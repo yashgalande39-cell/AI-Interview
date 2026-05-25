@@ -1,0 +1,401 @@
+{
+  "users": [
+    {
+      "id": "usr_1779707803424_7ope9",
+      "xp": 820,
+      "streak": 1,
+      "lastActive": "2026-05-25T11:16:43.422Z",
+      "badges": [
+        "Novice Prep",
+        "Roadmap Pioneer",
+        "Coding Master",
+        "Interview Scholar",
+        "Debating Scholar"
+      ],
+      "name": "Yash ",
+      "email": "yash123@gmail.com",
+      "password": "$2a$10$HThCV.Yn2rTWR4/cp9Fe7e2gAvzKJCHmolIMukQD4wd.qMpzWEGZW",
+      "collegeName": "MIT-ADT",
+      "branch": "",
+      "graduationYear": "2028",
+      "createdAt": "2026-05-25T11:16:43.424Z"
+    },
+    {
+      "id": "usr_1779713038867_n4naf",
+      "xp": 820,
+      "streak": 1,
+      "lastActive": "2026-05-25T12:43:58.864Z",
+      "badges": [
+        "Novice Prep",
+        "Debating Scholar",
+        "Interview Scholar"
+      ],
+      "name": "Raj",
+      "email": "raj123@gmail.com",
+      "password": "$2a$10$HGPFkUerf9GmfaB5CGFwPeMa2freBDFL9uFbQO.sDyWBUGhQsQag6",
+      "collegeName": "MIT-ADT",
+      "branch": "",
+      "graduationYear": "2028",
+      "createdAt": "2026-05-25T12:43:58.867Z"
+    }
+  ],
+  "interviews": [
+    {
+      "id": "int_1779708431431_6bfnx",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T11:27:11.431Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "Aptitude",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "Python",
+      "questions": [],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779708431465_r4qg3",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T11:27:11.466Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779708431479_2o882",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T11:27:11.479Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779713237891_8rq64",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T12:47:17.891Z",
+      "userId": "usr_1779713038867_n4naf",
+      "type": "Aptitude",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "Python",
+      "questions": [],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779713237928_pfmy1",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T12:47:17.928Z",
+      "userId": "usr_1779713038867_n4naf",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779713237938_an8kc",
+      "status": "completed",
+      "transcript": [
+        {
+          "question": "Tell me about yourself and walk me through your resume.",
+          "answer": " My name is Josie Randy and I'm pursuing computer Science from MIT ATT.",
+          "analysis": {
+            "score": 67,
+            "technicalAccuracy": 45,
+            "fluencyScore": 100,
+            "wpm": 56,
+            "fillerCount": 0,
+            "stressScore": 30,
+            "eyeContactScore": 90,
+            "emotion": "Confident"
+          }
+        }
+      ],
+      "startedAt": "2026-05-25T12:47:17.938Z",
+      "userId": "usr_1779713038867_n4naf",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 1,
+      "scoreCard": {
+        "overallScore": 71,
+        "technicalScore": 45,
+        "communicationScore": 100,
+        "eyeContactScore": 90,
+        "averageWpm": 56,
+        "stressScore": 30,
+        "totalFillers": 0,
+        "weakTopics": [
+          "HR Concepts"
+        ],
+        "recommendations": [
+          "Revise essential HR concepts on our Study Roadmap."
+        ],
+        "flashcards": [
+          {
+            "front": "Explain OOP Encapsulation",
+            "back": "Encapsulation binds data (variables) and code (methods) together into a single unit, shielding it from external access."
+          },
+          {
+            "front": "What is an Index in SQL?",
+            "back": "A database index is a data structure (like B-Tree) that improves data retrieval speeds, similar to a book index."
+          }
+        ],
+        "completedAt": "2026-05-25T12:47:56.182Z"
+      }
+    }
+  ],
+  "resumes": [],
+  "questions": [
+    {
+      "id": "q_hr_1",
+      "type": "HR",
+      "role": "All",
+      "company": "Common",
+      "difficulty": "Easy",
+      "question": "Tell me about yourself and walk me through your resume."
+    },
+    {
+      "id": "q_hr_2",
+      "type": "HR",
+      "role": "All",
+      "company": "Amazon",
+      "difficulty": "Medium",
+      "question": "Why do you want to work at Amazon, and how do you resonate with our Customer Obsession leadership principle?"
+    },
+    {
+      "id": "q_hr_3",
+      "type": "HR",
+      "role": "All",
+      "company": "Google",
+      "difficulty": "Hard",
+      "question": "Tell me about a time when you had a severe conflict with a manager or teammate. How did you handle it and what did you learn?"
+    },
+    {
+      "id": "q_hr_4",
+      "type": "HR",
+      "role": "All",
+      "company": "TCS",
+      "difficulty": "Easy",
+      "question": "Why should we hire you, and are you comfortable relocating to different project sites if required?"
+    },
+    {
+      "id": "q_hr_5",
+      "type": "HR",
+      "role": "All",
+      "company": "Infosys",
+      "difficulty": "Easy",
+      "question": "How do you handle working under tight deadlines and managing high-pressure situations?"
+    },
+    {
+      "id": "q_tech_1",
+      "type": "Technical",
+      "role": "Software Engineer",
+      "company": "Common",
+      "difficulty": "Easy",
+      "question": "Explain the four main pillars of Object-Oriented Programming (OOP) with real-world examples."
+    },
+    {
+      "id": "q_tech_2",
+      "type": "Technical",
+      "role": "Web Developer",
+      "company": "Common",
+      "difficulty": "Medium",
+      "question": "What is the difference between Virtual DOM and Shadow DOM? How does React optimize rendering using the Virtual DOM?"
+    },
+    {
+      "id": "q_tech_3",
+      "type": "Technical",
+      "role": "Software Engineer",
+      "company": "Google",
+      "difficulty": "Hard",
+      "question": "How do indexes work internally in databases? Explain the differences between B-Trees and Hash indexes and when to use each."
+    },
+    {
+      "id": "q_tech_4",
+      "type": "Technical",
+      "role": "Data Analyst",
+      "company": "Amazon",
+      "difficulty": "Medium",
+      "question": "What are the differences between INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL OUTER JOIN in SQL? Give a practical scenario."
+    },
+    {
+      "id": "q_tech_5",
+      "type": "Technical",
+      "role": "AI/ML Engineer",
+      "company": "Google",
+      "difficulty": "Hard",
+      "question": "What is overfitting in Deep Learning? How do you detect it, and what regularization techniques can prevent it?"
+    },
+    {
+      "id": "q_beh_1",
+      "type": "Behavioral",
+      "role": "All",
+      "company": "Google",
+      "difficulty": "Medium",
+      "question": "Describe a project that failed despite your best efforts. What went wrong, and how did you communicate the failure to stakeholders?"
+    },
+    {
+      "id": "q_beh_2",
+      "type": "Behavioral",
+      "role": "All",
+      "company": "Amazon",
+      "difficulty": "Hard",
+      "question": "Give me an example of a time when you had to make a critical decision with extremely limited data or time constraints. What was the outcome?"
+    },
+    {
+      "id": "q_code_1",
+      "type": "Coding",
+      "role": "Software Engineer",
+      "company": "TCS",
+      "difficulty": "Easy",
+      "title": "Reverse a String",
+      "description": "Write a function `reverseString(s)` that takes a string and returns its reversed version.",
+      "testCases": [
+        {
+          "input": "hello",
+          "expected": "olleh"
+        },
+        {
+          "input": "world",
+          "expected": "dlrow"
+        },
+        {
+          "input": "a",
+          "expected": "a"
+        }
+      ],
+      "templates": {
+        "javascript": "function reverseString(s) {\n  // Write your code here\n  return s.split('').reverse().join('');\n}",
+        "python": "def reverse_string(s):\n    # Write your code here\n    return s[::-1]",
+        "cpp": "#include <string>\nusing namespace std;\nstring reverseString(string s) {\n    // Write your code here\n}",
+        "java": "public class Solution {\n    public static String reverseString(String s) {\n        // Write your code here\n        return \"\";\n    }\n}"
+      }
+    },
+    {
+      "id": "q_code_2",
+      "type": "Coding",
+      "role": "Software Engineer",
+      "company": "Google",
+      "difficulty": "Medium",
+      "title": "Two Sum",
+      "description": "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`. You may assume that each input would have exactly one solution.",
+      "testCases": [
+        {
+          "input": "[2, 7, 11, 15], 9",
+          "expected": "[0, 1]"
+        },
+        {
+          "input": "[3, 2, 4], 6",
+          "expected": "[1, 2]"
+        },
+        {
+          "input": "[3, 3], 6",
+          "expected": "[0, 1]"
+        }
+      ],
+      "templates": {
+        "javascript": "function twoSum(nums, target) {\n  // Write your code here\n  const map = {};\n  for (let i = 0; i < nums.length; i++) {\n    const diff = target - nums[i];\n    if (diff in map) {\n      return [map[diff], i];\n    }\n    map[nums[i]] = i;\n  }\n}",
+        "python": "def two_sum(nums, target):\n    # Write your code here\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen:\n            return [seen[diff], i]\n        seen[num] = i",
+        "cpp": "#include <vector>\n#include <unordered_map>\nusing namespace std;\nvector<int> twoSum(vector<int>& nums, int target) {\n    // Write your code here\n}",
+        "java": "import java.util.HashMap;\npublic class Solution {\n    public static int[] twoSum(int[] nums, int target) {\n        // Write your code here\n        return new int[0];\n    }\n}"
+      }
+    },
+    {
+      "id": "q_code_3",
+      "type": "Coding",
+      "role": "Software Engineer",
+      "company": "Infosys",
+      "difficulty": "Easy",
+      "title": "Palindrome Number",
+      "description": "Determine whether an integer `x` is a palindrome. Return `true` if it is, and `false` otherwise.",
+      "testCases": [
+        {
+          "input": "121",
+          "expected": "true"
+        },
+        {
+          "input": "-121",
+          "expected": "false"
+        },
+        {
+          "input": "10",
+          "expected": "false"
+        }
+      ],
+      "templates": {
+        "javascript": "function isPalindrome(x) {\n  // Write your code here\n  if (x < 0) return false;\n  const str = x.toString();\n  return str === str.split('').reverse().join('');\n}",
+        "python": "def is_palindrome(x):\n    # Write your code here\n    if x < 0: return False\n    return str(x) == str(x)[::-1]",
+        "cpp": "using namespace std;\nbool isPalindrome(int x) {\n    // Write your code here\n}",
+        "java": "public class Solution {\n    public static boolean isPalindrome(int x) {\n        // Write your code here\n        return false;\n    }\n}"
+      }
+    }
+  ],
+  "leaderboard": [],
+  "challenges": [
+    {
+      "id": "ch_1",
+      "title": "Array Master",
+      "description": "Solve 2 array problems in a day",
+      "xp": 100
+    },
+    {
+      "id": "ch_2",
+      "title": "Speech Perfect",
+      "description": "Complete a mock HR interview with >90% fluency",
+      "xp": 150
+    },
+    {
+      "id": "ch_3",
+      "title": "Daily Grind",
+      "description": "Attend your daily mock check-in challenge",
+      "xp": 50
+    }
+  ]
+}

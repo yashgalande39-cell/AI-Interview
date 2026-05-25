@@ -1,0 +1,735 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { io } from 'socket.io-client';
+import { 
+  ShieldCheck, HelpCircle, AlertCircle, Compass, 
+  Sparkles, CheckSquare, Zap, PlayCircle, Loader2,
+  Users, MessageSquare, Send, PenTool, Trash2, Copy,
+  Check, ArrowRightLeft, BookOpen, RefreshCw, XCircle
+} from 'lucide-react';
+
+export default function InterviewLobby() {
+  const { token, user } = useAuth();
+  const navigate = useNavigate();
+
+  // Tab State: 'ai' (AI Interview) or 'peer' (Peer Matchmaker)
+  const [activeTab, setActiveTab] = useState('ai');
+
+  // Selected configs for AI mock
+  const [type, setType] = useState('HR');
+  const [difficulty, setDifficulty] = useState('Easy');
+  const [role, setRole] = useState('Software Engineer');
+  const [company, setCompany] = useState('Common');
+  const [language, setLanguage] = useState('JavaScript');
+  const [selectedResumeId, setSelectedResumeId] = useState('');
+
+  // Loaded lists
+  const [resumes, setResumes] = useState([]);
+  const [loadingResumes, setLoadingResumes] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [coachActive, setCoachActive] = useState(true);
+
+  // Confidence Checklist
+  const [confidenceCheck, setConfidenceCheck] = useState({
+    micAccess: false,
+    camAccess: false,
+    deepBreath: false,
+    focusedMind: false
+  });
+
+  // P2P Matchmaking states
+  const [matchingState, setMatchingState] = useState('idle'); // 'idle', 'searching', 'matched'
+  const [targetMatchRole, setTargetMatchRole] = useState('Software Engineer');
+  const [matchedPeer, setMatchedPeer] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [matchRoomId, setMatchRoomId] = useState('');
+  const [roleAssignment, setRoleAssignment] = useState('Interviewer'); // Interviewer / Candidate
+
+  // Canvas Refs for matched whiteboard sync
+  const canvasRef = useRef(null);
+  const contextRef = useRef(null);
+  const socketRef = useRef(null);
+  const isDrawingRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+  const [drawColor, setDrawColor] = useState('#06b6d4'); // Cyan default for peer board
+
+  useEffect(() => {
+    // Connect socket for matching & synchronized peer sessions
+    socketRef.current = io('http://localhost:5000');
+
+    socketRef.current.on('connect', () => {
+      console.log('🔌 Peer Matchmaking Socket connected.');
+    });
+
+    // Listen for socket relays
+    socketRef.current.on('peer_joined', ({ socketId }) => {
+      console.log('👤 Another peer joined room:', socketId);
+    });
+
+    socketRef.current.on('gd_message_receive', ({ sender, text, avatar }) => {
+      setChatMessages(prev => [...prev, { sender, text, avatar }]);
+    });
+
+    socketRef.current.on('draw_update', ({ drawData }) => {
+      drawPeerPath(drawData);
+    });
+
+    socketRef.current.on('canvas_cleared', () => {
+      clearLocalCanvas();
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Initialize canvas for matched P2P whiteboard when matched
+  useEffect(() => {
+    if (matchingState === 'matched' && canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = canvas.offsetWidth * 2;
+      canvas.height = canvas.offsetHeight * 2;
+      canvas.style.width = `${canvas.offsetWidth}px`;
+      canvas.style.height = `${canvas.offsetHeight}px`;
+
+      const context = canvas.getContext('2d');
+      context.scale(2, 2);
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      contextRef.current = context;
+    }
+  }, [matchingState]);
+
+  // Load Resumes
+  useEffect(() => {
+    const fetchResumes = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/resumes/analyze', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+        }
+      } catch (e) {
+        console.warn("Could not load resumes, using mock resumes list", e.message);
+      } finally {
+        setResumes([
+          { id: "res_mock_1", filename: "Rahul_Kumar_CV.pdf", targetRole: "Software Engineer", atsScore: 84 },
+          { id: "res_mock_2", filename: "Rahul_Kumar_WebDev.pdf", targetRole: "Web Developer", atsScore: 78 }
+        ]);
+        setLoadingResumes(false);
+      }
+    };
+
+    fetchResumes();
+  }, [token]);
+
+  const handleStartInterview = async () => {
+    const allChecked = Object.values(confidenceCheck).every(v => v === true);
+    if (!allChecked && type !== "Coding") {
+      alert("Please complete the AI Prep Coach confidence checklist before starting the voice session!");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/interviews/generate', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type,
+          difficulty,
+          role,
+          company,
+          language,
+          resumeId: selectedResumeId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to start interview');
+      navigate(`/interview-room?sessionId=${data.session.id}`);
+    } catch (err) {
+      console.warn("Server generation offline, starting mock-backed session:", err.message);
+      const mockSessionId = 'int_mock_' + Date.now();
+      navigate(`/interview-room?sessionId=${mockSessionId}&type=${type}&difficulty=${difficulty}&role=${role}&company=${company}&language=${language}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleCheck = (key) => {
+    setConfidenceCheck(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Peer Matchmaking sequence
+  const startPeerSearch = () => {
+    setMatchingState('searching');
+    setChatMessages([]);
+    
+    // Simulate real-time matchmaking over Socket.IO after 3 seconds
+    setTimeout(() => {
+      const mockPeers = [
+        { name: "Rahul Sharma", role: "Software Engineer", avatar: "👨‍💻", rating: "4.8★" },
+        { name: "Sneha Reddy", role: "Web Developer", avatar: "👩‍💻", rating: "4.9★" },
+        { name: "Amit Patel", role: "AI/ML Engineer", avatar: "🤖", rating: "4.7★" }
+      ];
+      const matched = mockPeers.find(p => p.role === targetMatchRole) || mockPeers[0];
+      setMatchedPeer(matched);
+      
+      const randomRoomKey = 'ROOM-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+      setMatchRoomId(randomRoomKey);
+      setRoleAssignment(Math.random() > 0.5 ? 'Interviewer' : 'Candidate');
+      setMatchingState('matched');
+
+      // Join standard WebSocket room
+      socketRef.current.emit('join_room', randomRoomKey);
+      
+      setChatMessages([
+        { sender: "System", text: `Matched with ${matched.name} (${matched.rating}) for ${matched.role}! Secure peer line established.`, avatar: "📢" },
+        { sender: matched.name, text: "Hey! Glad to mock code with you. Let's design something cool today!", avatar: matched.avatar }
+      ]);
+    }, 3000);
+  };
+
+  const cancelPeerSearch = () => {
+    setMatchingState('idle');
+    setMatchedPeer(null);
+  };
+
+  const leavePeerSession = () => {
+    setMatchingState('idle');
+    setMatchedPeer(null);
+    setChatMessages([]);
+  };
+
+  // Chat methods
+  const sendChatMessage = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const senderName = user?.name || "You";
+    const payload = chatInput.trim();
+    setChatInput('');
+
+    // Append locally
+    setChatMessages(prev => [...prev, { sender: `You (${senderName})`, text: payload, avatar: "👨‍🎓" }]);
+
+    // Emit socket broadcast
+    socketRef.current.emit('gd_message', {
+      roomId: matchRoomId,
+      sender: senderName,
+      text: payload,
+      avatar: "👨‍🎓"
+    });
+  };
+
+  // Whiteboard drawing synchronizations
+  const drawPeerPath = (drawData) => {
+    const context = contextRef.current;
+    if (!context) return;
+    context.beginPath();
+    context.strokeStyle = drawData.color;
+    context.lineWidth = 3;
+    context.moveTo(drawData.x0, drawData.y0);
+    context.lineTo(drawData.x1, drawData.y1);
+    context.stroke();
+    context.closePath();
+  };
+
+  const handleCanvasMouseDown = ({ nativeEvent }) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = nativeEvent.clientX - rect.left;
+    const y = nativeEvent.clientY - rect.top;
+    lastPosRef.current = { x, y };
+    isDrawingRef.current = true;
+  };
+
+  const handleCanvasMouseMove = ({ nativeEvent }) => {
+    if (!isDrawingRef.current) return;
+    const canvas = canvasRef.current;
+    const context = contextRef.current;
+    if (!canvas || !context) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = nativeEvent.clientX - rect.left;
+    const y = nativeEvent.clientY - rect.top;
+
+    const currentStroke = {
+      x0: lastPosRef.current.x,
+      y0: lastPosRef.current.y,
+      x1: x,
+      y1: y,
+      color: drawColor
+    };
+
+    context.beginPath();
+    context.strokeStyle = drawColor;
+    context.lineWidth = 3;
+    context.moveTo(currentStroke.x0, currentStroke.y0);
+    context.lineTo(currentStroke.x1, currentStroke.y1);
+    context.stroke();
+    context.closePath();
+
+    // Broadcast stroke
+    socketRef.current.emit('draw_path', {
+      roomId: matchRoomId,
+      drawData: currentStroke
+    });
+
+    lastPosRef.current = { x, y };
+  };
+
+  const handleCanvasMouseUp = () => {
+    isDrawingRef.current = false;
+  };
+
+  const clearLocalCanvas = () => {
+    const canvas = canvasRef.current;
+    const context = contextRef.current;
+    if (!canvas || !context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleClearCanvas = () => {
+    clearLocalCanvas();
+    socketRef.current.emit('clear_canvas', matchRoomId);
+  };
+
+  const roles = ["Software Engineer", "Web Developer", "Data Analyst", "AI/ML Engineer", "Cybersecurity Analyst"];
+  const companies = ["Common", "Google", "Amazon", "TCS", "Infosys"];
+  const languages = ["JavaScript", "Python", "Java", "C++", "DBMS", "OS", "CN"];
+
+  const peerGuidelines = {
+    Interviewer: [
+      "Ask: 'How do you design a high-availability rate limiter for a multi-tenant API?'",
+      "Observe how the candidate structures their components on the whiteboard.",
+      "Evaluate: Does the candidate state trade-offs of Token Bucket vs. Leaky Bucket?",
+      "Provide constructive, motivational feedback at the end."
+    ],
+    Candidate: [
+      "Task: Design a real-time rate limiting solution on the whiteboard.",
+      "First clarify specifications: Read/Write load, latency limits.",
+      "Draw the blocks: Client $\rightarrow$ API Gateway $\rightarrow$ Redis Cache.",
+      "Explain sliding-window algorithm mechanics out loud."
+    ]
+  };
+
+  return (
+    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+      
+      {matchingState !== 'matched' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 flex items-center gap-2">
+              🎙️ Mock Setup Lobby
+            </h2>
+            <p className="text-slate-400 text-xs sm:text-sm">
+              Tailor target configurations, connect with adaptive AI engines, or match with active peers for live mock interviews.
+            </p>
+          </div>
+
+          {/* Navigation tab switchers */}
+          <div className="flex border-b border-slate-900 gap-2">
+            <button
+              onClick={() => setActiveTab('ai')}
+              className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+                activeTab === 'ai' 
+                  ? 'border-violet-500 text-slate-200' 
+                  : 'border-transparent text-slate-500 hover:text-slate-350'
+              }`}
+            >
+              <Zap className="w-4 h-4" /> AI Mock Interview
+            </button>
+            <button
+              onClick={() => setActiveTab('peer')}
+              className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+                activeTab === 'peer' 
+                  ? 'border-violet-500 text-slate-200' 
+                  : 'border-transparent text-slate-500 hover:text-slate-350'
+              }`}
+            >
+              <Users className="w-4 h-4" /> Peer-to-Peer Matchmaker
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'ai' && matchingState !== 'matched' && (
+        /* Original AI interview selector */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+              <h3 className="text-lg font-bold text-slate-200 border-b border-slate-800/80 pb-4">
+                Configure Target Parameters
+              </h3>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Interview Domain Type
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {['HR', 'Technical', 'Behavioral', 'Aptitude', 'Coding'].map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setType(t)}
+                      className={`py-3 px-2 rounded-xl text-xs font-bold transition-all border ${
+                        type === t 
+                          ? 'bg-glow-gradient text-white border-violet-500/25 shadow-lg' 
+                          : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Target Job Role
+                  </label>
+                  <select 
+                    value={role} 
+                    onChange={e => setRole(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
+                  >
+                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Target Company Preset
+                  </label>
+                  <select 
+                    value={company} 
+                    onChange={e => setCompany(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
+                  >
+                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Difficulty Rating
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Easy', 'Medium', 'Hard'].map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setDifficulty(d)}
+                        className={`py-3 rounded-xl text-xs font-semibold border transition-all ${
+                          difficulty === d 
+                            ? 'bg-slate-900 text-accentCyan border-accentCyan/30 shadow-md shadow-cyan-500/5' 
+                            : 'bg-slate-950/30 border-slate-900 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Language / Sub-Domain
+                  </label>
+                  <select 
+                    value={language} 
+                    disabled={type === 'HR' || type === 'Behavioral'}
+                    onChange={e => setLanguage(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all disabled:opacity-40"
+                  >
+                    {languages.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-4 border-t border-slate-900/60">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Associate ATS Resume (Optional)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    Tailors AI prompts
+                  </span>
+                </div>
+                <select
+                  value={selectedResumeId}
+                  onChange={e => setSelectedResumeId(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
+                >
+                  <option value="">Start without resume details (General)</option>
+                  {resumes.map(r => (
+                    <option key={r.id} value={r.id}>
+                      📄 {r.filename} (ATS Score: {r.atsScore}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={handleStartInterview}
+                disabled={submitting}
+                className="w-full bg-glow-gradient py-4 rounded-xl text-sm font-bold text-white shadow-xl hover:shadow-violet-500/25 hover:scale-[1.01] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Generating Adaptive Session...
+                  </>
+                ) : (
+                  <>
+                    🚀 Launch Virtual Interview Room
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {coachActive && (
+              <div className="glass-panel rounded-3xl p-6 border-violet-500/25 relative overflow-hidden bg-gradient-to-b from-violet-500/5 to-slate-950/40">
+                <div className="absolute -top-16 -right-16 w-32 h-32 bg-accentViolet/10 rounded-full blur-2xl pointer-events-none animate-pulse-slow"></div>
+                
+                <div className="flex items-center gap-2 text-violet-400 font-extrabold text-sm mb-4">
+                  <Sparkles className="w-5 h-5 fill-current animate-bounce" /> AI Interview Coach
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-3 rounded-2xl bg-slate-950/50 border border-slate-900 text-slate-300 leading-normal text-xs">
+                    <span className="font-bold text-slate-200">Coach Tip:</span> In {type} rounds, follow the <span className="font-bold text-accentCyan">STAR Method</span>: Describe the **S**ituation, **T**ask, **A**ction, and **R**esults. Focus heavily on metrics.
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      Verification Checklist
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      {Object.keys(confidenceCheck).map(key => (
+                        <button 
+                          key={key}
+                          onClick={() => toggleCheck(key)}
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-950/30 border border-slate-900 hover:border-slate-800 transition-colors text-left"
+                        >
+                          <CheckSquare className={`w-4 h-4 shrink-0 transition-all ${confidenceCheck[key] ? 'text-accentCyan fill-current' : 'text-slate-600'}`} />
+                          <span className="text-slate-400">
+                            {key === 'micAccess' && 'Microphone plugged and active'}
+                            {key === 'camAccess' && 'Camera access cleared (for eye check)'}
+                            {key === 'deepBreath' && 'Took 3 deep breaths (Calms anxiety)'}
+                            {key === 'focusedMind' && 'Silence around is verified'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-900/60 text-[10px] text-slate-500 font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Compliance checks are secure.</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Peer-to-Peer Matchmaking Search view */}
+      {activeTab === 'peer' && matchingState !== 'matched' && (
+        <div className="glass-panel rounded-3xl p-6 sm:p-8 space-y-8 bg-gradient-to-b from-slate-950/50 to-slate-900/10">
+          
+          {matchingState === 'idle' ? (
+            <div className="max-w-xl mx-auto text-center space-y-6 py-6">
+              <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto text-violet-400">
+                <Users className="w-8 h-8 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-200">Find a Collaborative Peer Partner</h3>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                  Match with another tech student preparing for similar tracks. Conduct mutual interviews, sync drawing architectures, and improve together!
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-900 text-left space-y-4 max-w-md mx-auto">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+                    Choose Target Category
+                  </label>
+                  <select
+                    value={targetMatchRole}
+                    onChange={e => setTargetMatchRole(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
+                  >
+                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+
+                <button
+                  onClick={startPeerSearch}
+                  className="w-full bg-glow-gradient py-3.5 rounded-xl text-xs font-bold text-white shadow shadow-violet-500/10 transition-all hover:scale-101"
+                >
+                  Initiate Matchmaking Search
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Searching state radar loader */
+            <div className="max-w-xl mx-auto text-center space-y-8 py-10">
+              <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+                <div className="absolute inset-0 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-4 border-4 border-cyan-500/10 border-b-cyan-500 rounded-full animate-spin-reverse"></div>
+                <Users className="w-8 h-8 text-violet-400 animate-bounce" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-slate-200">Scanning for peers...</h3>
+                <p className="text-xs text-slate-500">
+                  Filtering for active candidates in <span className="text-accentCyan font-bold">{targetMatchRole}</span> categories.
+                </p>
+              </div>
+
+              <button
+                onClick={cancelPeerSearch}
+                className="bg-slate-900 border border-slate-800 hover:bg-rose-500/10 hover:border-rose-500/20 hover:text-rose-400 px-6 py-3 rounded-xl text-xs font-semibold text-slate-400 transition-colors"
+              >
+                Cancel Search Queue
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Matched Real-Time Collaborative Workspace Panels */}
+      {matchingState === 'matched' && matchedPeer && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 border border-slate-900 p-4 rounded-3xl">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 text-xl flex items-center justify-center">
+                {matchedPeer.avatar}
+              </span>
+              <div className="text-left">
+                <span className="text-xs text-slate-500 font-bold block">PEER PARTNER</span>
+                <span className="font-extrabold text-slate-200 text-sm">{matchedPeer.name} ({matchedPeer.rating})</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-left text-xs bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-xl font-bold text-violet-400">
+                You are: {roleAssignment}
+              </div>
+              <div className="h-8 w-px bg-slate-900"></div>
+              <button
+                onClick={leavePeerSession}
+                className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl text-xs font-bold text-rose-400 transition-all flex items-center gap-1"
+              >
+                <XCircle className="w-3.5 h-3.5" /> End Session
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            
+            {/* Whiteboard canvas design desk */}
+            <div className="xl:col-span-2 space-y-4">
+              <div className="glass-panel rounded-3xl p-3 bg-slate-950 border-slate-800/80 relative">
+                <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl text-xs mb-2">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleClearCanvas}
+                      className="px-3 py-1 rounded bg-slate-950 border border-slate-850 hover:text-rose-400 text-slate-400 flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Reset
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5 items-center">
+                    {['#06b6d4', '#f43f5e', '#a855f7', '#ffffff'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setDrawColor(c)}
+                        className={`w-4 h-4 rounded-full border transition-all ${drawColor === c ? 'scale-125 ring-2 ring-violet-500/40' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <span className="text-[10px] text-slate-500 font-bold ml-1">Color</span>
+                  </div>
+                </div>
+
+                <div className="h-[380px] w-full bg-[#090d16] rounded-2xl relative overflow-hidden">
+                  <canvas
+                    ref={canvasRef}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    className="w-full h-full cursor-crosshair bg-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Guide card based on Role Assignment */}
+              <div className="glass-panel rounded-3xl p-5 border-cyan-500/10 bg-gradient-to-r from-cyan-500/5 to-slate-950/20 text-left space-y-3">
+                <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 text-accentCyan" />
+                  <span>Mock Role Guidelines - {roleAssignment}</span>
+                </div>
+                <ul className="space-y-1.5 text-[11px] text-slate-400">
+                  {peerGuidelines[roleAssignment].map((g, i) => (
+                    <li key={i} className="flex gap-2 items-start pl-1">
+                      <span className="text-accentCyan font-bold shrink-0">✓</span>
+                      <span>{g}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Chat discussion feed */}
+            <div className="glass-panel rounded-3xl p-6 space-y-4 flex flex-col justify-between h-[520px]">
+              <div>
+                <h3 className="text-xs font-bold text-slate-400 border-b border-slate-800 pb-3 uppercase tracking-wider">LOBBY CHAT ENGINE</h3>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-3 p-1">
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`p-3 rounded-2xl border text-xs space-y-1 ${msg.sender.includes('You') ? 'bg-violet-500/5 border-violet-500/10' : msg.sender.includes('System') ? 'bg-slate-950/40 border-slate-900' : 'bg-emerald-500/5 border-emerald-500/10'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-350">{msg.avatar} {msg.sender}</span>
+                    </div>
+                    <p className="text-slate-400 leading-normal pl-0.5">"{msg.text}"</p>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={sendChatMessage} className="flex gap-2 border-t border-slate-900/60 pt-3">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  placeholder="Write message to peer..."
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-xs text-slate-300 outline-none focus:border-accentViolet"
+                />
+                <button type="submit" className="p-2.5 bg-glow-gradient rounded-xl text-white hover:scale-102 transition-all">
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
