@@ -2,7 +2,7 @@
   "users": [
     {
       "id": "usr_1779707803424_7ope9",
-      "xp": 820,
+      "xp": 1000,
       "streak": 2,
       "lastActive": "2026-05-25T14:38:22.072Z",
       "badges": [
@@ -10,7 +10,8 @@
         "Roadmap Pioneer",
         "Coding Master",
         "Interview Scholar",
-        "Debating Scholar"
+        "Debating Scholar",
+        "Aptitude Scholar"
       ],
       "name": "Yash ",
       "email": "yash123@gmail.com",
@@ -190,6 +191,41 @@
         ],
         "completedAt": "2026-05-25T12:47:56.182Z"
       }
+    },
+    {
+      "id": "int_1779720241906_owmvj",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T14:44:01.906Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "Aptitude",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "Python",
+      "questions": [],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779720242199_bc1xr",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T14:44:02.199Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
     }
   ],
   "resumes": [

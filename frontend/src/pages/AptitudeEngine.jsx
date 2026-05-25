@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom';
 import { 
   BookOpen, Clock, AlertCircle, CheckCircle, 
   HelpCircle, RefreshCw, ChevronRight, Award,
-  Sliders, BookOpenCheck, Brain, ArrowLeft, BarChart2
+  Sliders, BookOpenCheck, Brain, ArrowLeft, BarChart2,
+  Pause, Play
 } from 'lucide-react';
 import { API_BASE } from '../config';
+
 
 export default function AptitudeEngine() {
   const { token, updateXp } = useAuth();
@@ -30,6 +32,8 @@ export default function AptitudeEngine() {
   const [score, setScore] = useState(0);
   const [timer, setTimer] = useState(180); // 3 minutes standard
   const [maxTimer, setMaxTimer] = useState(180);
+  const [isPaused, setIsPaused] = useState(false);
+
 
   // Structured Practice Sets Pool
   // Sets 1-20: Easy, Sets 21-40: Medium, Sets 41-50: Hard
@@ -69,6 +73,7 @@ export default function AptitudeEngine() {
         setScore(0);
         setTimer(300); // 5 minutes for sets
         setMaxTimer(300);
+        setIsPaused(false);
         setView('quiz');
       }
     } catch (err) {
@@ -98,6 +103,7 @@ export default function AptitudeEngine() {
         const allocatedTime = quizLength * 30; // 30 seconds per question
         setTimer(allocatedTime);
         setMaxTimer(allocatedTime);
+        setIsPaused(false);
         setView('quiz');
       }
     } catch (err) {
@@ -109,7 +115,7 @@ export default function AptitudeEngine() {
 
   // Live countdown timer loop
   useEffect(() => {
-    if (view === 'quiz' && timer > 0 && !submitted) {
+    if (view === 'quiz' && timer > 0 && !submitted && !isPaused) {
       const interval = setInterval(() => {
         setTimer(prev => prev - 1);
       }, 1000);
@@ -117,7 +123,7 @@ export default function AptitudeEngine() {
     } else if (timer === 0 && view === 'quiz' && !submitted) {
       handleSubmit();
     }
-  }, [timer, view, submitted]);
+  }, [timer, view, submitted, isPaused]);
 
   // Submit test answers
   const handleSubmit = () => {
@@ -147,6 +153,7 @@ export default function AptitudeEngine() {
           setSubmitted(false);
           setScore(0);
           setTimer(300);
+          setIsPaused(false);
           setView('quiz');
         }
       } else {
@@ -165,6 +172,7 @@ export default function AptitudeEngine() {
           setScore(0);
           const allocatedTime = quizLength * 30;
           setTimer(allocatedTime);
+          setIsPaused(false);
           setView('quiz');
         }
       }
@@ -329,23 +337,37 @@ export default function AptitudeEngine() {
           <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-900 rounded-2xl">
             <button
               onClick={() => {
-                if (window.confirm("Are you sure you want to quit the active test session? Your progress will be lost.")) {
+                if (window.confirm("Are you sure you want to go back to Lobby? Your current progress will be lost.")) {
                   setView('lobby');
                 }
               }}
               className="text-[10px] font-black uppercase text-slate-500 hover:text-slate-350 transition-colors flex items-center gap-1.5"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Quit Session
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Lobby
             </button>
 
-            <div className="flex items-center gap-6">
-              <div className="text-right">
+            <div className="flex items-center gap-4">
+              {/* Pause/Play Button */}
+              <button
+                onClick={() => setIsPaused(!isPaused)}
+                className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase border transition-all flex items-center gap-1.5 ${
+                  isPaused 
+                    ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400 animate-pulse' 
+                    : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:text-slate-200'
+                }`}
+                title={isPaused ? "Resume Session" : "Pause Session"}
+              >
+                {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                {isPaused ? "Resume" : "Pause"}
+              </button>
+
+              <div className="text-right border-l border-slate-900 pl-4 sm:pl-6">
                 <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">Allocated Timer</span>
                 <span className={`text-sm font-extrabold flex items-center gap-1 ${timer < 30 ? 'text-rose-500 animate-pulse' : 'text-accentCyan'}`}>
                   <Clock className="w-3.5 h-3.5" /> {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
                 </span>
               </div>
-              <div className="text-right border-l border-slate-900 pl-6">
+              <div className="text-right border-l border-slate-900 pl-4 sm:pl-6">
                 <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">Session Size</span>
                 <span className="text-sm font-extrabold text-violet-400">{questions.length} Questions</span>
               </div>
@@ -360,57 +382,80 @@ export default function AptitudeEngine() {
             />
           </div>
 
-          {/* Dynamic Question List */}
-          <div className="space-y-6">
-            {questions.map((q, idx) => (
-              <div key={q.id} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold uppercase tracking-wider">
-                      {q.section}
-                    </span>
-                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${getDifficultyColor(q.difficulty)}`}>
-                      {q.difficulty}
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-500 font-bold">Question {idx + 1} of {questions.length}</span>
+          {/* Dynamic Question List Wrapper with Pause Overlay */}
+          <div className="relative">
+            {isPaused && (
+              <div className="absolute inset-0 backdrop-blur-md bg-slate-950/75 z-40 rounded-3xl flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/35 flex items-center justify-center text-violet-400 text-2xl">
+                  ⏸️
                 </div>
-
-                <div className="text-sm font-bold text-slate-200 leading-relaxed pl-1">
-                  {q.question}
+                <div className="space-y-1.5">
+                  <h4 className="text-sm font-black text-slate-200 uppercase tracking-wide">Cognitive Practice Session Paused</h4>
+                  <p className="text-[10px] text-slate-500 max-w-sm leading-relaxed font-semibold">
+                    Timer has stopped. Question contents are obscured during pause intervals to maintain testing alignment and integrity.
+                  </p>
                 </div>
-
-                {/* Multiple choice Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  {q.options.map((opt, oIdx) => {
-                    const isSelected = answers[q.id] === oIdx;
-                    return (
-                      <button
-                        key={oIdx}
-                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: oIdx }))}
-                        className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all hover:scale-[1.005] ${
-                          isSelected 
-                            ? 'bg-violet-500/10 border-violet-500/40 text-violet-400' 
-                            : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        <span className="font-extrabold mr-2 uppercase text-[10px] text-slate-500">Option {String.fromCharCode(65 + oIdx)}:</span>
-                        {opt}
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  onClick={() => setIsPaused(false)}
+                  className="bg-glow-gradient px-6 py-3 rounded-xl text-xs font-black uppercase text-white shadow-lg hover:shadow-violet-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5" /> Resume Test
+                </button>
               </div>
-            ))}
+            )}
 
-            {/* Test submission hooks */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
-              <button
-                onClick={handleSubmit}
-                className="bg-glow-gradient px-8 py-4 rounded-xl text-xs font-black uppercase tracking-wider text-white shadow-lg hover:shadow-violet-500/20 hover:scale-[1.01] transition-all"
-              >
-                Submit Practice Exam
-              </button>
+            {/* Questions List */}
+            <div className={`space-y-6 transition-all duration-300 ${isPaused ? 'filter blur-sm select-none pointer-events-none' : ''}`}>
+              {questions.map((q, idx) => (
+                <div key={q.id} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-900 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold uppercase tracking-wider">
+                        {q.section}
+                      </span>
+                      <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${getDifficultyColor(q.difficulty)}`}>
+                        {q.difficulty}
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-500 font-bold">Question {idx + 1} of {questions.length}</span>
+                  </div>
+
+                  <div className="text-sm font-bold text-slate-200 leading-relaxed pl-1">
+                    {q.question}
+                  </div>
+
+                  {/* Multiple choice Options Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {q.options.map((opt, oIdx) => {
+                      const isSelected = answers[q.id] === oIdx;
+                      return (
+                        <button
+                          key={oIdx}
+                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: oIdx }))}
+                          className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all hover:scale-[1.005] ${
+                            isSelected 
+                              ? 'bg-violet-500/10 border-violet-500/40 text-violet-400' 
+                              : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <span className="font-extrabold mr-2 uppercase text-[10px] text-slate-500">Option {String.fromCharCode(65 + oIdx)}:</span>
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Test submission hooks */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+                <button
+                  onClick={handleSubmit}
+                  className="bg-glow-gradient px-8 py-4 rounded-xl text-xs font-black uppercase tracking-wider text-white shadow-lg hover:shadow-violet-500/20 hover:scale-[1.01] transition-all"
+                >
+                  Submit Practice Exam
+                </button>
+              </div>
             </div>
           </div>
 

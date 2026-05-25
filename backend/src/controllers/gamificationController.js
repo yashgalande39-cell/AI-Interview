@@ -86,6 +86,8 @@ exports.getAptitudeQuestions = async (req, res) => {
 
     if (!isNaN(setNum)) {
       pool = pool.filter(q => q.set === setNum);
+      // Shuffle set pool so each attempt pulls a fresh randomized subset
+      pool = [...pool].sort(() => 0.5 - Math.random());
     } else {
       if (difficulty && difficulty !== 'All') {
         pool = pool.filter(q => q.difficulty.toLowerCase() === difficulty.toLowerCase());
