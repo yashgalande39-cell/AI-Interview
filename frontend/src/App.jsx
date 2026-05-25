@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 // Components
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import ChatAssistant from './components/ChatAssistant';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -43,6 +44,7 @@ const AppLayout = ({ children }) => {
           {children}
         </main>
       </div>
+      <ChatAssistant />
     </div>
   );
 };

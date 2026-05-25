@@ -7,5 +7,6 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.get('/profile', authMiddleware, authController.getProfile);
 router.post('/progress', authMiddleware, authController.updateXpAndStreak);
+router.post('/chat-assistant', authController.chatAssistant);
 
 module.exports = router;
