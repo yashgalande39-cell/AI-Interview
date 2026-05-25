@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
+import { BACKEND_URL } from '../config';
 import { 
   PenTool, Trash2, Download, Users, Copy, 
   Check, ArrowRightLeft, Square, Circle, Eraser
@@ -38,7 +39,7 @@ export default function Whiteboard() {
 
   // Initialize Socket.IO connection
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
+    socketRef.current = io(BACKEND_URL);
 
     socketRef.current.on('connect', () => {
       console.log('🔌 Whiteboard linked to websocket relay server.');
