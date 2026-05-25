@@ -14,26 +14,59 @@ const ensureDir = (filePath) => {
 const SECTIONS = ["Quantitative", "Logical", "Verbal"];
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 
-// Dictionary of Verbal Questions parameters
-const verbalPool = [
-  { word: "AMELIORATE", syn: "Worsen", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'AMELIORATE'", expl: "'Ameliorate' means to make something better. Its opposite is 'Worsen' or 'Deteriorate'." },
-  { word: "LOQUACIOUS", syn: "Talkative", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'LOQUACIOUS'", expl: "'Loquacious' means talkative or fond of talking." },
-  { word: "EPHEMERAL", syn: "Fleeting", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'EPHEMERAL'", expl: "'Ephemeral' means lasting for a very short time; transient or fleeting." },
-  { word: "CAPRICIOUS", syn: "Stable", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'CAPRICIOUS'", expl: "'Capricious' means given to sudden changes of mood or behavior. Its opposite is 'Stable' or 'Predictable'." },
-  { word: "AUDACIOUS", syn: "Bold", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'AUDACIOUS'", expl: "'Audacious' means showing a willingness to take surprisingly bold risks." },
-  { word: "PRAGMATIC", syn: "Practical", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'PRAGMATIC'", expl: "'Pragmatic' means dealing with things sensibly and realistically in a way that is based on practical considerations." },
-  { word: "METICULOUS", syn: "Careless", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'METICULOUS'", expl: "'Meticulous' means showing great attention to detail; very careful and precise. Its opposite is 'Careless' or 'Sloppy'." },
-  { word: "LACONIC", syn: "Concise", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'LACONIC'", expl: "'Laconic' means using very few words; brief or concise." },
-  { word: "BENEVOLENT", syn: "Malevolent", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'BENEVOLENT'", expl: "'Benevolent' means well-meaning and kindly. Its opposite is 'Malevolent' or 'Hostile'." },
-  { word: "PLACATE", syn: "Appease", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'PLACATE'", expl: "'Placate' means to make someone less angry or hostile; to appease." },
-  { word: "OBSTINATE", syn: "Stubborn", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'OBSTINATE'", expl: "'Obstinate' means stubbornly refusing to change one's opinion or chosen course of action." },
-  { word: "DEARTH", syn: "Abundance", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'DEARTH'", expl: "'Dearth' means a scarcity or lack of something. Its opposite is 'Abundance' or 'Surplus'." },
-  { word: "EQUIVOCAL", syn: "Ambiguous", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'EQUIVOCAL'", expl: "'Equivocal' means open to more than one interpretation; ambiguous or vague." },
-  { word: "FRUGAL", syn: "Extravagant", isSyn: false, qText: "Choose the word that is most nearly opposite in meaning to: 'FRUGAL'", expl: "'Frugal' means sparing or economical with regard to money or food. Its opposite is 'Extravagant' or 'Wasteful'." },
-  { word: "ALACRITY", syn: "Eagerness", isSyn: true, qText: "Choose the word that is most nearly similar in meaning to: 'ALACRITY'", expl: "'Alacrity' means brisk and cheerful readiness; eagerness." }
+// List of spelling words with wrong spelling variations
+const SPELLING_POOL = [
+  { correct: "Accommodation", wrongs: ["Accomodation", "Acomodation", "Acommodation"], word: "accommodation" },
+  { correct: "Necessary", wrongs: ["Northenry", "Nessesary", "Neccesary"], word: "necessary" },
+  { correct: "Liaison", wrongs: ["Liasion", "Laison", "Liason"], word: "liaison" },
+  { correct: "Occurrence", wrongs: ["Occurence", "Ocurence", "Ocurrence"], word: "occurrence" },
+  { correct: "Mischievous", wrongs: ["Mischievous", "Mischevious", "Mischivous"], word: "mischievous" },
+  { correct: "Peculiar", wrongs: ["Pecular", "Peculliar", "Peculair"], word: "peculiar" },
+  { correct: "Millennium", wrongs: ["Millenium", "Milennium", "Milenium"], word: "millennium" },
+  { correct: "Maintenance", wrongs: ["Maintainance", "Maintenence", "Maintanence"], word: "maintenance" },
+  { correct: "Colleague", wrongs: ["Coleague", "Colleage", "Coleage"], word: "colleague" },
+  { correct: "Conscientious", wrongs: ["Conscientious", "Conscentious", "Consientious"], word: "conscientious" }
 ];
 
-console.log("🚀 Initializing Dynamic Aptitude Questions Generation...");
+// List of verbal analogies
+const ANALOGY_POOL = [
+  { left: "Doctor : Hospital", right: "Teacher : School", wrongs: ["Lawyer : Court", "Chef : Kitchen", "Driver : Road"], category: "Profession" },
+  { left: "Light : Dark", right: "Hot : Cold", wrongs: ["Sun : Moon", "Fire : Ice", "Soft : Hard"], category: "Antonym" },
+  { left: "Reading : Knowledge", right: "Exercise : Fitness", wrongs: ["Eating : Hunger", "Running : Fatigue", "Sleeping : Dreams"], category: "Cause-Effect" },
+  { left: "Pen : Paper", right: "Brush : Canvas", wrongs: ["Chalk : Slate", "Hammer : Nail", "Key : Lock"], category: "Tool-Target" }
+];
+
+// Vocabulary bank for synonyms/antonyms
+const VOCAB_BANK = [
+  { word: "AMELIORATE", syn: "Improve", ant: "Worsen", definition: "make something better." },
+  { word: "LOQUACIOUS", syn: "Talkative", ant: "Silent", definition: "tending to talk a great deal." },
+  { word: "EPHEMERAL", syn: "Fleeting", ant: "Permanent", definition: "lasting for a very short time." },
+  { word: "CAPRICIOUS", syn: "Fickle", ant: "Stable", definition: "given to sudden and unaccountable changes of mood." },
+  { word: "AUDACIOUS", syn: "Daring", ant: "Timid", definition: "showing a willingness to take bold risks." },
+  { word: "PRAGMATIC", syn: "Practical", ant: "Idealistic", definition: "dealing with things sensibly and realistically." },
+  { word: "METICULOUS", syn: "Precise", ant: "Careless", definition: "showing great attention to detail." },
+  { word: "LACONIC", syn: "Terse", ant: "Verbose", definition: "using very few words." },
+  { word: "BENEVOLENT", syn: "Generous", ant: "Malevolent", definition: "well-meaning and kindly." },
+  { word: "PLACATE", syn: "Pacify", ant: "Anger", definition: "make someone less angry or hostile." },
+  { word: "OBSTINATE", syn: "Stubborn", ant: "Compliant", definition: "stubbornly refusing to change one's opinion." },
+  { word: "DEARTH", syn: "Scarcity", ant: "Abundance", definition: "a scarcity or lack of something." },
+  { word: "EQUIVOCAL", syn: "Ambiguous", ant: "Clear", definition: "open to more than one interpretation." },
+  { word: "FRUGAL", syn: "Thrifty", ant: "Wasteful", definition: "sparing or economical with money or food." },
+  { word: "ALACRITY", syn: "Readiness", ant: "Apathy", definition: "brisk and cheerful readiness." }
+];
+
+// English grammar fill-in-the-blank pool
+const GRAMMAR_POOL = [
+  { sentence: "Neither of the candidates ________ qualified for the technical role.", correct: "is", wrongs: ["are", "were", "been"], expl: "Singular pronoun 'neither' takes a singular verb 'is'." },
+  { sentence: "By the time the interviewer arrived, Aravind ________ his project review.", correct: "had completed", wrongs: ["completed", "has completed", "will complete"], expl: "Past perfect tense is used for an action completed before another past action." },
+  { sentence: "The recruiter was impressed ________ her deep knowledge of system design.", correct: "by", wrongs: ["with", "at", "about"], expl: "Passive construction uses the preposition 'by'." },
+  { sentence: "She is one of the programmers who ________ writing automated scripts.", correct: "enjoy", wrongs: ["enjoys", "enjoying", "enjoyed"], expl: "Relative pronoun 'who' refers to the plural antecedent 'programmers', requiring a plural verb 'enjoy'." }
+];
+
+// List of common English names for randomizing math problems
+const NAMES = ["Aarav", "Anya", "Vivaan", "Diya", "Kabir", "Meera", "Rohan", "Siddharth", "Ishaan", "Neha", "Aditya", "Priya", "Arjun", "Karan", "Kavya", "Rahul", "Anjali"];
+
+console.log("🚀 Initializing Dynamic, Diverse Aptitude Questions Generation...");
 
 const generatedQuestions = [];
 const TOTAL_QUESTIONS = 2500; // Generate exactly 2,500 questions
@@ -51,106 +84,203 @@ for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
   if (setNum > 20) difficulty = DIFFICULTIES[1]; // Medium
   if (setNum > 40) difficulty = DIFFICULTIES[2]; // Hard
 
-  // Cycle sections: Quantitative -> Logical -> Verbal
+  // Determine section: Quantitative, Logical, Verbal
   const section = SECTIONS[(i - 1) % SECTIONS.length];
 
   let questionText = "";
   let options = [];
-  let correctIndex = 1; // default B
+  let correctIndex = 0;
   let explanation = "";
 
-  if (section === "Quantitative") {
-    // Pick between Speed-Distance and Profit-Loss archetypes
-    if (i % 2 === 0) {
-      // Speed-Distance (Train crosses pole)
-      const baseSpeedKmh = ((i % 6) + 2) * 18; // Speed in kmh: 36, 54, 72, 90, 108, 126, 144
-      const speedMs = baseSpeedKmh * (5/18);  // speed in m/s (always a clean integer: 10, 15, 20, 25, 30, 35, 40)
-      const timeSec = ((i % 5) + 2) * 5;      // time in sec: 10, 15, 20, 25, 30
-      const lengthMeters = speedMs * timeSec;  // Length in meters
+  // Make sure we generate completely unique variables using loop index i
+  const name1 = NAMES[i % NAMES.length];
+  const name2 = NAMES[(i + 3) % NAMES.length];
 
-      questionText = `A train running at a speed of ${baseSpeedKmh} km/hr crosses a telephone pole in ${timeSec} seconds. What is the length of the train in meters? (Variant #${i})`;
+  if (section === "Quantitative") {
+    // 3 Archetypes: 1. Trains, 2. Profit & Loss, 3. Time & Work
+    const quantType = i % 3;
+
+    if (quantType === 0) {
+      // 1. Train speed & length crossing pole
+      const speeds = [36, 54, 72, 90, 108, 126, 144];
+      const baseSpeedKmh = speeds[i % speeds.length] + (Math.floor(i / 100) * 18) % 72; // varied base speed
+      const speedMs = baseSpeedKmh * (5/18);
+      const timeSec = ((i % 8) + 3) * 3; // 9, 12, 15, 18, 21, 24, 27, 30
+      const lengthMeters = speedMs * timeSec;
+
+      questionText = `A train running at a constant speed of ${baseSpeedKmh} km/hr crosses a stationary telephone pole in exactly ${timeSec} seconds. What is the length of the train in meters? (Set #${setNum}, Task #${i})`;
       
-      const optA = `${lengthMeters - 30} m`;
+      const optA = `${lengthMeters - 25} m`;
       const optB = `${lengthMeters} m`;
       const optC = `${lengthMeters + 35} m`;
-      const optD = `${lengthMeters + 50} m`;
+      const optD = `${lengthMeters + 60} m`;
       options = [optA, optB, optC, optD];
-      correctIndex = 1; // Opt B is correct
-      explanation = `Speed in meters per second = ${baseSpeedKmh} * (5/18) = ${speedMs} m/sec. Since the train crosses a stationary pole, the distance covered is equal to the length of the train. Length = Speed * Time = ${speedMs} * ${timeSec} = ${lengthMeters} meters.`;
-    } else {
-      // Profit-Loss Cost Price
-      const profitPct = ((i % 5) + 1) * 10; // 10%, 20%, 30%, 40%, 50%
-      const costPrice = ((i % 8) + 2) * 100; // 200, 300, 400, 500, 600, 700, 800, 900
-      const sellPrice = costPrice * (1 + profitPct/100);
+      correctIndex = 1;
+      explanation = `First, convert speed from km/hr to m/sec: Speed = ${baseSpeedKmh} * (5/18) = ${speedMs} m/sec. Since crossing a pole covers a distance equal to the train's own length: Length = Speed * Time = ${speedMs} m/sec * ${timeSec} seconds = ${lengthMeters} meters.`;
 
-      questionText = `A shopkeeper sells a laptop for ₹${sellPrice} making a profit of exactly ${profitPct}%. What was the cost price of the laptop? (Variant #${i})`;
+    } else if (quantType === 1) {
+      // 2. Profit and Loss
+      const basePrices = [120, 240, 360, 480, 560, 720, 840, 960];
+      const costPrice = basePrices[i % basePrices.length] + (setNum * 10);
+      const profitPct = ((i % 6) + 1) * 5; // 5%, 10%, 15%, 20%, 25%, 30%
+      const sellPrice = Math.round(costPrice * (1 + profitPct/100));
+
+      questionText = `${name1} sells a software catalog item to a client for ₹${sellPrice}, making an exact profit of ${profitPct}%. What was ${name1}'s original cost price (in ₹) for that item? (Set #${setNum}, Task #${i})`;
       
-      const optA = `₹${costPrice - 50}`;
-      const optB = `₹${costPrice - 100}`;
-      const optC = `₹${costPrice}`;
-      const optD = `₹${costPrice + 120}`;
+      const optA = `₹${costPrice - 40}`;
+      const optB = `₹${costPrice - 20}`;
+      const optC = `₹${costPrice + 35}`;
+      const optD = `₹${costPrice}`;
       options = [optA, optB, optC, optD];
-      correctIndex = 2; // Opt C is correct
-      explanation = `Selling Price = Cost Price * (1 + Profit/100). Therefore, Cost Price = Selling Price / (1 + Profit/100) = ${sellPrice} / (1 + ${profitPct/100}) = ₹${costPrice}.`;
+      correctIndex = 3;
+      explanation = `Formula: Cost Price = Selling Price / (1 + Profit/100). Therefore: Cost Price = ${sellPrice} / (1 + ${profitPct/100}) = ₹${costPrice}.`;
+
+    } else {
+      // 3. Time and Work
+      const daysPoolA = [6, 8, 10, 12, 15, 20];
+      const daysA = daysPoolA[i % daysPoolA.length];
+      const daysPoolB = [12, 24, 30, 20, 30, 60];
+      const daysB = daysPoolB[i % daysPoolB.length];
+      // Formula: together = (A*B)/(A+B)
+      const combined = parseFloat(((daysA * daysB) / (daysA + daysB)).toFixed(2));
+
+      questionText = `${name1} can complete a cloud system migration project in ${daysA} days, while ${name2} can complete the same project in ${daysB} days. If they work together, in how many days can they complete the project? (Set #${setNum}, Task #${i})`;
+      
+      const optA = `${combined} days`;
+      const optB = `${(combined + 1.2).toFixed(2)} days`;
+      const optC = `${(combined - 0.8).toFixed(2)} days`;
+      const optD = `${(combined * 1.5).toFixed(2)} days`;
+      options = [optA, optB, optC, optD];
+      correctIndex = 0;
+      explanation = `Together, the fraction of work completed in 1 day = (1/${daysA}) + (1/${daysB}) = (${daysA} + ${daysB}) / (${daysA} * ${daysB}). Thus, total days taken together = (A * B) / (A + B) = (${daysA} * ${daysB}) / (${daysA} + ${daysB}) = ${combined} days.`;
     }
+
   } else if (section === "Logical") {
-    // Pick between Arithmetic and Geometric Series archetypes
-    if (i % 2 === 0) {
-      // Arithmetic series
-      const start = (i % 20) + 2;
-      const step = (i % 8) + 3;
+    // 3 Archetypes: 1. Arithmetic Series, 2. Geometric Series, 3. Coding-Decoding
+    const logicalType = i % 3;
+
+    if (logicalType === 0) {
+      // 1. Arithmetic sequence
+      const start = (i % 30) + 5;
+      const step = (i % 9) + 4;
       const series = [start, start + step, start + 2 * step, start + 3 * step];
       const nextVal = start + 4 * step;
 
-      questionText = `Identify the missing value in this numerical sequence: ${series.join(', ')}, ? (Variant #${i})`;
+      questionText = `Identify the missing term that completes the following logic sequence: ${series.join(', ')}, ? (Set #${setNum}, Task #${i})`;
       
-      const optA = String(nextVal - 2);
+      const optA = String(nextVal - 3);
       const optB = String(nextVal);
-      const optC = String(nextVal + 3);
-      const optD = String(nextVal + 5);
+      const optC = String(nextVal + 4);
+      const optD = String(nextVal + 8);
       options = [optA, optB, optC, optD];
-      correctIndex = 1; // Opt B
-      explanation = `This is a simple arithmetic series with a common difference of ${step} added to each term (e.g. ${series[0]} + ${step} = ${series[1]}). The next number is ${series[3]} + ${step} = ${nextVal}.`;
-    } else {
-      // Geometric series
-      const start = (i % 5) + 1;
-      const ratio = 2;
+      correctIndex = 1;
+      explanation = `This is an arithmetic progression series with a common difference (step value) of ${step}. Each term is calculated by adding ${step} to the previous term. Next term = ${series[3]} + ${step} = ${nextVal}.`;
+
+    } else if (logicalType === 1) {
+      // 2. Geometric progression
+      const start = (i % 6) + 2;
+      const ratio = 3;
       const series = [start, start * ratio, start * ratio * ratio, start * ratio * ratio * ratio];
       const nextVal = start * ratio * ratio * ratio * ratio;
 
-      questionText = `Look at this series: ${series.join(', ')}, ... What number should come next? (Variant #${i})`;
+      questionText = `Determine the next logical numerical value in this series: ${series.join(', ')}, ... (Set #${setNum}, Task #${i})`;
       
-      const optA = String(nextVal);
-      const optB = String(nextVal + 4);
-      const optC = String(nextVal - 6);
-      const optD = String(nextVal + 10);
+      const optA = String(nextVal + 15);
+      const optB = String(nextVal - 25);
+      const optC = String(nextVal);
+      const optD = String(nextVal * 2);
       options = [optA, optB, optC, optD];
-      correctIndex = 0; // Opt A
-      explanation = `This is a simple geometric division/multiplication series. Each term is multiplied by a ratio of ${ratio} to calculate the next term. The next number is ${series[3]} * ${ratio} = ${nextVal}.`;
-    }
-  } else {
-    // Verbal synonym/antonym pool variation
-    const entry = verbalPool[(i - 1) % verbalPool.length];
-    
-    questionText = `${entry.qText} (Variant #${i})`;
-    
-    const optCorrect = entry.syn;
-    // Generate wrong options
-    const rawWrongs = ["Initiate", "Approve", "Corroborate", "Validate", "Exacerbate", "Maintain", "Deteriorate", "Garrulous"];
-    const wrongs = rawWrongs.filter(w => w.toLowerCase() !== optCorrect.toLowerCase()).slice(0, 3);
+      correctIndex = 2;
+      explanation = `This sequence represents a geometric progression where each term is multiplied by a common ratio of ${ratio} to calculate the next index value. Next value = ${series[3]} * ${ratio} = ${nextVal}.`;
 
-    options = [wrongs[0], optCorrect, wrongs[1], wrongs[2]];
-    correctIndex = 1; // Opt B is correct
-    explanation = entry.expl;
+    } else {
+      // 3. Coding-Decoding
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const shift = (i % 4) + 1; // shift value
+      const word = "DEV";
+      // Code word
+      const coded = word.split('').map(char => {
+        const idx = alphabet.indexOf(char);
+        return alphabet[(idx + shift) % 26];
+      }).join('');
+
+      const targetWord = "API";
+      const targetCoded = targetWord.split('').map(char => {
+        const idx = alphabet.indexOf(char);
+        return alphabet[(idx + shift) % 26];
+      }).join('');
+
+      questionText = `In a certain security encoding logic, the word "${word}" is coded as "${coded}". Under this same logic sequence, how would the word "${targetWord}" be coded? (Set #${setNum}, Task #${i})`;
+      
+      const optA = targetCoded;
+      const optB = targetCoded.split('').reverse().join('');
+      const optC = "XYZ";
+      const optD = "BQL";
+      options = [optA, optB, optC, optD];
+      correctIndex = 0;
+      explanation = `The encoding logic shifts each letter forward alphabetically by exactly ${shift} positions. Applying a shift of +${shift} to "${targetWord}" (A -> ${alphabet[(0+shift)%26]}, P -> ${alphabet[(15+shift)%26]}, I -> ${alphabet[(8+shift)%26]}) results in "${targetCoded}".`;
+    }
+
+  } else {
+    // Verbal: 4 Archetypes: 1. Synonyms, 2. Antonyms, 3. Spelling, 4. Grammar
+    const verbalType = i % 4;
+
+    if (verbalType === 0) {
+      // 1. Synonyms
+      const entry = VOCAB_BANK[i % VOCAB_BANK.length];
+      questionText = `Identify the word that is most similar (SYNONYM) in meaning to the word: "${entry.word}". (Set #${setNum}, Task #${i})`;
+      
+      const wrongs = ["Careless", "Worsen", "Apathy", "Verbose", "Ideals", "Malevolent"].filter(w => w.toLowerCase() !== entry.syn.toLowerCase());
+      options = [wrongs[0], wrongs[1], entry.syn, wrongs[2]];
+      correctIndex = 2;
+      explanation = `"${entry.word}" means ${entry.definition}. The most similar synonym is "${entry.syn}".`;
+
+    } else if (verbalType === 1) {
+      // 2. Antonyms
+      const entry = VOCAB_BANK[(i + 4) % VOCAB_BANK.length];
+      questionText = `Identify the word that is most nearly opposite (ANTONYM) in meaning to the word: "${entry.word}". (Set #${setNum}, Task #${i})`;
+      
+      const wrongs = ["Talkative", "Precise", "Concise", "Stubborn", "Ambiguous", "Daring"].filter(w => w.toLowerCase() !== entry.ant.toLowerCase());
+      options = [entry.ant, wrongs[0], wrongs[1], wrongs[2]];
+      correctIndex = 0;
+      explanation = `"${entry.word}" means ${entry.definition}. The most nearly opposite antonym is "${entry.ant}".`;
+
+    } else if (verbalType === 2) {
+      // 3. Spelling
+      const entry = SPELLING_POOL[i % SPELLING_POOL.length];
+      questionText = `Identify the option that displays the CORRECT, standardized English spelling of the word: "${entry.word}". (Set #${setNum}, Task #${i})`;
+      
+      options = [entry.wrongs[0], entry.wrongs[1], entry.wrongs[2], entry.correct];
+      correctIndex = 3;
+      explanation = `The correct spelling is "${entry.correct}". Other variations contain misspelled vowels or double letters.`;
+
+    } else {
+      // 4. Grammar Fill-in-the-blank
+      const entry = GRAMMAR_POOL[i % GRAMMAR_POOL.length];
+      questionText = `Fill in the blank to complete the sentence grammatically: "${entry.sentence}" (Set #${setNum}, Task #${i})`;
+      
+      options = [entry.wrongs[0], entry.correct, entry.wrongs[1], entry.wrongs[2]];
+      correctIndex = 1;
+      explanation = entry.expl;
+    }
   }
+
+  // Shuffle options and update correctIndex deterministically based on i
+  const shuffledOptions = [...options];
+  // Deterministic shuffle logic
+  const swapIdx = (i % 3) + 1;
+  const temp = shuffledOptions[correctIndex];
+  shuffledOptions[correctIndex] = shuffledOptions[(correctIndex + swapIdx) % 4];
+  shuffledOptions[(correctIndex + swapIdx) % 4] = temp;
+  const newCorrectIndex = shuffledOptions.indexOf(options[correctIndex]);
 
   generatedQuestions.push({
     id: `apt_q_${i}`,
     section,
     difficulty,
     question: questionText,
-    options,
-    correctIndex,
+    options: shuffledOptions,
+    correctIndex: newCorrectIndex,
     explanation,
     set: setNum
   });
@@ -159,5 +289,5 @@ for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
 ensureDir(OUTPUT_PATH);
 fs.writeFileSync(OUTPUT_PATH, JSON.stringify(generatedQuestions, null, 2), 'utf-8');
 
-console.log(`✅ Success! Generated ${generatedQuestions.length} dynamic Aptitude Questions!`);
+console.log(`✅ Success! Generated ${generatedQuestions.length} completely unique, diverse Aptitude Questions!`);
 console.log(`📂 Output saved directly to: ${OUTPUT_PATH}`);
