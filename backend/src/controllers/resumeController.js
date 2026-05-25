@@ -45,7 +45,7 @@ exports.buildResume = async (req, res) => {
 
 exports.analyzeResume = async (req, res) => {
   try {
-    const { role, skills } = req.body; // Expects skills listed in the resume and targeted job role
+    const { name, email, phone, role, skills, experience, projects, education } = req.body;
     const userId = req.user ? req.user.userId : 'anonymous';
 
     if (!role) {
@@ -53,14 +53,17 @@ exports.analyzeResume = async (req, res) => {
     }
 
     const providedSkills = Array.isArray(skills) ? skills : [];
+    const providedExp = Array.isArray(experience) ? experience : [];
+    const providedProj = Array.isArray(projects) ? projects : [];
+    const providedEdu = Array.isArray(education) ? education : [];
     
-    // Core keywords based on target roles
+    // 1. Keyword Alignment Score (40% weight)
     const roleKeywords = {
-      "Software Engineer": ["Data Structures", "Algorithms", "System Design", "Git", "Java", "Python", "C++", "DBMS"],
-      "Web Developer": ["React", "HTML5", "CSS3", "JavaScript", "Node.js", "Express", "REST APIs", "Tailwind CSS"],
-      "Data Analyst": ["Python", "SQL", "Excel", "Tableau", "Pandas", "PowerBI", "Statistics", "Machine Learning"],
-      "AI/ML Engineer": ["Python", "PyTorch", "TensorFlow", "Deep Learning", "NLP", "Computer Vision", "Scikit-Learn"],
-      "Cybersecurity Analyst": ["Network Security", "Cryptography", "Penetration Testing", "Linux", "Firewalls", "Wireshark"]
+      "Software Engineer": ["Data Structures", "Algorithms", "System Design", "Git", "Java", "Python", "C++", "DBMS", "OOP", "SQL", "Docker", "REST APIs"],
+      "Web Developer": ["React", "HTML5", "CSS3", "JavaScript", "Node.js", "Express", "REST APIs", "Tailwind CSS", "TypeScript", "Redux", "Webpack", "Git"],
+      "Data Analyst": ["Python", "SQL", "Excel", "Tableau", "Pandas", "PowerBI", "Statistics", "Machine Learning", "Data Mining", "NumPy", "Matplotlib", "Git"],
+      "AI/ML Engineer": ["Python", "PyTorch", "TensorFlow", "Deep Learning", "NLP", "Computer Vision", "Scikit-Learn", "Neural Networks", "Keras", "Model Deployment", "Git"],
+      "Cybersecurity Analyst": ["Network Security", "Cryptography", "Penetration Testing", "Linux", "Firewalls", "Wireshark", "SIEM", "Vulnerability Assessment", "CompTIA", "CISSP"]
     };
 
     const targetKeywords = roleKeywords[role] || roleKeywords["Software Engineer"];
@@ -72,35 +75,104 @@ exports.analyzeResume = async (req, res) => {
       !providedSkills.some(ps => ps.toLowerCase() === tk.toLowerCase() || ps.toLowerCase().includes(tk.toLowerCase()))
     );
 
-    // Compute ATS Score
-    const matchRatio = matchingSkills.length / targetKeywords.length;
-    let atsScore = Math.round(40 + (matchRatio * 50));
-    atsScore = Math.max(45, Math.min(98, atsScore));
+    const keywordScore = targetKeywords.length > 0 
+      ? Math.round((matchingSkills.length / targetKeywords.length) * 100) 
+      : 50;
 
-    // Dynamic tailored questions mapping based on candidate skills
+    // 2. Quantifiable Impact Score (30% weight)
+    // Scan all descriptions (experience + projects) for numeric statistics, percentages, or multipliers
+    let textToAnalyze = "";
+    providedExp.forEach(e => {
+      textToAnalyze += ` ${e.company || ""} ${e.role || ""} ${e.desc || ""}`;
+    });
+    providedProj.forEach(p => {
+      textToAnalyze += ` ${p.title || ""} ${p.desc || ""}`;
+    });
+
+    const metricsRegexes = [
+      /\b\d+%\b/,                   // percentages (e.g. 25%, 100%)
+      /\$\d+(?:,\d+)*(?:\.\d+)?\b/,  // dollar metrics (e.g. $10,000, $5k)
+      /\b\d+x\b/i,                  // growth multipliers (e.g. 2x, 5X)
+      /\b\d+(?:\.\d+)?\s*(?:million|thousand|users|queries|ms|sec|hours|days|weeks|months|years|lbs|k|m)\b/i, // scales or time units
+      /\b\d{3,}\b/                  // larger numbers (e.g. 500 users)
+    ];
+
+    let matchesCount = 0;
+    metricsRegexes.forEach(regex => {
+      const matches = textToAnalyze.match(new RegExp(regex, 'g'));
+      if (matches) matchesCount += matches.length;
+    });
+
+    // Score based on count of dynamic metrics
+    let impactScore = 20; // baseline
+    if (matchesCount > 0) impactScore += 30;
+    if (matchesCount > 2) impactScore += 30;
+    if (matchesCount > 4) impactScore += 20;
+    impactScore = Math.min(100, impactScore);
+
+    // 3. Profile Completeness Score (30% weight)
+    let completenessScore = 0;
+    if (email) completenessScore += 15;
+    if (phone) completenessScore += 15;
+    if (providedSkills.length >= 3) completenessScore += 20;
+    if (providedEdu.length >= 1 && providedEdu[0].school) completenessScore += 15;
+    if (providedExp.length >= 1 && providedExp[0].company) completenessScore += 15;
+    if (providedProj.length >= 1 && providedProj[0].title) completenessScore += 20;
+
+    // 4. Compute Dynamic Overall ATS Score
+    let atsScore = Math.round((keywordScore * 0.4) + (impactScore * 0.3) + (completenessScore * 0.3));
+    atsScore = Math.max(35, Math.min(99, atsScore));
+
+    // Dynamic tailored recommendations based on scorecard results
+    const suggestions = [];
+    if (completenessScore < 100) {
+      if (!email || !phone) {
+        suggestions.push("⚠️ Add complete contact coordinates (phone number and active email) to your resume header.");
+      }
+      if (providedEdu.length === 0 || !providedEdu[0].school) {
+        suggestions.push("⚠️ Incorporate your formal education history, listing degrees and graduation years.");
+      }
+      if (providedExp.length === 0 || !providedExp[0].company) {
+        suggestions.push("⚠️ Add professional work history or internship records to highlight career experience.");
+      }
+      if (providedProj.length === 0 || !providedProj[0].title) {
+        suggestions.push("⚠️ Incorporate structural software project listings to showcase practical coding expertise.");
+      }
+    }
+
+    if (impactScore < 80) {
+      suggestions.push("📈 ATS Priority: Add more quantifiable metrics (e.g., 'Boosted efficiency by 30%', 'Reduced loading latency by 150ms') to your project and job descriptions. Recruiters favor measurable results.");
+    }
+
+    if (missingKeywords.length > 0) {
+      suggestions.push(`💡 Integrate critical keywords relevant for ${role}: ${missingKeywords.slice(0, 3).join(', ')} to push your alignment score past 85%.`);
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push("🏆 Excellent work! Your resume covers all core structural sections, lists dynamic keywords, and showcases measurable metrics.");
+    }
+
+    // Custom prep questions tailored directly to listed skills
     const mappedQuestions = providedSkills.slice(0, 3).map(skill => 
-      `In your resume, you listed ${skill}. Can you walk me through a complex problem you solved using this technology?`
+      `In your resume, you listed ${skill}. Can you walk me through a technically challenging problem you solved using this technology?`
     );
 
-    // Provide default generic questions if no skills mapped
     if (mappedQuestions.length === 0) {
       mappedQuestions.push(
-        "Walk me through the most technically challenging software project you've listed on your resume.",
-        "How do you handle testing and code reviews in your personal project workflow?",
-        "Explain how you design scale configurations for data structures in your application."
+        "Walk me through the most technically complex software project you've listed on your resume.",
+        "How do you handle test coverage and CI/CD pipelines in your personal project workflow?"
       );
     }
 
     const analysis = {
       atsScore,
+      keywordScore,
+      impactScore,
+      completenessScore,
       targetRole: role,
       matchedSkills: matchingSkills,
       missingSkills: missingKeywords,
-      suggestions: [
-        `Consider adding key technologies: ${missingKeywords.slice(0, 3).join(', ')} to boost your score above 85%.`,
-        "Write detailed metric-focused bullet points for your projects (e.g., 'Optimized system efficiency by 25%').",
-        "Include links to live project demos and your active GitHub profile directly under project headers."
-      ],
+      suggestions: suggestions,
       recommendedQuestions: mappedQuestions
     };
 
