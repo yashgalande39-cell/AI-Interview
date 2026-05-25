@@ -9,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const interviewRoutes = require('./routes/interviewRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const gamificationRoutes = require('./routes/gamificationRoutes');
+const codingRoutes = require('./routes/codingRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,6 +38,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/gamification', gamificationRoutes);
+app.use('/api/coding', codingRoutes);
 
 // Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
 const io = new Server(server, {
