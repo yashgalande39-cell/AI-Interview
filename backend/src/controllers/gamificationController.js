@@ -1,4 +1,18 @@
 const mockDb = require('../models/mockDb');
+const fs = require('fs');
+const path = require('path');
+
+const APTITUDE_PATH = path.join(__dirname, '../../data/aptitude_questions.json');
+let aptitudePool = [];
+try {
+  if (fs.existsSync(APTITUDE_PATH)) {
+    aptitudePool = JSON.parse(fs.readFileSync(APTITUDE_PATH, 'utf-8'));
+    console.log(`[GamificationController] Loaded ${aptitudePool.length} aptitude questions successfully.`);
+  }
+} catch (err) {
+  console.error("[GamificationController] Error loading aptitude questions:", err);
+}
+
 
 exports.getLeaderboard = async (req, res) => {
   try {
@@ -63,35 +77,32 @@ exports.completeChallenge = async (req, res) => {
 
 exports.getAptitudeQuestions = async (req, res) => {
   try {
-    // Return structured multiple choice questions
-    const aptitudeQuestions = [
-      {
-        id: "apt_1",
-        section: "Quantitative",
-        question: "A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train in meters?",
-        options: ["120 m", "150 m", "180 m", "200 m"],
-        correctIndex: 1, // 150 m
-        explanation: "Speed = 60 * (5/18) = 50/3 m/sec. Length of train = Speed * Time = (50/3) * 9 = 150 meters."
-      },
-      {
-        id: "apt_2",
-        section: "Logical",
-        question: "Look at this series: 2, 1, (1/2), (1/4), ... What number should come next?",
-        options: ["1/3", "1/8", "2/8", "1/16"],
-        correctIndex: 1, // 1/8
-        explanation: "This is a simple division series; each number is one-half of the previous number (2 / 2 = 1, 1 / 2 = 1/2, etc.)."
-      },
-      {
-        id: "apt_3",
-        section: "Verbal",
-        question: "Choose the word that is most nearly opposite in meaning to the word: 'AMELIORATE'",
-        options: ["Worsen", "Improve", "Validate", "Initiate"],
-        correctIndex: 0, // Worsen
-        explanation: "'Ameliorate' means to make something better. Its opposite is 'Worsen' or 'Deteriorate'."
-      }
-    ];
+    const setNum = parseInt(req.query.set);
+    const difficulty = req.query.difficulty || 'All';
+    const section = req.query.section || 'All';
+    const limit = parseInt(req.query.limit) || 10;
 
-    return res.status(200).json({ questions: aptitudeQuestions });
+    let pool = aptitudePool;
+
+    if (!isNaN(setNum)) {
+      pool = pool.filter(q => q.set === setNum);
+    } else {
+      if (difficulty && difficulty !== 'All') {
+        pool = pool.filter(q => q.difficulty.toLowerCase() === difficulty.toLowerCase());
+      }
+      if (section && section !== 'All') {
+        pool = pool.filter(q => q.section.toLowerCase() === section.toLowerCase());
+      }
+      // Shuffle randomly
+      pool = [...pool].sort(() => 0.5 - Math.random());
+    }
+
+    const subset = pool.slice(0, limit);
+
+    return res.status(200).json({
+      questions: subset,
+      totalCount: pool.length
+    });
   } catch (err) {
     console.error("Aptitude Fetch Error:", err);
     return res.status(500).json({ message: "Failed to load aptitude test" });

@@ -22,7 +22,7 @@
     },
     {
       "id": "usr_1779713038867_n4naf",
-      "xp": 1090,
+      "xp": 1140,
       "streak": 1,
       "lastActive": "2026-05-25T12:43:58.864Z",
       "badges": [
@@ -191,7 +191,41 @@
       }
     }
   ],
-  "resumes": [],
+  "resumes": [
+    {
+      "id": "res_1779719433653",
+      "uploadedAt": "2026-05-25T14:30:33.653Z",
+      "userId": "usr_1779713038867_n4naf",
+      "targetRole": "Software Engineer",
+      "atsScore": 65,
+      "analysisData": {
+        "atsScore": 65,
+        "targetRole": "Software Engineer",
+        "matchedSkills": [
+          "JavaScript",
+          "Python",
+          "Git",
+          "Data Structures"
+        ],
+        "missingSkills": [
+          "Algorithms",
+          "System Design",
+          "C++",
+          "DBMS"
+        ],
+        "suggestions": [
+          "Consider adding key technologies: Algorithms, System Design, C++ to boost your score above 85%.",
+          "Write detailed metric-focused bullet points for your projects (e.g., 'Optimized system efficiency by 25%').",
+          "Include links to live project demos and your active GitHub profile directly under project headers."
+        ],
+        "recommendedQuestions": [
+          "In your resume, you listed React. Can you walk me through a complex problem you solved using this technology?",
+          "In your resume, you listed JavaScript. Can you walk me through a complex problem you solved using this technology?",
+          "In your resume, you listed Python. Can you walk me through a complex problem you solved using this technology?"
+        ]
+      }
+    }
+  ],
   "questions": [
     {
       "id": "q_hr_1",

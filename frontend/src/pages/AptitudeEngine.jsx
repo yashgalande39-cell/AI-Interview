@@ -3,215 +3,532 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { 
   BookOpen, Clock, AlertCircle, CheckCircle, 
-  HelpCircle, RefreshCw, ChevronRight, Award 
+  HelpCircle, RefreshCw, ChevronRight, Award,
+  Sliders, BookOpenCheck, Brain, ArrowLeft, BarChart2
 } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export default function AptitudeEngine() {
   const { token, updateXp } = useAuth();
   
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // App views: 'lobby' (select sets / customize), 'quiz' (active test), 'result' (after submit)
+  const [view, setView] = useState('lobby');
 
-  // Quiz states
+  // Pool lists & loaders
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Selector choices
+  const [selectedSet, setSelectedSet] = useState(null);
+  const [quizDifficulty, setQuizDifficulty] = useState('All');
+  const [quizSection, setQuizSection] = useState('All');
+  const [quizLength, setQuizLength] = useState(10);
+
+  // Active quiz states
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [timer, setTimer] = useState(180); // 3 minutes
+  const [timer, setTimer] = useState(180); // 3 minutes standard
+  const [maxTimer, setMaxTimer] = useState(180);
 
+  // Structured Practice Sets Pool
+  // Sets 1-20: Easy, Sets 21-40: Medium, Sets 41-50: Hard
+  const practiceSets = Array.from({ length: 50 }, (_, i) => {
+    const setNum = i + 1;
+    let difficulty = "Easy";
+    if (setNum > 20) difficulty = "Medium";
+    if (setNum > 40) difficulty = "Hard";
+
+    // Cycle topics
+    const topics = ["Quantitative", "Logical", "Verbal"];
+    const topic = topics[i % topics.length];
+
+    return {
+      id: setNum,
+      title: `Practice Set #${setNum}`,
+      difficulty,
+      topic,
+      qCount: 50,
+      description: `Structured practicing sets analyzing foundational cognitive parameters for ${topic} aptitude.`
+    };
+  });
+
+  // Start set-based test
+  const handleStartSet = async (setId) => {
+    setLoading(true);
+    setSelectedSet(setId);
+    try {
+      const res = await fetch(`${API_BASE}/gamification/aptitude?set=${setId}&limit=10`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(data.questions);
+        setAnswers({});
+        setSubmitted(false);
+        setScore(0);
+        setTimer(300); // 5 minutes for sets
+        setMaxTimer(300);
+        setView('quiz');
+      }
+    } catch (err) {
+      console.error("Failed to load set questions:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Start dynamic custom randomized test
+  const handleStartCustomQuiz = async () => {
+    setLoading(true);
+    setSelectedSet(null);
+    try {
+      const res = await fetch(
+        `${API_BASE}/gamification/aptitude?difficulty=${quizDifficulty}&section=${quizSection}&limit=${quizLength}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(data.questions);
+        setAnswers({});
+        setSubmitted(false);
+        setScore(0);
+        const allocatedTime = quizLength * 30; // 30 seconds per question
+        setTimer(allocatedTime);
+        setMaxTimer(allocatedTime);
+        setView('quiz');
+      }
+    } catch (err) {
+      console.error("Failed to generate custom quiz:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Live countdown timer loop
   useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        const res = await fetch('http://localhost:5000/api/gamification/aptitude', {
+    if (view === 'quiz' && timer > 0 && !submitted) {
+      const interval = setInterval(() => {
+        setTimer(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    } else if (timer === 0 && view === 'quiz' && !submitted) {
+      handleSubmit();
+    }
+  }, [timer, view, submitted]);
+
+  // Submit test answers
+  const handleSubmit = () => {
+    let finalScore = 0;
+    questions.forEach((q) => {
+      if (answers[q.id] === q.correctIndex) finalScore += 1;
+    });
+    setScore(finalScore);
+    setSubmitted(true);
+    updateXp(finalScore * 30, "Aptitude Scholar"); // 30 XP per correct question
+    setView('result');
+  };
+
+  // Refresh and pull completely fresh questions
+  const handleRefreshQuiz = async () => {
+    setLoading(true);
+    try {
+      if (selectedSet) {
+        // Fetch fresh subset of that same set
+        const res = await fetch(`${API_BASE}/gamification/aptitude?set=${selectedSet}&limit=10`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
           const data = await res.json();
           setQuestions(data.questions);
-        } else {
-          throw new Error("Aptitude failed");
+          setAnswers({});
+          setSubmitted(false);
+          setScore(0);
+          setTimer(300);
+          setView('quiz');
         }
-      } catch (err) {
-        console.warn("Using offline aptitude presets", err.message);
-        setQuestions([
+      } else {
+        // Fetch completely fresh randomized questions matching selected parameters
+        const res = await fetch(
+          `${API_BASE}/gamification/aptitude?difficulty=${quizDifficulty}&section=${quizSection}&limit=${quizLength}`,
           {
-            id: "apt_1",
-            section: "Quantitative",
-            question: "A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train in meters?",
-            options: ["120 m", "150 m", "180 m", "200 m"],
-            correctIndex: 1,
-            explanation: "Speed = 60 * (5/18) = 50/3 m/sec. Length of train = Speed * Time = (50/3) * 9 = 150 meters."
-          },
-          {
-            id: "apt_2",
-            section: "Logical",
-            question: "Look at this series: 2, 1, (1/2), (1/4), ... What number should come next?",
-            options: ["1/3", "1/8", "2/8", "1/16"],
-            correctIndex: 1,
-            explanation: "This is a simple division series; each number is one-half of the previous number (2 / 2 = 1, 1 / 2 = 1/2, etc.)."
-          },
-          {
-            id: "apt_3",
-            section: "Verbal",
-            question: "Choose the word that is most nearly opposite in meaning to the word: 'AMELIORATE'",
-            options: ["Worsen", "Improve", "Validate", "Initiate"],
-            correctIndex: 0,
-            explanation: "'Ameliorate' means to make something better. Its opposite is 'Worsen' or 'Deteriorate'."
+            headers: { 'Authorization': `Bearer ${token}` }
           }
-        ]);
-      } finally {
-        setLoading(false);
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setQuestions(data.questions);
+          setAnswers({});
+          setSubmitted(false);
+          setScore(0);
+          const allocatedTime = quizLength * 30;
+          setTimer(allocatedTime);
+          setView('quiz');
+        }
       }
-    };
-
-    fetchQuestions();
-  }, [token]);
-
-  // Timed Countdown loop
-  useEffect(() => {
-    if (timer > 0 && !submitted && !loading) {
-      const interval = setInterval(() => {
-        setTimer(prev => prev - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    } else if (timer === 0 && !submitted) {
-      handleSubmit();
+    } catch (err) {
+      console.error("Failed to refresh quiz:", err);
+    } finally {
+      setLoading(false);
     }
-  }, [timer, submitted, loading]);
-
-  const handleSubmit = () => {
-    let finalScore = 0;
-    questions.forEach((q, i) => {
-      if (answers[q.id] === q.correctIndex) finalScore += 1;
-    });
-    setScore(finalScore);
-    setSubmitted(true);
-    updateXp(finalScore * 30); // 30 XP per correct question
   };
 
-  const handleReset = () => {
-    setAnswers({});
-    setSubmitted(false);
-    setScore(0);
-    setTimer(180);
+  const getDifficultyColor = (diff) => {
+    switch (diff) {
+      case 'Easy': return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
+      case 'Medium': return 'bg-amber-500/10 border-amber-500/20 text-amber-400';
+      case 'Hard': return 'bg-rose-500/10 border-rose-500/20 text-rose-400';
+      default: return 'bg-slate-500/10 border-slate-500/20 text-slate-400';
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-10 h-10 border-4 border-accentViolet border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-3">
+        <RefreshCw className="w-10 h-10 text-violet-400 animate-spin" />
+        <span className="text-xs text-slate-500 font-black uppercase tracking-widest">Constructing practice grid...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)] bg-darkBg text-slate-100">
       
-      {/* Top dashboard details */}
-      <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-900 rounded-2xl">
-        <div className="space-y-0.5">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cognitive practice</span>
-          <div className="text-xs font-bold text-slate-200">Aptitude Test Center</div>
-        </div>
-        
-        <div className="flex items-center gap-6">
-          {!submitted && (
-            <div className="text-right">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Remaining Timer</span>
-              <span className={`text-sm font-extrabold flex items-center gap-1 ${timer < 30 ? 'text-rose-500 animate-pulse' : 'text-accentCyan'}`}>
-                <Clock className="w-3.5 h-3.5" /> {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
-              </span>
+      {/* 1. LOBBY VIEW: Practice Sets Explorer & Custom Panel */}
+      {view === 'lobby' && (
+        <div className="space-y-8">
+          
+          {/* Header Card */}
+          <div className="flex justify-between items-center bg-slate-950/40 p-5 border border-slate-900 rounded-3xl">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Cognitive test center</span>
+              <h2 className="text-lg font-black text-slate-200">Interactive Aptitude Engine</h2>
             </div>
-          )}
-
-          <div className="text-right">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Test Length</span>
-            <span className="text-sm font-extrabold text-accentViolet">{questions.length} Questions</span>
+            <span className="text-[10px] px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-extrabold uppercase tracking-wide">
+              2,500 Practice Tasks Loaded
+            </span>
           </div>
-        </div>
-      </div>
 
-      {/* Main questions panels */}
-      <div className="space-y-6">
-        {questions.map((q, idx) => (
-          <div key={q.id} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
-              <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold uppercase tracking-wider">
-                {q.section} Section
-              </span>
-              <span className="text-xs text-slate-500 font-bold">Question {idx + 1}</span>
-            </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
+            
+            {/* Left: Dynamic Custom Practice Generator Panel */}
+            <div className="xl:col-span-1 glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+              <h3 className="text-sm font-black text-slate-200 uppercase tracking-wider flex items-center gap-2 pb-4 border-b border-slate-900">
+                <Sliders className="w-4 h-4 text-violet-400" /> Custom Quiz Generator
+              </h3>
 
-            <div className="text-sm font-bold text-slate-200 leading-relaxed">
-              {q.question}
-            </div>
-
-            {/* Options grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              {q.options.map((opt, oIdx) => {
-                const isSelected = answers[q.id] === oIdx;
-                return (
-                  <button
-                    key={oIdx}
-                    disabled={submitted}
-                    onClick={() => setAnswers(prev => ({ ...prev, [q.id]: oIdx }))}
-                    className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                      isSelected 
-                        ? 'bg-accentViolet/10 border-accentViolet/40 text-accentViolet' 
-                        : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-250'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Solution and explanations */}
-            {submitted && (
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-900 text-xs space-y-2 leading-relaxed">
-                <div className="flex items-center gap-1.5 font-bold">
-                  {answers[q.id] === q.correctIndex ? (
-                    <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Correct</span>
-                  ) : (
-                    <span className="text-rose-400">❌ Incorrect (Correct option: {q.options[q.correctIndex]})</span>
-                  )}
+              {/* Difficulty */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Level of Difficulty</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {['All', 'Easy', 'Medium', 'Hard'].map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setQuizDifficulty(d)}
+                      className={`px-2 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                        quizDifficulty === d 
+                          ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' 
+                          : 'bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
                 </div>
-                <p className="text-slate-400">{q.explanation}</p>
               </div>
-            )}
-          </div>
-        ))}
 
-        {/* Command controls */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-900/60 print:hidden">
-          {!submitted ? (
+              {/* Topic category */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Cognitive Topic</label>
+                <select
+                  value={quizSection}
+                  onChange={e => setQuizSection(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-xs text-slate-350 outline-none font-bold"
+                >
+                  <option value="All">All Categories</option>
+                  <option value="Quantitative">Quantitative Reasoning</option>
+                  <option value="Logical">Logical Reasoning</option>
+                  <option value="Verbal">Verbal Ability</option>
+                </select>
+              </div>
+
+              {/* Quiz length */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Test Length</label>
+                <select
+                  value={quizLength}
+                  onChange={e => setQuizLength(parseInt(e.target.value))}
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-855 rounded-xl text-xs text-slate-350 outline-none font-bold"
+                >
+                  <option value="5">5 Questions (2.5 mins)</option>
+                  <option value="10">10 Questions (5 mins)</option>
+                  <option value="15">15 Questions (7.5 mins)</option>
+                  <option value="20">20 Questions (10 mins)</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleStartCustomQuiz}
+                className="w-full bg-glow-gradient py-3.5 rounded-xl text-xs font-black uppercase text-white shadow-lg hover:shadow-violet-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Brain className="w-4 h-4" /> Start Custom Practice
+              </button>
+            </div>
+
+            {/* Right: Practice Sets grid listing */}
+            <div className="xl:col-span-2 space-y-4">
+              <h3 className="text-sm font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <BookOpenCheck className="w-4.5 h-4.5 text-violet-400" /> Topic-focused Practice Sets
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 divide-y-0">
+                {practiceSets.map(set => (
+                  <div 
+                    key={set.id}
+                    className="glass-panel rounded-3xl p-5 bg-slate-950/40 border-slate-900 flex flex-col justify-between hover:border-slate-850 transition-all min-h-[160px]"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-slate-900 border border-slate-800 text-slate-400">
+                          {set.topic}
+                        </span>
+                        <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-black border tracking-wider ${getDifficultyColor(set.difficulty)}`}>
+                          {set.difficulty}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-200">{set.title}</h4>
+                      <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">{set.description}</p>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-900 mt-4">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">10 Selected Tasks</span>
+                      <button
+                        onClick={() => handleStartSet(set.id)}
+                        className="text-[10px] font-black uppercase text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1"
+                      >
+                        Practice Set <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* 2. ACTIVE QUIZ TEST PANEL */}
+      {view === 'quiz' && (
+        <div className="space-y-8">
+          
+          {/* Active Quiz Header Info */}
+          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-900 rounded-2xl">
             <button
-              onClick={handleSubmit}
-              className="bg-glow-gradient px-8 py-4 rounded-xl text-xs font-bold text-white shadow-lg hover:shadow-violet-500/20 hover:scale-[1.01] transition-all"
+              onClick={() => {
+                if (window.confirm("Are you sure you want to quit the active test session? Your progress will be lost.")) {
+                  setView('lobby');
+                }
+              }}
+              className="text-[10px] font-black uppercase text-slate-500 hover:text-slate-350 transition-colors flex items-center gap-1.5"
             >
-              Submit Test Answers
+              <ArrowLeft className="w-3.5 h-3.5" /> Quit Session
             </button>
-          ) : (
-            <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 text-xs font-bold">
-              <span className="text-emerald-400 flex items-center gap-2">
-                <Award className="w-4 h-4" /> Timed Quiz Evaluated! Final Score: {score} / {questions.length} (+{score * 30} XP)
+
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">Allocated Timer</span>
+                <span className={`text-sm font-extrabold flex items-center gap-1 ${timer < 30 ? 'text-rose-500 animate-pulse' : 'text-accentCyan'}`}>
+                  <Clock className="w-3.5 h-3.5" /> {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
+                </span>
+              </div>
+              <div className="text-right border-l border-slate-900 pl-6">
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">Session Size</span>
+                <span className="text-sm font-extrabold text-violet-400">{questions.length} Questions</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quiz Question progress bar */}
+          <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-900">
+            <div 
+              className="h-full bg-glow-gradient" 
+              style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }}
+            />
+          </div>
+
+          {/* Dynamic Question List */}
+          <div className="space-y-6">
+            {questions.map((q, idx) => (
+              <div key={q.id} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold uppercase tracking-wider">
+                      {q.section}
+                    </span>
+                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${getDifficultyColor(q.difficulty)}`}>
+                      {q.difficulty}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-500 font-bold">Question {idx + 1} of {questions.length}</span>
+                </div>
+
+                <div className="text-sm font-bold text-slate-200 leading-relaxed pl-1">
+                  {q.question}
+                </div>
+
+                {/* Multiple choice Options Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {q.options.map((opt, oIdx) => {
+                    const isSelected = answers[q.id] === oIdx;
+                    return (
+                      <button
+                        key={oIdx}
+                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: oIdx }))}
+                        className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all hover:scale-[1.005] ${
+                          isSelected 
+                            ? 'bg-violet-500/10 border-violet-500/40 text-violet-400' 
+                            : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <span className="font-extrabold mr-2 uppercase text-[10px] text-slate-500">Option {String.fromCharCode(65 + oIdx)}:</span>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Test submission hooks */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+              <button
+                onClick={handleSubmit}
+                className="bg-glow-gradient px-8 py-4 rounded-xl text-xs font-black uppercase tracking-wider text-white shadow-lg hover:shadow-violet-500/20 hover:scale-[1.01] transition-all"
+              >
+                Submit Practice Exam
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* 3. DETAILED SCORES AND ANSWER KEYS VIEW */}
+      {view === 'result' && (
+        <div className="space-y-8">
+          
+          {/* Summary results top panel */}
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-emerald-500/5 to-slate-950/30 border-emerald-500/10 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
+              
+              <div className="text-center sm:text-left space-y-1">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Practice evaluations complete</span>
+                <h3 className="text-lg font-black text-slate-200 flex items-center justify-center sm:justify-start gap-1.5">
+                  <Award className="w-5 h-5 text-emerald-400" /> Practicing Score Card
+                </h3>
+              </div>
+
+              <div className="flex gap-6 items-center bg-slate-950/60 p-4 border border-slate-900 rounded-2xl shrink-0">
+                <div className="text-center pr-6 border-r border-slate-900">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">Final Grade</span>
+                  <span className="text-xl font-black text-emerald-400">{score} / {questions.length}</span>
+                </div>
+                <div className="text-center">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block">XP Awarded</span>
+                  <span className="text-xl font-black text-violet-400">+{score * 30} XP</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Explanations & dynamic shuffler toolbar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-900 mt-2">
+              <span className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                Review the detailed answer sheets below to optimize your calculations. You can pull fresh randomized questions to re-test!
               </span>
               
-              <div className="flex gap-3">
+              <div className="flex gap-2.5 w-full sm:w-auto shrink-0 justify-end">
                 <button
-                  onClick={handleReset}
-                  className="px-5 py-3 border border-slate-800 hover:bg-slate-850 rounded-xl font-bold text-slate-300 hover:text-white transition-all flex items-center gap-1.5"
+                  onClick={handleRefreshQuiz}
+                  className="w-full sm:w-auto px-5 py-3 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-black uppercase text-slate-300 hover:text-white transition-all flex items-center justify-center gap-1.5"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Re-practice Quiz
+                  <RefreshCw className="w-3.5 h-3.5 text-violet-400" /> Refresh & Pull New Questions
                 </button>
-                <Link to="/dashboard" className="bg-slate-900 hover:bg-slate-850 border border-slate-800 px-5 py-3 rounded-xl font-bold text-slate-300 hover:text-white transition-all flex items-center gap-1">
-                  Go back <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
+                <button
+                  onClick={() => setView('lobby')}
+                  className="w-full sm:w-auto bg-slate-900 border border-slate-800 hover:bg-slate-850 px-5 py-3 rounded-xl text-xs font-black uppercase text-slate-350 transition-all"
+                >
+                  Go to Lobby
+                </button>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Exam reviews list */}
+          <div className="space-y-6">
+            {questions.map((q, idx) => (
+              <div key={q.id} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
+                  <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold uppercase tracking-wider">
+                    {q.section} Section
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">Review Question {idx + 1}</span>
+                </div>
+
+                <div className="text-sm font-bold text-slate-200 leading-relaxed pl-1">
+                  {q.question}
+                </div>
+
+                {/* Shuffled Options Review */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {q.options.map((opt, oIdx) => {
+                    const isSelected = answers[q.id] === oIdx;
+                    const isCorrect = q.correctIndex === oIdx;
+
+                    let classes = 'bg-slate-950/40 border-slate-900 text-slate-500';
+                    if (isCorrect) {
+                      classes = 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400';
+                    } else if (isSelected && !isCorrect) {
+                      classes = 'bg-rose-500/5 border-rose-500/20 text-rose-400';
+                    }
+
+                    return (
+                      <div
+                        key={oIdx}
+                        className={`p-3.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between ${classes}`}
+                      >
+                        <div>
+                          <span className="font-extrabold mr-2 uppercase text-[10px] text-slate-500">Option {String.fromCharCode(65 + oIdx)}:</span>
+                          {opt}
+                        </div>
+                        {isCorrect && <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mathematical Solution and explanations deck */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-900 text-xs space-y-2 leading-relaxed">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    {answers[q.id] === q.correctIndex ? (
+                      <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Correct Answer</span>
+                    ) : (
+                      <span className="text-rose-400">❌ Incorrect (Selected: {answers[q.id] !== undefined ? q.options[answers[q.id]] : 'None'} | Correct: {q.options[q.correctIndex]})</span>
+                    )}
+                  </div>
+                  <p className="text-slate-400 font-semibold">{q.explanation}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
-      </div>
+      )}
+
     </div>
   );
 }
