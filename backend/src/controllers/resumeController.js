@@ -193,3 +193,15 @@ exports.analyzeResume = async (req, res) => {
     return res.status(500).json({ message: "Failed to scan and analyze resume" });
   }
 };
+
+exports.getUserResumes = async (req, res) => {
+  try {
+    const userId = req.user ? req.user.userId : 'anonymous';
+    // Find all resumes uploaded by this user in mock DB
+    const resumes = mockDb.resumes.find({ userId });
+    return res.status(200).json({ resumes });
+  } catch (err) {
+    console.error("Get User Resumes Error:", err);
+    return res.status(500).json({ message: "Failed to fetch user resumes" });
+  }
+};

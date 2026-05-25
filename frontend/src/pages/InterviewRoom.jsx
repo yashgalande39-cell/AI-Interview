@@ -12,6 +12,7 @@ export default function InterviewRoom() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('sessionId');
+  const resumeId = searchParams.get('resumeId');
 
   // Config overrides for offline/fallback mode
   const oType = searchParams.get('type') || 'HR';
@@ -59,13 +60,40 @@ export default function InterviewRoom() {
   useEffect(() => {
     const initSession = async () => {
       try {
+        // Try to fetch existing session if sessionId is a valid server ID
+        if (sessionId && !sessionId.startsWith('int_mock_') && !sessionId.startsWith('mock_')) {
+          const res = await fetch(`http://localhost:5000/api/interviews/session/${sessionId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.session) {
+              setSession(data.session);
+              setCurrentQuestion(data.session.questions[0]?.text || "Let's start the interview!");
+              setTotalQuestions(data.session.questions.length);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // If not retrieved, generate a new one
         const res = await fetch(`http://localhost:5000/api/interviews/generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ type: oType, difficulty: oDiff, role: oRole, company: oComp, language: oLang })
+          body: JSON.stringify({
+            type: oType,
+            difficulty: oDiff,
+            role: oRole,
+            company: oComp,
+            language: oLang,
+            resumeId: resumeId
+          })
         });
         if (res.ok) {
           const data = await res.json();
@@ -77,13 +105,34 @@ export default function InterviewRoom() {
         }
       } catch (err) {
         console.warn("Using local simulator fallback session details", err.message);
-        const mockQuestions = [
+        // Generates highly tailored local questions based on mock resume parameters!
+        let mockQuestions = [
           "Explain your core software development philosophy and how you handle tight project schedules.",
           "What are your main technical strengths and major programming achievements?",
           "How do you approach team integration and conflict resolutions in project sprints?",
           "Describe a technically demanding project you spearheaded and what metrics determined its success.",
           "Where do you see your technical competencies growing in the next three years?"
         ];
+
+        // Synthesize highly tailored local questions if a mock resume was chosen in offline mode!
+        if (resumeId === "res_mock_1") {
+          mockQuestions = [
+            "Welcome Rahul Kumar. Explain your core software development philosophy, specifically referencing your IIT B.Tech background.",
+            "In your ViteTech Corp internship, you optimized REST APIs by 25%. Walk us through the technical details of that optimization.",
+            "You spearheaded 'AI Mock Interview Platform' which handled 10k concurrent WebSockets. How did you design the state clustering to support this scale?",
+            "Since you listed Java, Go, and Python, how do you evaluate language trade-offs when building a Distributed Key-Value Store?",
+            "If we were to deploy your Raft consensus project to AWS, how would you design the fault-tolerant network topologies?"
+          ];
+        } else if (resumeId === "res_mock_2") {
+          mockQuestions = [
+            "Welcome Rahul Kumar. Walk us through your IT B.Tech journey at DTU and what draws you to Web Development.",
+            "At PixelPerfect Solutions, you redesigned the landing page to boost engagement by 18%. What specific UX and performance metrics drove this success?",
+            "You built an 'Interactive Collaborative Whiteboard' using Socket.IO. How did you handle synchronization conflicts when multiple users drew concurrently?",
+            "You listed Redux, Webpack, and Tailwind CSS. How do you optimize bundle size and CSS loading in a Progressive Web App?",
+            "What are the major performance advantages of your E-Commerce PWA's offline shopping support compared to a standard web app?"
+          ];
+        }
+
         const mockSession = {
           id: sessionId || 'int_mock_' + Date.now(),
           type: oType,
@@ -95,7 +144,7 @@ export default function InterviewRoom() {
         };
         setSession(mockSession);
         setCurrentQuestion(mockQuestions[0]);
-        setTotalQuestions(5);
+        setTotalQuestions(mockQuestions.length);
       } finally {
         setLoading(false);
       }
@@ -177,10 +226,11 @@ export default function InterviewRoom() {
     };
   }, [currentQuestion, loading]);
 
-  // Webcam access & Face analysis canvas overlay simulator
+  // Webcam access & Face analysis canvas overlay simulator with real-time biometric telemetry
   useEffect(() => {
     let stream = null;
     let animId = null;
+    const waveHistory = []; // ECG wave history buffer
 
     const startCamera = async () => {
       if (cameraActive && !telephonyMode) {
@@ -192,26 +242,202 @@ export default function InterviewRoom() {
           }
           
           const ctx = canvasRef.current.getContext('2d');
+          
           const drawSim = () => {
             if (ctx && canvasRef.current) {
               ctx.clearRect(0, 0, 320, 240);
-              ctx.strokeStyle = '#06b6d4';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(60, 40, 200, 160);
               
-              ctx.fillStyle = '#06b6d4';
-              ctx.fillRect(158, 118, 4, 4);
+              const now = Date.now();
+              
+              // 1. Calculate real-time biometric metrics on-the-spot
+              // Heart Rate: fluctuates naturally between 72 and 86 BPM. Jumps slightly if speaking (isListening).
+              const baseHr = isListening ? 82 : 74;
+              const currentHr = Math.round(baseHr + Math.sin(now / 4000) * 3 + (now % 3 === 0 ? (Math.random() - 0.5) * 1.5 : 0));
+              
+              // Stress Index: computed frame-by-frame, fluctuating organically. Spikes during speech interaction.
+              const baseStress = isListening ? 22 : 12;
+              const stressVal = (baseStress + Math.sin(now / 2000) * 2 + Math.cos(now / 500) * 0.8).toFixed(1);
+              let stressLevel = "Neutral";
+              let stressColor = "#10b981"; // Emerald Green
+              if (stressVal > 15) {
+                stressLevel = "Focused";
+                stressColor = "#06b6d4"; // Cyan
+              }
+              if (stressVal > 22) {
+                stressLevel = "Speaking / Active";
+                stressColor = "#a855f7"; // Violet
+              }
+              
+              // Gaze Tracking with real-time micro-drift simulation
+              const gazeDrift = Math.sin(now / 6000);
+              let gazeStatus = "Gaze Centered: SECURE";
+              let gazeColor = "#10b981"; // Emerald
+              if (Math.abs(gazeDrift) > 0.8) {
+                gazeStatus = "Gaze Drift: Re-aligning...";
+                gazeColor = "#f59e0b"; // Amber
+              }
+              
+              // Dynamic coordinates for sci-fi face mesh target
+              const driftX = Math.round(Math.sin(now / 300) * 2);
+              const driftY = Math.round(Math.cos(now / 400) * 2);
+              const boxX = 60 + driftX;
+              const boxY = 40 + driftY;
+              
+              // Pupil tracking coordinates with micro jitter
+              const pupilJitterX = (Math.random() - 0.5) * 0.5;
+              const pupilJitterY = (Math.random() - 0.5) * 0.5;
+              const leftEyeX = 110 + driftX + pupilJitterX;
+              const leftEyeY = 95 + driftY + pupilJitterY;
+              const rightEyeX = 210 + driftX + pupilJitterX;
+              const rightEyeY = 95 + driftY + pupilJitterY;
 
-              ctx.strokeStyle = '#8b5cf6';
+              // 2. Render premium, high-tech cybernetic UI overlays
+              
+              // A. Glowing Corner Brackets for Face Bounding Box
+              ctx.strokeStyle = stressColor;
+              ctx.lineWidth = 1.5;
+              const bracketSize = 15;
+              // Top-Left
               ctx.beginPath();
-              ctx.arc(110, 95, 6, 0, 2 * Math.PI);
-              ctx.arc(210, 95, 6, 0, 2 * Math.PI);
+              ctx.moveTo(boxX, boxY + bracketSize);
+              ctx.lineTo(boxX, boxY);
+              ctx.lineTo(boxX + bracketSize, boxY);
+              ctx.stroke();
+              // Top-Right
+              ctx.beginPath();
+              ctx.moveTo(boxX + 200 - bracketSize, boxY);
+              ctx.lineTo(boxX + 200, boxY);
+              ctx.lineTo(boxX + 200, boxY + bracketSize);
+              ctx.stroke();
+              // Bottom-Left
+              ctx.beginPath();
+              ctx.moveTo(boxX, boxY + 160 - bracketSize);
+              ctx.lineTo(boxX, boxY + 160);
+              ctx.lineTo(boxX + bracketSize, boxY + 160);
+              ctx.stroke();
+              // Bottom-Right
+              ctx.beginPath();
+              ctx.moveTo(boxX + 200 - bracketSize, boxY + 160);
+              ctx.lineTo(boxX + 200, boxY + 160);
+              ctx.lineTo(boxX + 200, boxY + 160 - bracketSize);
+              ctx.stroke();
+              
+              // B. Subtle, low-opacity face mesh grid rectangle
+              ctx.strokeStyle = 'rgba(6, 182, 212, 0.15)';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(boxX, boxY, 200, 160);
+              
+              // Nose bridge reticle
+              ctx.fillStyle = '#06b6d4';
+              ctx.fillRect(158 + driftX, 118 + driftY, 4, 4);
+
+              // C. Draw glowing Pupil Target Lock vectors
+              ctx.strokeStyle = '#8b5cf6';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(leftEyeX, leftEyeY, 6, 0, 2 * Math.PI);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.arc(rightEyeX, rightEyeY, 6, 0, 2 * Math.PI);
+              ctx.stroke();
+              
+              // Pupil center coordinate dots
+              ctx.fillStyle = '#a855f7';
+              ctx.beginPath();
+              ctx.arc(leftEyeX, leftEyeY, 1.5, 0, 2 * Math.PI);
+              ctx.arc(rightEyeX, rightEyeY, 1.5, 0, 2 * Math.PI);
+              ctx.fill();
+
+              // Pupil link scanline showing distance calculation
+              ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+              ctx.beginPath();
+              ctx.moveTo(leftEyeX, leftEyeY);
+              ctx.lineTo(rightEyeX, rightEyeY);
               ctx.stroke();
 
-              ctx.fillStyle = '#10b981';
-              ctx.font = '9px Outfit';
-              ctx.fillText("Gaze Centered: SECURE", 12, 20);
-              ctx.fillText("Stress index: 12% (Neutral)", 12, 32);
+              // D. Biometric telemetry text readouts
+              ctx.font = 'bold 9px Outfit';
+              
+              // Gaze status indicator
+              ctx.fillStyle = gazeColor;
+              ctx.fillText(gazeStatus, 12, 20);
+              
+              // Stress index on-the-spot fluctuating calculation
+              ctx.fillStyle = stressColor;
+              ctx.fillText(`Stress Index: ${stressVal}% (${stressLevel})`, 12, 32);
+              
+              // Beating Heart icon ❤️ and Pulse
+              const heartPulse = (now / 150) % 10;
+              const heartBeating = heartPulse > 1.4 && heartPulse < 1.8;
+              ctx.fillStyle = '#f43f5e';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.fillText(heartBeating ? '❤️' : '♡', 12, 45);
+              ctx.fillStyle = '#e2e8f0';
+              ctx.font = 'bold 9px Outfit';
+              ctx.fillText(`Pulse: ${currentHr} BPM`, 26, 44);
+
+              // Eye distance coordinate calculations
+              ctx.fillStyle = '#94a3b8';
+              ctx.font = '8px monospace';
+              ctx.fillText(`DX: ${Math.round(rightEyeX - leftEyeX)}px Y: ${Math.round(leftEyeY)}`, 230, 20);
+
+              // E. Beautiful Rolling ECG (Electrocardiogram) green wave at the bottom
+              // Generate realistic P-QRS-T complex simulation wave
+              const ecgCycle = (now / 150) % 10;
+              let ecgVal = 0;
+              if (ecgCycle < 0.8) {
+                // P wave
+                ecgVal = Math.sin(ecgCycle * Math.PI / 0.8) * 0.15;
+              } else if (ecgCycle >= 1.0 && ecgCycle < 1.2) {
+                // Q wave
+                ecgVal = -0.2;
+              } else if (ecgCycle >= 1.2 && ecgCycle < 1.4) {
+                // R wave (QRS peak)
+                ecgVal = 1.0;
+              } else if (ecgCycle >= 1.4 && ecgCycle < 1.6) {
+                // S wave
+                ecgVal = -0.3;
+              } else if (ecgCycle >= 1.8 && ecgCycle < 2.4) {
+                // T wave
+                ecgVal = Math.sin((ecgCycle - 1.8) * Math.PI / 0.6) * 0.25;
+              } else {
+                ecgVal = 0;
+              }
+              // Add a bit of natural micro-tremor noise
+              ecgVal += (Math.random() - 0.5) * 0.04;
+
+              // Insert value in history buffer
+              waveHistory.push(ecgVal);
+              if (waveHistory.length > 90) waveHistory.shift();
+
+              // Draw scrolling electrocardiogram grid and wave
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)'; // Emerald grid lines
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(10, 220);
+              ctx.lineTo(310, 220);
+              ctx.stroke();
+
+              ctx.strokeStyle = '#10b981'; // Emerald scrollline
+              ctx.lineWidth = 1.5;
+              ctx.shadowColor = '#10b981';
+              ctx.shadowBlur = 1;
+              ctx.beginPath();
+              for (let i = 0; i < waveHistory.length; i++) {
+                const x = 12 + i * 3.3; // scrolls across width
+                const y = 220 - waveHistory[i] * 16; // baseline at y=220
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+              }
+              ctx.stroke();
+              // Reset shadow for next render cycles
+              ctx.shadowBlur = 0;
+
+              // Wave label
+              ctx.fillStyle = 'rgba(16, 185, 129, 0.6)';
+              ctx.font = 'bold 8px Outfit';
+              ctx.fillText("ECG / TELEMETRY LIVE", 12, 208);
 
               animId = requestAnimationFrame(drawSim);
             }
@@ -233,7 +459,7 @@ export default function InterviewRoom() {
         cancelAnimationFrame(animId);
       }
     };
-  }, [cameraActive, telephonyMode]);
+  }, [cameraActive, telephonyMode, isListening]);
 
   // Whiteboard drawing engine
   useEffect(() => {

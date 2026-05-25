@@ -107,17 +107,27 @@ export default function InterviewLobby() {
   // Load Resumes
   useEffect(() => {
     const fetchResumes = async () => {
+      let loadedResumes = [];
       try {
-        const res = await fetch('http://localhost:5000/api/resumes/analyze', {
+        const res = await fetch('http://localhost:5000/api/resumes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
           const data = await res.json();
+          if (data.resumes && Array.isArray(data.resumes)) {
+            loadedResumes = data.resumes.map(r => ({
+              id: r.id,
+              filename: r.filename || `${r.name || 'User'}_Resume_${r.targetRole || 'General'}.pdf`,
+              targetRole: r.targetRole || 'Software Engineer',
+              atsScore: r.atsScore || 80
+            }));
+          }
         }
       } catch (e) {
         console.warn("Could not load resumes, using mock resumes list", e.message);
       } finally {
         setResumes([
+          ...loadedResumes,
           { id: "res_mock_1", filename: "Rahul_Kumar_CV.pdf", targetRole: "Software Engineer", atsScore: 84 },
           { id: "res_mock_2", filename: "Rahul_Kumar_WebDev.pdf", targetRole: "Web Developer", atsScore: 78 }
         ]);
@@ -154,11 +164,11 @@ export default function InterviewLobby() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to start interview');
-      navigate(`/interview-room?sessionId=${data.session.id}`);
+      navigate(`/interview-room?sessionId=${data.session.id}&resumeId=${selectedResumeId}`);
     } catch (err) {
       console.warn("Server generation offline, starting mock-backed session:", err.message);
       const mockSessionId = 'int_mock_' + Date.now();
-      navigate(`/interview-room?sessionId=${mockSessionId}&type=${type}&difficulty=${difficulty}&role=${role}&company=${company}&language=${language}`);
+      navigate(`/interview-room?sessionId=${mockSessionId}&type=${type}&difficulty=${difficulty}&role=${role}&company=${company}&language=${language}&resumeId=${selectedResumeId}`);
     } finally {
       setSubmitting(false);
     }

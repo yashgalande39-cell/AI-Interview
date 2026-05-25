@@ -1,20 +1,85 @@
 const mockDb = require('../models/mockDb');
 
+// Dynamic rule-based question synthesizer that mimics a world-class AI interviewer when Gemini is unavailable.
+// It parses the structured fields from real or mock resumes and generates genuine, highly tailored questions.
+const synthesizeResumeQuestions = (type, difficulty, role, company, resume) => {
+  const questions = [];
+  const name = resume.name || "Rahul Kumar";
+  const skills = Array.isArray(resume.skills) ? resume.skills : [];
+  const projects = Array.isArray(resume.projects) ? resume.projects : [];
+  const experience = Array.isArray(resume.experience) ? resume.experience : [];
+  
+  const skill1 = skills.length > 0 ? skills[0] : (role === "Web Developer" ? "React" : "Software Engineering");
+  const skill2 = skills.length > 1 ? skills[1] : (role === "Web Developer" ? "CSS3/HTML5" : "System Design");
+  const skill3 = skills.length > 2 ? skills[2] : (role === "Web Developer" ? "Node.js" : "Data Structures");
+  
+  const proj1 = projects.length > 0 ? projects[0] : { title: "AI Interview Platform", desc: "built real-time interaction and simulation systems" };
+  const proj2 = projects.length > 1 ? projects[1] : { title: "Distributed Web System", desc: "developed a highly scalable back-end architecture" };
+  
+  const exp1 = experience.length > 0 ? experience[0] : { company: "ViteTech Corp", role: "Software Engineer Intern", desc: "optimized system components and integrated REST APIs" };
+
+  if (type === "HR") {
+    questions.push(
+      `Hello ${name}. Welcome to your virtual interview. Let's start by walking through your resume, specifically explaining your journey toward becoming a senior-level ${role}.`,
+      experience.length > 0 ? 
+        `I see that you did an internship at ${exp1.company} as a ${exp1.role}. What was the biggest behavioral or cultural challenge you faced while adapting to their engineering sprint cycles?` :
+        `Tell me about a time when you had to adapt to a brand new environment or a fast-changing team project. What was your strategy?`,
+      `You spear-headed the development of the project "${proj1.title}". How did you manage your timeline, prioritize core features, and ensure the project succeeded?`,
+      `If you are selected for this ${role} position at ${company && company !== "Common" ? company : "our company"}, how do you plan to leverage your background in ${skill1} and ${skill2} to make an immediate impact on our deliverables?`,
+      `Where do you see your technical competencies growing in the next three years, and how does this role align with your personal goals?`
+    );
+  } else if (type === "Technical") {
+    questions.push(
+      `Since you listed ${skill1} in your skills, could you walk me through its core architectural concepts and how you have practically optimized it in a production scenario?`,
+      `Let's discuss "${proj1.title}". You stated that you "${proj1.desc}". What were the most critical database or state management bottlenecks you faced during its implementation, and how did you resolve them?`,
+      `During your work at ${exp1.company} as a ${exp1.role}, what was the most demanding feature or system optimization you owned, and how did you implement the REST/WebSocket architecture?`,
+      `How do you decide between building a relational SQL schema versus a distributed NoSQL document store? For a project like your "${proj2.title}", what would be the scalability trade-offs?`,
+      `If you had to scale your "${proj1.title}" system to handle 10,000 active concurrent connections and live gaze-tracking calculations, how would you design the horizontal clustering and message queuing system?`
+    );
+  } else if (type === "Behavioral") {
+    questions.push(
+      `Tell me about a time at ${experience.length > 0 ? exp1.company : 'your previous project team'} when you had a strong disagreement with a peer or stakeholder regarding a technical choice. How did you resolve the conflict?`,
+      `While engineering "${proj1.title}", did you ever encounter an unexpected technical roadblock or critical API failure? How did you pivot your strategy and communicate this to others?`,
+      `Describe a scenario where you received critical or direct feedback on your system design or code quality. How did you handle that feedback, and what changes did you integrate into your workflow?`,
+      `At ${exp1.company}, did you ever have to work on a task under an extremely tight deadline where you had to compromise on technical debt to deliver on time? What was the outcome?`,
+      `Walk me through the single most challenging milestone on your resume that you are proud of. What quantitative metrics (like performance percentage or query throughput) did you achieve?`
+    );
+  } else {
+    // Standard genuine fallback
+    questions.push(
+      `Hello ${name}, explain your philosophy on writing clean, scalable, and maintainable code in ${difficulty} level environments.`,
+      `In ${role} workflows, how do you approach integration testing, automated CI/CD checks, and Git branching strategies?`,
+      `Explain the differences between asynchronous execution (like Event Loop or asynchronous workers) and multi-threaded processing. When is each optimal?`,
+      `How do you keep your skills in ${skill1} and ${skill2} up-to-date with the latest industry trends?`,
+      `What are the most critical factors you look for during a technical code review of a teammate's pull request?`
+    );
+  }
+
+  return questions;
+};
+
 // Helper to simulate Gemini API prompting or fallback to rich rule-based generation
-const generateAIQuestions = async (type, difficulty, role, company, language, resumeText) => {
+const generateAIQuestions = async (type, difficulty, role, company, language, resumeText, resumeObj) => {
   const apiKey = process.env.GEMINI_API_KEY;
   
   if (apiKey) {
     try {
-      // If the user has a Gemini API key configured, we could run a real fetch here.
-      // We will provide a robust structural call, with a graceful fallback.
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `Generate 5 realistic and challenging ${difficulty} level interview questions for a ${role} position at ${company || 'a top tech company'}. The interview type is ${type}. Language/Domain: ${language || 'General'}. ${resumeText ? `Based on this resume context: ${resumeText}` : ''} Return strictly a JSON array of strings.`
+              text: `You are an elite, senior technical interviewer from a top tech company (like Google or Netflix). Generate exactly 5 extremely realistic, genuine, and challenging ${difficulty} level interview questions for a ${role} position at ${company || 'a top tech company'}.
+The interview type is ${type}.
+Language/Domain: ${language || 'General'}.
+Candidate Context:
+${resumeText ? `Use these details from their resume to customize the questions, making them direct, genuine, and referring specifically to their achievements, projects, skills, or experience: ${resumeText}` : 'Treat them as a highly qualified candidate for this role.'}
+
+Format Instructions:
+- Return STRICTLY a JSON array of strings: ["question 1", "question 2", "question 3", "question 4", "question 5"].
+- Do NOT wrap it in Markdown formatting.
+- Address the candidate by name if available, and reference their resume naturally. Do not ask generic textbook questions.`
             }]
           }]
         })
@@ -30,14 +95,46 @@ const generateAIQuestions = async (type, difficulty, role, company, language, re
     }
   }
 
-  // Simulator Fallback: Grabs rich template questions from database and matches criteria
-  const allQs = mockDb.questions.find({ type, difficulty });
-  let filtered = allQs.filter(q => q.company === company || q.company === "Common");
-  if (filtered.length === 0) filtered = allQs;
+  // Simulator Fallback: If resume context exists, synthesize highly tailored questions
+  if (resumeObj) {
+    return synthesizeResumeQuestions(type, difficulty, role, company, resumeObj);
+  }
 
-  // Shuffle and take 5 questions
-  const shuffled = filtered.sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 5).map(q => q.question || q.description || q.question);
+  // General rule-based fallback without a resume:
+  const questions = [];
+  if (type === "HR") {
+    questions.push(
+      `Tell me about yourself, walk me through your technical background, and explain what draws you to this ${role} position.`,
+      `Why are you interested in working at ${company || 'a top-tier company'} specifically, and how do you fit into our engineering culture?`,
+      `How do you handle high-pressure environments, competing priorities, and tight sprint deadlines?`,
+      `Tell me about a time you had a strong communication conflict with a team member or stakeholder. How did you resolve it?`,
+      `What are your long-term career aspirations, and how does this role help you achieve them?`
+    );
+  } else if (type === "Technical") {
+    questions.push(
+      `What are the most critical software design patterns and architectural principles you consider when building a scalable ${role} application?`,
+      `Explain the difference between synchronous and asynchronous architectures, and when you would recommend using an event-driven model.`,
+      `How do you ensure data integrity, indexing efficiency, and query performance when designing databases for high-traffic workloads?`,
+      `How do you handle API security, authorization scopes, CORS, and rate-limiting to prevent malicious load spikes?`,
+      `Walk me through your end-to-end integration testing, CI/CD automated pipeline, and production deployment strategy for a modern application.`
+    );
+  } else if (type === "Behavioral") {
+    questions.push(
+      `Describe a technically complex challenge you faced in a past project. How did you analyze the choices and implement the solution?`,
+      `Tell me about a project that failed or missed its delivery deadline. What were the root causes, and what lessons did you take away?`,
+      `Give me an example of a time you had to make a critical technical decision with very limited information or severe time constraints.`,
+      `Describe a time you proposed a new framework or methodology to your team. How did you handle skepticism and obtain team buy-in?`,
+      `Walk me through a situation where you had to quickly acquire a brand new technical skill to solve an urgent project blocker.`
+    );
+  } else {
+    // Default matching questions
+    const allQs = mockDb.questions.find({ type, difficulty });
+    let filtered = allQs.filter(q => q.company === company || q.company === "Common");
+    if (filtered.length === 0) filtered = allQs;
+    const shuffled = filtered.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 5).map(q => q.question || q.description || q.question);
+  }
+  return questions.slice(0, 5);
 };
 
 exports.generateSession = async (req, res) => {
@@ -49,12 +146,53 @@ exports.generateSession = async (req, res) => {
       return res.status(400).json({ message: "Type, difficulty and role are required fields" });
     }
 
-    // Retrieve resume text if attached
+    // Retrieve resume if attached (support real DB resumes and lobby mock presets)
+    let resumeObj = null;
     let resumeText = "";
     if (resumeId) {
       const db = mockDb.getData();
-      const resume = db.resumes.find(r => r.id === resumeId);
-      if (resume) resumeText = resume.text || "";
+      resumeObj = db.resumes.find(r => r.id === resumeId);
+      if (!resumeObj) {
+        if (resumeId === "res_mock_1") {
+          resumeObj = {
+            id: "res_mock_1",
+            name: "Rahul Kumar",
+            role: "Software Engineer",
+            skills: ["React", "Node.js", "Express", "MongoDB", "Java", "Python", "Data Structures", "Algorithms", "SQL", "Git", "Docker", "AWS"],
+            projects: [
+              { title: "AI Mock Interview Platform", desc: "built a real-time voice simulator using Web Speech API, Express, and canvas gaze-tracking. Reduced user setup latency by 40% and handled 10k concurrent WebSockets" },
+              { title: "Distributed Key-Value Store", desc: "implemented a custom Raft consensus protocol in Go to ensure fault-tolerant state machine replication" }
+            ],
+            experience: [
+              { company: "ViteTech Corp", role: "Software Engineer Intern", desc: "optimized REST APIs, increasing query throughput by 25%. Built internal dashboards using React and Tailwind CSS." }
+            ],
+            education: [
+              { school: "Indian Institute of Technology", degree: "B.Tech in Computer Science" }
+            ]
+          };
+        } else if (resumeId === "res_mock_2") {
+          resumeObj = {
+            id: "res_mock_2",
+            name: "Rahul Kumar",
+            role: "Web Developer",
+            skills: ["React", "HTML5", "CSS3", "JavaScript", "Node.js", "Express", "Tailwind CSS", "Redux", "Webpack", "Git", "Firebase"],
+            projects: [
+              { title: "Interactive Collaborative Whiteboard", desc: "constructed a real-time multi-user drawing board using HTML5 Canvas and Socket.IO" },
+              { title: "E-Commerce PWA", desc: "engineered a highly responsive Progressive Web App with offline shopping support and Stripe integration" }
+            ],
+            experience: [
+              { company: "PixelPerfect Solutions", role: "Frontend Developer Intern", desc: "redesigned the main landing page, boosting user engagement metrics by 18% and achieving a lighthouse performance score of 98/100" }
+            ],
+            education: [
+              { school: "Delhi Technological University", degree: "B.Tech in Information Technology" }
+            ]
+          };
+        }
+      }
+      
+      if (resumeObj) {
+        resumeText = resumeObj.text || `${resumeObj.name} Resume. Skills: ${resumeObj.skills ? resumeObj.skills.join(', ') : ''}. Projects: ${resumeObj.projects ? resumeObj.projects.map(p => p.title).join(', ') : ''}`;
+      }
     }
 
     console.log(`Generating a ${difficulty} ${type} session for role: ${role} at ${company || 'Common'}`);
@@ -65,7 +203,7 @@ exports.generateSession = async (req, res) => {
       const codingChallenges = mockDb.getData().questions.filter(q => q.type === "Coding" && (q.difficulty === difficulty || difficulty === "Medium"));
       questions = codingChallenges.slice(0, 2); // 2 coding rounds
     } else {
-      const generated = await generateAIQuestions(type, difficulty, role, company, language, resumeText);
+      const generated = await generateAIQuestions(type, difficulty, role, company, language, resumeText, resumeObj);
       questions = generated.map((q, idx) => ({ id: `sq_${idx + 1}`, text: q }));
     }
 
@@ -80,7 +218,8 @@ exports.generateSession = async (req, res) => {
       questions,
       currentQuestionIndex: 0,
       transcript: [],
-      scoreCard: null
+      scoreCard: null,
+      resumeId: resumeId || null
     });
 
     return res.status(200).json({
@@ -330,5 +469,19 @@ exports.getHistory = async (req, res) => {
   } catch (err) {
     console.error("Retrieve History Error:", err);
     return res.status(500).json({ message: "Failed to retrieve interview history" });
+  }
+};
+
+exports.getSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = mockDb.interviews.findOne({ id: sessionId });
+    if (!session) {
+      return res.status(404).json({ message: "Mock interview session not found" });
+    }
+    return res.status(200).json({ session });
+  } catch (err) {
+    console.error("Retrieve Session Error:", err);
+    return res.status(500).json({ message: "Failed to retrieve mock interview session details" });
   }
 };

@@ -7,5 +7,6 @@ router.post('/generate', authMiddleware, interviewController.generateSession);
 router.post('/submit-answer', authMiddleware, interviewController.submitAnswer);
 router.post('/finish', authMiddleware, interviewController.finishSession);
 router.get('/history', authMiddleware, interviewController.getHistory);
+router.get('/session/:sessionId', authMiddleware, interviewController.getSession);
 
 module.exports = router;

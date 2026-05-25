@@ -226,6 +226,157 @@
       ],
       "currentQuestionIndex": 0,
       "scoreCard": null
+    },
+    {
+      "id": "int_1779721349234_wljf7",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T15:02:29.234Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "Coding",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "Python",
+      "questions": [
+        {
+          "id": "q_code_1",
+          "type": "Coding",
+          "role": "Software Engineer",
+          "company": "TCS",
+          "difficulty": "Easy",
+          "title": "Reverse a String",
+          "description": "Write a function `reverseString(s)` that takes a string and returns its reversed version.",
+          "testCases": [
+            {
+              "input": "hello",
+              "expected": "olleh"
+            },
+            {
+              "input": "world",
+              "expected": "dlrow"
+            },
+            {
+              "input": "a",
+              "expected": "a"
+            }
+          ],
+          "templates": {
+            "javascript": "function reverseString(s) {\n  // Write your code here\n  return s.split('').reverse().join('');\n}",
+            "python": "def reverse_string(s):\n    # Write your code here\n    return s[::-1]",
+            "cpp": "#include <string>\nusing namespace std;\nstring reverseString(string s) {\n    // Write your code here\n}",
+            "java": "public class Solution {\n    public static String reverseString(String s) {\n        // Write your code here\n        return \"\";\n    }\n}"
+          }
+        },
+        {
+          "id": "q_code_3",
+          "type": "Coding",
+          "role": "Software Engineer",
+          "company": "Infosys",
+          "difficulty": "Easy",
+          "title": "Palindrome Number",
+          "description": "Determine whether an integer `x` is a palindrome. Return `true` if it is, and `false` otherwise.",
+          "testCases": [
+            {
+              "input": "121",
+              "expected": "true"
+            },
+            {
+              "input": "-121",
+              "expected": "false"
+            },
+            {
+              "input": "10",
+              "expected": "false"
+            }
+          ],
+          "templates": {
+            "javascript": "function isPalindrome(x) {\n  // Write your code here\n  if (x < 0) return false;\n  const str = x.toString();\n  return str === str.split('').reverse().join('');\n}",
+            "python": "def is_palindrome(x):\n    # Write your code here\n    if x < 0: return False\n    return str(x) == str(x)[::-1]",
+            "cpp": "using namespace std;\nbool isPalindrome(int x) {\n    // Write your code here\n}",
+            "java": "public class Solution {\n    public static boolean isPalindrome(int x) {\n        // Write your code here\n        return false;\n    }\n}"
+          }
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779721349636_4ek9o",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T15:02:29.636Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779721349649_rg8kk",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T15:02:29.649Z",
+      "userId": "usr_1779707803424_7ope9",
+      "type": "HR",
+      "difficulty": "Easy",
+      "role": "Software Engineer",
+      "company": "Common",
+      "language": "JavaScript",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Tell me about yourself and walk me through your resume."
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null
+    },
+    {
+      "id": "int_1779721800013_qd4f4",
+      "status": "ongoing",
+      "transcript": [],
+      "startedAt": "2026-05-25T15:10:00.013Z",
+      "userId": "test_user_123",
+      "type": "Technical",
+      "difficulty": "Medium",
+      "role": "Software Engineer",
+      "company": "Google",
+      "language": "Java",
+      "questions": [
+        {
+          "id": "sq_1",
+          "text": "Since you listed React in your skills, could you walk me through its core architectural concepts and how you have practically optimized it in a production scenario?"
+        },
+        {
+          "id": "sq_2",
+          "text": "Let's discuss \"AI Mock Interview Platform\". You stated that you \"built a real-time voice simulator using Web Speech API, Express, and canvas gaze-tracking. Reduced user setup latency by 40% and handled 10k concurrent WebSockets\". What were the most critical database or state management bottlenecks you faced during its implementation, and how did you resolve them?"
+        },
+        {
+          "id": "sq_3",
+          "text": "During your work at ViteTech Corp as a Software Engineer Intern, what was the most demanding feature or system optimization you owned, and how did you implement the REST/WebSocket architecture?"
+        },
+        {
+          "id": "sq_4",
+          "text": "How do you decide between building a relational SQL schema versus a distributed NoSQL document store? For a project like your \"Distributed Key-Value Store\", what would be the scalability trade-offs?"
+        },
+        {
+          "id": "sq_5",
+          "text": "If you had to scale your \"AI Mock Interview Platform\" system to handle 10,000 active concurrent connections and live gaze-tracking calculations, how would you design the horizontal clustering and message queuing system?"
+        }
+      ],
+      "currentQuestionIndex": 0,
+      "scoreCard": null,
+      "resumeId": "res_mock_1"
     }
   ],
   "resumes": [
