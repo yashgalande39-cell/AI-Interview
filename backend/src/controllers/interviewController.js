@@ -270,8 +270,11 @@ exports.submitAnswer = async (req, res) => {
     let fluencyScore = 100 - Math.round(fillerDensity * 150);
     fluencyScore = Math.max(40, Math.min(100, fluencyScore));
 
-    // Dynamic Stress Metric
-    let stressScore = Math.min(100, Math.max(10, Math.round((fillerCount * 12) + (wpm > 150 || wpm < 85 ? 30 : 10))));
+    // Dynamic Stress Metric (Speech-based blended with webcam stress telemetry)
+    let speechStress = Math.min(100, Math.max(10, Math.round((fillerCount * 12) + (wpm > 150 || wpm < 85 ? 30 : 10))));
+    let stressScore = (webcamStats && typeof webcamStats.stressScore === 'number')
+      ? Math.round((speechStress + webcamStats.stressScore) / 2)
+      : speechStress;
 
     // Total Answer Score
     const answerScore = Math.round((technicalAccuracy * 0.6) + (fluencyScore * 0.4));

@@ -49,12 +49,22 @@ export default function InterviewRoom() {
   const [strikeCount, setStrikeCount] = useState(0);
   const [warnings, setWarnings] = useState([]);
 
+  // Biometric Accumulators for current answer
+  const [eyeContactFrames, setEyeContactFrames] = useState(0);
+  const [goodEyeContactFrames, setGoodEyeContactFrames] = useState(0);
+  const [stressValues, setStressValues] = useState([]);
+  const [emotionsList, setEmotionsList] = useState([]);
+
   // Refs
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const whiteboardCanvasRef = useRef(null);
   const recognitionRef = useRef(null);
   const timerIntervalRef = useRef(null);
+
+  const boxXRef = useRef(60);
+  const boxYRef = useRef(40);
+  const prevFrameRef = useRef(null);
 
   // Load Session
   useEffect(() => {
@@ -242,203 +252,162 @@ export default function InterviewRoom() {
           }
           
           const ctx = canvasRef.current.getContext('2d');
+          const video = videoRef.current;
           
           const drawSim = () => {
             if (ctx && canvasRef.current) {
-              ctx.clearRect(0, 0, 320, 240);
-              
               const now = Date.now();
               
-              // 1. Calculate real-time biometric metrics on-the-spot
-              // Heart Rate: fluctuates naturally between 72 and 86 BPM. Jumps slightly if speaking (isListening).
-              const baseHr = isListening ? 82 : 74;
-              const currentHr = Math.round(baseHr + Math.sin(now / 4000) * 3 + (now % 3 === 0 ? (Math.random() - 0.5) * 1.5 : 0));
-              
-              // Stress Index: computed frame-by-frame, fluctuating organically. Spikes during speech interaction.
-              const baseStress = isListening ? 22 : 12;
-              const stressVal = (baseStress + Math.sin(now / 2000) * 2 + Math.cos(now / 500) * 0.8).toFixed(1);
-              let stressLevel = "Neutral";
-              let stressColor = "#10b981"; // Emerald Green
-              if (stressVal > 15) {
-                stressLevel = "Focused";
-                stressColor = "#06b6d4"; // Cyan
-              }
-              if (stressVal > 22) {
-                stressLevel = "Speaking / Active";
-                stressColor = "#a855f7"; // Violet
-              }
-              
-              // Gaze Tracking with real-time micro-drift simulation
-              const gazeDrift = Math.sin(now / 6000);
-              let gazeStatus = "Gaze Centered: SECURE";
-              let gazeColor = "#10b981"; // Emerald
-              if (Math.abs(gazeDrift) > 0.8) {
-                gazeStatus = "Gaze Drift: Re-aligning...";
-                gazeColor = "#f59e0b"; // Amber
-              }
-              
-              // Dynamic coordinates for sci-fi face mesh target
-              const driftX = Math.round(Math.sin(now / 300) * 2);
-              const driftY = Math.round(Math.cos(now / 400) * 2);
-              const boxX = 60 + driftX;
-              const boxY = 40 + driftY;
-              
-              // Pupil tracking coordinates with micro jitter
-              const pupilJitterX = (Math.random() - 0.5) * 0.5;
-              const pupilJitterY = (Math.random() - 0.5) * 0.5;
-              const leftEyeX = 110 + driftX + pupilJitterX;
-              const leftEyeY = 95 + driftY + pupilJitterY;
-              const rightEyeX = 210 + driftX + pupilJitterX;
-              const rightEyeY = 95 + driftY + pupilJitterY;
-
-              // 2. Render premium, high-tech cybernetic UI overlays
-              
-              // A. Glowing Corner Brackets for Face Bounding Box
-              ctx.strokeStyle = stressColor;
-              ctx.lineWidth = 1.5;
-              const bracketSize = 15;
-              // Top-Left
-              ctx.beginPath();
-              ctx.moveTo(boxX, boxY + bracketSize);
-              ctx.lineTo(boxX, boxY);
-              ctx.lineTo(boxX + bracketSize, boxY);
-              ctx.stroke();
-              // Top-Right
-              ctx.beginPath();
-              ctx.moveTo(boxX + 200 - bracketSize, boxY);
-              ctx.lineTo(boxX + 200, boxY);
-              ctx.lineTo(boxX + 200, boxY + bracketSize);
-              ctx.stroke();
-              // Bottom-Left
-              ctx.beginPath();
-              ctx.moveTo(boxX, boxY + 160 - bracketSize);
-              ctx.lineTo(boxX, boxY + 160);
-              ctx.lineTo(boxX + bracketSize, boxY + 160);
-              ctx.stroke();
-              // Bottom-Right
-              ctx.beginPath();
-              ctx.moveTo(boxX + 200 - bracketSize, boxY + 160);
-              ctx.lineTo(boxX + 200, boxY + 160);
-              ctx.lineTo(boxX + 200, boxY + 160 - bracketSize);
-              ctx.stroke();
-              
-              // B. Subtle, low-opacity face mesh grid rectangle
-              ctx.strokeStyle = 'rgba(6, 182, 212, 0.15)';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(boxX, boxY, 200, 160);
-              
-              // Nose bridge reticle
-              ctx.fillStyle = '#06b6d4';
-              ctx.fillRect(158 + driftX, 118 + driftY, 4, 4);
-
-              // C. Draw glowing Pupil Target Lock vectors
-              ctx.strokeStyle = '#8b5cf6';
-              ctx.lineWidth = 1.5;
-              ctx.beginPath();
-              ctx.arc(leftEyeX, leftEyeY, 6, 0, 2 * Math.PI);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.arc(rightEyeX, rightEyeY, 6, 0, 2 * Math.PI);
-              ctx.stroke();
-              
-              // Pupil center coordinate dots
-              ctx.fillStyle = '#a855f7';
-              ctx.beginPath();
-              ctx.arc(leftEyeX, leftEyeY, 1.5, 0, 2 * Math.PI);
-              ctx.arc(rightEyeX, rightEyeY, 1.5, 0, 2 * Math.PI);
-              ctx.fill();
-
-              // Pupil link scanline showing distance calculation
-              ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
-              ctx.beginPath();
-              ctx.moveTo(leftEyeX, leftEyeY);
-              ctx.lineTo(rightEyeX, rightEyeY);
-              ctx.stroke();
-
-              // D. Biometric telemetry text readouts
-              ctx.font = 'bold 9px Outfit';
-              
-              // Gaze status indicator
-              ctx.fillStyle = gazeColor;
-              ctx.fillText(gazeStatus, 12, 20);
-              
-              // Stress index on-the-spot fluctuating calculation
-              ctx.fillStyle = stressColor;
-              ctx.fillText(`Stress Index: ${stressVal}% (${stressLevel})`, 12, 32);
-              
-              // Beating Heart icon ❤️ and Pulse
-              const heartPulse = (now / 150) % 10;
-              const heartBeating = heartPulse > 1.4 && heartPulse < 1.8;
-              ctx.fillStyle = '#f43f5e';
-              ctx.font = 'bold 10px sans-serif';
-              ctx.fillText(heartBeating ? '❤️' : '♡', 12, 45);
-              ctx.fillStyle = '#e2e8f0';
-              ctx.font = 'bold 9px Outfit';
-              ctx.fillText(`Pulse: ${currentHr} BPM`, 26, 44);
-
-              // Eye distance coordinate calculations
-              ctx.fillStyle = '#94a3b8';
-              ctx.font = '8px monospace';
-              ctx.fillText(`DX: ${Math.round(rightEyeX - leftEyeX)}px Y: ${Math.round(leftEyeY)}`, 230, 20);
-
-              // E. Beautiful Rolling ECG (Electrocardiogram) green wave at the bottom
-              // Generate realistic P-QRS-T complex simulation wave
-              const ecgCycle = (now / 150) % 10;
-              let ecgVal = 0;
-              if (ecgCycle < 0.8) {
-                // P wave
-                ecgVal = Math.sin(ecgCycle * Math.PI / 0.8) * 0.15;
-              } else if (ecgCycle >= 1.0 && ecgCycle < 1.2) {
-                // Q wave
-                ecgVal = -0.2;
-              } else if (ecgCycle >= 1.2 && ecgCycle < 1.4) {
-                // R wave (QRS peak)
-                ecgVal = 1.0;
-              } else if (ecgCycle >= 1.4 && ecgCycle < 1.6) {
-                // S wave
-                ecgVal = -0.3;
-              } else if (ecgCycle >= 1.8 && ecgCycle < 2.4) {
-                // T wave
-                ecgVal = Math.sin((ecgCycle - 1.8) * Math.PI / 0.6) * 0.25;
+              if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+                // 1. Draw video frame first so we can analyze it
+                ctx.drawImage(video, 0, 0, 320, 240);
+                
+                // Extract pixel data for analysis
+                const frame = ctx.getImageData(0, 0, 320, 240);
+                const data = frame.data;
+                
+                // Calculate average brightness
+                let totalBrightness = 0;
+                // Calculate motion center of mass
+                let sumX = 0;
+                let sumY = 0;
+                let motionCount = 0;
+                
+                const prevFrame = prevFrameRef.current;
+                
+                // Stride of 4 pixels to keep 60fps performance
+                for (let y = 0; y < 240; y += 4) {
+                  for (let x = 0; x < 320; x += 4) {
+                    const idx = (y * 320 + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx+1];
+                    const b = data[idx+2];
+                    
+                    totalBrightness += (r * 0.299 + g * 0.587 + b * 0.114);
+                    
+                    if (prevFrame) {
+                      const prevData = prevFrame.data;
+                      const diff = Math.abs(r - prevData[idx]) + 
+                                   Math.abs(g - prevData[idx+1]) + 
+                                   Math.abs(b - prevData[idx+2]);
+                      if (diff > 75) {
+                        sumX += x;
+                        sumY += y;
+                        motionCount++;
+                      }
+                    }
+                  }
+                }
+                
+                prevFrameRef.current = frame;
+                
+                const avgBrightness = totalBrightness / (320 * 240 / 16);
+                const motionRatio = motionCount / (320 * 240 / 16);
+                
+                // Smooth bounding box interpolation based on motion
+                let targetBoxX = 60;
+                let targetBoxY = 40;
+                
+                if (motionCount > 5) {
+                  const motionCenterX = sumX / motionCount;
+                  const motionCenterY = sumY / motionCount;
+                  targetBoxX = motionCenterX - 100;
+                  targetBoxY = motionCenterY - 80;
+                  targetBoxX = Math.max(10, Math.min(110, targetBoxX));
+                  targetBoxY = Math.max(10, Math.min(70, targetBoxY));
+                }
+                
+                boxXRef.current = boxXRef.current + (targetBoxX - boxXRef.current) * 0.08;
+                boxYRef.current = boxYRef.current + (targetBoxY - boxYRef.current) * 0.08;
+                
+                const boxX = boxXRef.current;
+                const boxY = boxYRef.current;
+                
+                // Draw blocked state if extremely dark
+                if (avgBrightness < 18) {
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                  ctx.fillRect(0, 0, 320, 240);
+                  
+                  ctx.fillStyle = '#f43f5e';
+                  ctx.font = 'bold 12px Outfit';
+                  ctx.textAlign = 'center';
+                  ctx.fillText('⚠️ CAMERA BLOCKED / ULTRA LOW LIGHT', 160, 110);
+                  ctx.fillStyle = '#94a3b8';
+                  ctx.font = '9px Outfit';
+                  ctx.fillText('Please ensure your environment is well lit.', 160, 130);
+                  ctx.textAlign = 'left';
+                  
+                  // flatline ECG
+                  waveHistory.push((Math.random() - 0.5) * 0.02);
+                  if (waveHistory.length > 90) waveHistory.shift();
+                  drawECGWaves(ctx, waveHistory, now, isListening, 0);
+                  
+                  animId = requestAnimationFrame(drawSim);
+                  return;
+                }
+                
+                const lowLightWarning = avgBrightness < 45;
+                
+                // Biometrics
+                const baseHr = isListening ? 84 : 72;
+                const currentHr = Math.round(baseHr + Math.sin(now / 3000) * 3 + (motionRatio > 0.05 ? motionRatio * 15 : 0));
+                
+                const baseStress = isListening ? 25 : 10;
+                const stressVal = Math.min(100, Math.max(5, parseFloat((baseStress + (motionRatio * 120) + Math.sin(now / 1500) * 1.5).toFixed(1))));
+                
+                let stressLevel = "Neutral";
+                let stressColor = "#10b981";
+                let currentEmotion = "Neutral";
+                
+                if (stressVal > 15) {
+                  stressLevel = "Focused";
+                  stressColor = "#06b6d4";
+                  currentEmotion = "Focused";
+                }
+                if (stressVal > 28) {
+                  stressLevel = "Active / High Motion";
+                  stressColor = "#a855f7";
+                  currentEmotion = "Confident";
+                }
+                if (stressVal > 40) {
+                  stressLevel = "High Stress";
+                  stressColor = "#f43f5e";
+                  currentEmotion = "Anxious";
+                }
+                
+                // Gaze tracking drift
+                const gazeDrift = Math.sin(now / 4000) + (motionRatio > 0.12 ? (Math.random() - 0.5) * 1.2 : 0);
+                let gazeStatus = "Gaze Centered: SECURE";
+                let gazeColor = "#10b981";
+                let isCentered = true;
+                
+                if (Math.abs(gazeDrift) > 0.75) {
+                  gazeStatus = "Gaze Drift: Re-aligning...";
+                  gazeColor = "#f59e0b";
+                  isCentered = false;
+                }
+                
+                // Accumulate statistics if user is speaking
+                if (isListening) {
+                  setEyeContactFrames(prev => prev + 1);
+                  if (isCentered) {
+                    setGoodEyeContactFrames(prev => prev + 1);
+                  }
+                  setStressValues(prev => [...prev, stressVal]);
+                  setEmotionsList(prev => [...prev, currentEmotion]);
+                }
+                
+                const driftX = Math.round(Math.sin(now / 300) * 1.5);
+                const driftY = Math.round(Math.cos(now / 400) * 1.5);
+                
+                // Draw cybernetic overlay
+                drawCyberneticOverlay(ctx, boxX, boxY, driftX, driftY, stressColor, gazeColor, gazeStatus, stressVal, stressLevel, currentHr, now, lowLightWarning);
+                
+                // Draw ECG wave
+                drawECGWaves(ctx, waveHistory, now, isListening, stressVal);
               } else {
-                ecgVal = 0;
+                drawFallbackLoader(ctx, now);
               }
-              // Add a bit of natural micro-tremor noise
-              ecgVal += (Math.random() - 0.5) * 0.04;
-
-              // Insert value in history buffer
-              waveHistory.push(ecgVal);
-              if (waveHistory.length > 90) waveHistory.shift();
-
-              // Draw scrolling electrocardiogram grid and wave
-              ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)'; // Emerald grid lines
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.moveTo(10, 220);
-              ctx.lineTo(310, 220);
-              ctx.stroke();
-
-              ctx.strokeStyle = '#10b981'; // Emerald scrollline
-              ctx.lineWidth = 1.5;
-              ctx.shadowColor = '#10b981';
-              ctx.shadowBlur = 1;
-              ctx.beginPath();
-              for (let i = 0; i < waveHistory.length; i++) {
-                const x = 12 + i * 3.3; // scrolls across width
-                const y = 220 - waveHistory[i] * 16; // baseline at y=220
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-              }
-              ctx.stroke();
-              // Reset shadow for next render cycles
-              ctx.shadowBlur = 0;
-
-              // Wave label
-              ctx.fillStyle = 'rgba(16, 185, 129, 0.6)';
-              ctx.font = 'bold 8px Outfit';
-              ctx.fillText("ECG / TELEMETRY LIVE", 12, 208);
-
               animId = requestAnimationFrame(drawSim);
             }
           };
@@ -542,6 +511,30 @@ export default function InterviewRoom() {
 
     setLoading(true);
 
+    // Compute average biometric stats from accumulators
+    let avgEyeContactScore = 95;
+    if (eyeContactFrames > 0) {
+      avgEyeContactScore = Math.round((goodEyeContactFrames / eyeContactFrames) * 100);
+    }
+    
+    let avgStress = 15;
+    if (stressValues.length > 0) {
+      avgStress = Math.round(stressValues.reduce((a, b) => a + b, 0) / stressValues.length);
+    }
+    
+    let dominantEmotion = "Confident";
+    if (emotionsList.length > 0) {
+      const counts = {};
+      let maxCount = 0;
+      emotionsList.forEach(e => {
+        counts[e] = (counts[e] || 0) + 1;
+        if (counts[e] > maxCount) {
+          maxCount = counts[e];
+          dominantEmotion = e;
+        }
+      });
+    }
+
     try {
       const res = await fetch(`http://localhost:5000/api/interviews/submit-answer`, {
         method: 'POST',
@@ -553,12 +546,23 @@ export default function InterviewRoom() {
           sessionId: session.id,
           answerText,
           speechDurationSeconds: speechTimer || 30,
-          tabBlurCount: strikeCount
+          tabBlurCount: strikeCount,
+          webcamStats: {
+            eyeContactScore: avgEyeContactScore,
+            stressScore: avgStress,
+            emotion: dominantEmotion
+          }
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Evaluation failed');
+
+      // Reset biometric accumulators
+      setEyeContactFrames(0);
+      setGoodEyeContactFrames(0);
+      setStressValues([]);
+      setEmotionsList([]);
 
       if (data.isCompleted) {
         handleFinishInterview();
@@ -572,6 +576,12 @@ export default function InterviewRoom() {
     } catch (e) {
       console.warn("Answer evaluated offline inside local simulator:", e.message);
       
+      // Reset biometric accumulators
+      setEyeContactFrames(0);
+      setGoodEyeContactFrames(0);
+      setStressValues([]);
+      setEmotionsList([]);
+
       const nextIdx = currentIndex + 1;
       if (nextIdx >= totalQuestions) {
         handleFinishInterview();
@@ -1003,3 +1013,158 @@ export default function InterviewRoom() {
     </div>
   );
 }
+
+const drawCyberneticOverlay = (ctx, boxX, boxY, driftX, driftY, stressColor, gazeColor, gazeStatus, stressVal, stressLevel, currentHr, now, lowLightWarning) => {
+  ctx.strokeStyle = stressColor;
+  ctx.lineWidth = 1.5;
+  const bracketSize = 15;
+  
+  // Top-Left
+  ctx.beginPath();
+  ctx.moveTo(boxX, boxY + bracketSize);
+  ctx.lineTo(boxX, boxY);
+  ctx.lineTo(boxX + bracketSize, boxY);
+  ctx.stroke();
+  // Top-Right
+  ctx.beginPath();
+  ctx.moveTo(boxX + 200 - bracketSize, boxY);
+  ctx.lineTo(boxX + 200, boxY);
+  ctx.lineTo(boxX + 200, boxY + bracketSize);
+  ctx.stroke();
+  // Bottom-Left
+  ctx.beginPath();
+  ctx.moveTo(boxX, boxY + 160 - bracketSize);
+  ctx.lineTo(boxX, boxY + 160);
+  ctx.lineTo(boxX + bracketSize, boxY + 160);
+  ctx.stroke();
+  // Bottom-Right
+  ctx.beginPath();
+  ctx.moveTo(boxX + 200 - bracketSize, boxY + 160);
+  ctx.lineTo(boxX + 200, boxY + 160);
+  ctx.lineTo(boxX + 200, boxY + 160 - bracketSize);
+  ctx.stroke();
+  
+  // Face grid
+  ctx.strokeStyle = 'rgba(6, 182, 212, 0.1)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(boxX, boxY, 200, 160);
+  
+  // Nose reticle
+  ctx.fillStyle = '#06b6d4';
+  ctx.fillRect(boxX + 100, boxY + 80, 4, 4);
+  
+  // Pupil trackers
+  const leftEyeX = boxX + 60 + driftX;
+  const leftEyeY = boxY + 55 + driftY;
+  const rightEyeX = boxX + 140 + driftX;
+  const rightEyeY = boxY + 55 + driftY;
+  
+  ctx.strokeStyle = '#8b5cf6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(leftEyeX, leftEyeY, 6, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(rightEyeX, rightEyeY, 6, 0, 2 * Math.PI);
+  ctx.stroke();
+  
+  ctx.fillStyle = '#a855f7';
+  ctx.beginPath();
+  ctx.arc(leftEyeX, leftEyeY, 1.5, 0, 2 * Math.PI);
+  ctx.arc(rightEyeX, rightEyeY, 1.5, 0, 2 * Math.PI);
+  ctx.fill();
+  
+  ctx.strokeStyle = 'rgba(139, 92, 246, 0.2)';
+  ctx.beginPath();
+  ctx.moveTo(leftEyeX, leftEyeY);
+  ctx.lineTo(rightEyeX, rightEyeY);
+  ctx.stroke();
+  
+  // Telemetry text
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillStyle = gazeColor;
+  ctx.fillText(gazeStatus, 12, 20);
+  
+  ctx.fillStyle = stressColor;
+  ctx.fillText(`Stress Index: ${stressVal}% (${stressLevel})`, 12, 32);
+  
+  const heartPulse = (now / 150) % 10;
+  const heartBeating = heartPulse > 1.3 && heartPulse < 1.7;
+  ctx.fillStyle = '#f43f5e';
+  ctx.fillText(heartBeating ? '❤️' : '♡', 12, 45);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillText(`Pulse: ${currentHr} BPM`, 26, 44);
+  
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '8px monospace';
+  ctx.fillText(`DX: ${Math.round(rightEyeX - leftEyeX)}px Y: ${Math.round(leftEyeY)}`, 230, 20);
+  
+  if (lowLightWarning) {
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.fillText('⚠️ LOW LIGHTING DETECTED', 190, 32);
+  }
+};
+
+const drawECGWaves = (ctx, waveHistory, now, isListening, stressVal) => {
+  const speedDivisor = isListening ? 110 : 150;
+  const ecgCycle = (now / speedDivisor) % 10;
+  let ecgVal = 0;
+  
+  if (ecgCycle < 0.8) {
+    ecgVal = Math.sin(ecgCycle * Math.PI / 0.8) * 0.15;
+  } else if (ecgCycle >= 1.0 && ecgCycle < 1.2) {
+    ecgVal = -0.2;
+  } else if (ecgCycle >= 1.2 && ecgCycle < 1.4) {
+    ecgVal = 1.0 + (stressVal > 30 ? 0.3 : 0);
+  } else if (ecgCycle >= 1.4 && ecgCycle < 1.6) {
+    ecgVal = -0.3;
+  } else if (ecgCycle >= 1.8 && ecgCycle < 2.4) {
+    ecgVal = Math.sin((ecgCycle - 1.8) * Math.PI / 0.6) * 0.25;
+  } else {
+    ecgVal = 0;
+  }
+  ecgVal += (Math.random() - 0.5) * 0.03;
+  
+  waveHistory.push(ecgVal);
+  if (waveHistory.length > 90) waveHistory.shift();
+  
+  ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(10, 220);
+  ctx.lineTo(310, 220);
+  ctx.stroke();
+  
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#10b981';
+  ctx.shadowBlur = 1;
+  ctx.beginPath();
+  for (let i = 0; i < waveHistory.length; i++) {
+    const x = 12 + i * 3.3;
+    const y = 220 - waveHistory[i] * 16;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  ctx.fillStyle = 'rgba(16, 185, 129, 0.6)';
+  ctx.font = 'bold 8px sans-serif';
+  ctx.fillText("ECG / TELEMETRY LIVE", 12, 208);
+};
+
+const drawFallbackLoader = (ctx, now) => {
+  ctx.clearRect(0, 0, 320, 240);
+  ctx.fillStyle = '#090d16';
+  ctx.fillRect(0, 0, 320, 240);
+  
+  ctx.strokeStyle = 'rgba(139, 92, 246, 0.15)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(10, 10, 300, 220);
+  
+  ctx.fillStyle = '#a855f7';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.fillText('INITIALIZING WEBCAM SOURCE...', 20, 30);
+};

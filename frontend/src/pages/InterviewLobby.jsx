@@ -6,7 +6,8 @@ import {
   ShieldCheck, HelpCircle, AlertCircle, Compass, 
   Sparkles, CheckSquare, Zap, PlayCircle, Loader2,
   Users, MessageSquare, Send, PenTool, Trash2, Copy,
-  Check, ArrowRightLeft, BookOpen, RefreshCw, XCircle
+  Check, ArrowRightLeft, BookOpen, RefreshCw, XCircle,
+  UploadCloud
 } from 'lucide-react';
 
 export default function InterviewLobby() {
@@ -23,6 +24,9 @@ export default function InterviewLobby() {
   const [company, setCompany] = useState('Common');
   const [language, setLanguage] = useState('JavaScript');
   const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   // Loaded lists
   const [resumes, setResumes] = useState([]);
@@ -137,6 +141,53 @@ export default function InterviewLobby() {
 
     fetchResumes();
   }, [token]);
+
+  const handleResumeUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    setUploadError('');
+    setUploadSuccess(false);
+
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/resumes/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to upload resume');
+
+      // Add the new resume to the state list
+      const newResume = {
+        id: data.resume.id,
+        filename: data.resume.filename,
+        targetRole: data.resume.targetRole || 'Software Engineer',
+        atsScore: data.resume.atsScore || 80
+      };
+
+      setResumes(prev => [newResume, ...prev]);
+      setSelectedResumeId(data.resume.id);
+      setUploadSuccess(true);
+      
+      // Auto-set the role, difficulty, etc. if Gemini detected it!
+      if (data.resume.targetRole) {
+        setRole(data.resume.targetRole);
+      }
+    } catch (err) {
+      console.error("Resume Upload Error:", err);
+      setUploadError(err.message || 'Error uploading file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
 
   const handleStartInterview = async () => {
     const allChecked = Object.values(confidenceCheck).every(v => v === true);
@@ -487,6 +538,47 @@ export default function InterviewLobby() {
                     </option>
                   ))}
                 </select>
+
+                {/* Resume upload uploader button / drop-zone */}
+                <div className="pt-2">
+                  <label className="relative flex flex-col items-center justify-center border border-dashed border-slate-800 hover:border-violet-500/40 hover:bg-violet-500/[0.02] transition-all rounded-xl p-4 cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept=".pdf,.txt" 
+                      onChange={handleResumeUpload} 
+                      className="hidden" 
+                      disabled={uploadingFile}
+                    />
+                    
+                    {uploadingFile ? (
+                      <div className="flex flex-col items-center gap-2 py-2">
+                        <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                        <span className="text-xs text-slate-400 font-semibold">Extracting & analyzing with AI...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-violet-400 group-hover:border-violet-500/20 transition-all">
+                          <UploadCloud className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-slate-300">Upload new PDF or TXT Resume</p>
+                          <p className="text-[10px] text-slate-500 font-semibold">Let AI automatically analyze your capabilities</p>
+                        </div>
+                      </div>
+                    )}
+                  </label>
+                  
+                  {uploadSuccess && (
+                    <p className="text-[10px] text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
+                      <Check className="w-3 h-3 animate-pulse" /> Resume uploaded and parsed successfully!
+                    </p>
+                  )}
+                  {uploadError && (
+                    <p className="text-[10px] text-rose-400 font-bold mt-1.5 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> {uploadError}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <button
