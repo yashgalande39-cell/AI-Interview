@@ -175,7 +175,7 @@ export default function Dashboard() {
   const prepProgress = Math.round((passedChecksCount / 4) * 100);
 
   // Career Coach Message Synthesizer
-  let coachMessage = "";
+  let coachMessage;
   if (readinessScore >= 85) {
     coachMessage = `Outstanding performance, ${userName.split(' ')[0]}! Your readiness score is ${readinessScore}/100. You are placement-ready. Keep polishing your skills with daily coding challenges!`;
   } else if (completedCount === 0) {
@@ -856,7 +856,7 @@ const getRelativeTime = (isoString) => {
     if (diffHours < 24) return `${diffHours}h ago`;
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}d ago`;
-  } catch (_) {
+  } catch {
     return 'Recently';
   }
 };

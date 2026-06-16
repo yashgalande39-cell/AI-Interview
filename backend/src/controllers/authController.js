@@ -267,3 +267,72 @@ exports.updatePlan = async (req, res) => {
   }
 };
 
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, currentRole, location, bio, collegeName, branch, graduationYear } = req.body;
+
+    const user = mockDb.users.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (currentRole !== undefined) updateFields.currentRole = currentRole;
+    if (location !== undefined) updateFields.location = location;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (collegeName !== undefined) updateFields.collegeName = collegeName;
+    if (branch !== undefined) updateFields.branch = branch;
+    if (graduationYear !== undefined) updateFields.graduationYear = graduationYear;
+
+    const updatedUser = mockDb.users.updateOne({ id: userId }, updateFields);
+    const { password: _, ...userWithoutPassword } = updatedUser;
+
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      user: userWithoutPassword
+    });
+  } catch (err) {
+    console.error("Update Profile Error:", err);
+    return res.status(500).json({ message: "Server error updating profile" });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current password and new password are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters" });
+    }
+
+    const user = mockDb.users.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    mockDb.users.updateOne({ id: userId }, { password: hashedNewPassword });
+
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (err) {
+    console.error("Change Password Error:", err);
+    return res.status(500).json({ message: "Server error changing password" });
+  }
+};
+

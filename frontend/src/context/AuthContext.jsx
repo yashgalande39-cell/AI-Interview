@@ -226,8 +226,39 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (profileData) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data.user);
+        localStorage.setItem('user_cache', JSON.stringify(data.user));
+        return { success: true, user: data.user };
+      } else {
+        throw new Error(data.message || 'Profile update failed');
+      }
+    } catch (err) {
+      // Offline fallback: update locally
+      console.warn("Profile update API failed, updating locally:", err.message);
+      if (user) {
+        const updatedUser = { ...user, ...profileData };
+        setUser(updatedUser);
+        localStorage.setItem('user_cache', JSON.stringify(updatedUser));
+        return { success: true, user: updatedUser, offline: true };
+      }
+      throw err;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateXp, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
+    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateXp, updateProfile, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
       {children}
     </AuthContext.Provider>
   );
