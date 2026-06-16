@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const mockDb = require('../models/mockDb');
 const vm = require('vm');
+const openRouterAI = require('../services/openRouter');
 
 const QUESTIONS_PATH = path.join(__dirname, '../../data/dsa_questions.json');
 let dsaQuestions = [];
@@ -262,35 +263,56 @@ exports.submitCode = async (req, res) => {
       if (user) {
         let updatedXP = (user.xp || 0) + 200;
         let badges = [...(user.badges || [])];
-        if (!badges.includes("Coding Master")) {
-          badges.push("Coding Master");
-        }
-        
-        // Milestones
-        if (updatedXP >= 500 && !badges.includes("Interview Scholar")) {
-          badges.push("Interview Scholar");
-        }
-        if (updatedXP >= 1500 && !badges.includes("Coding Master")) {
-          badges.push("Coding Master");
-        }
-        if (updatedXP >= 3000 && !badges.includes("Placement Ready")) {
-          badges.push("Placement Ready");
-        }
-
+        if (!badges.includes('Coding Master')) badges.push('Coding Master');
+        if (updatedXP >= 500 && !badges.includes('Interview Scholar')) badges.push('Interview Scholar');
+        if (updatedXP >= 1500 && !badges.includes('Coding Master')) badges.push('Coding Master');
+        if (updatedXP >= 3000 && !badges.includes('Placement Ready')) badges.push('Placement Ready');
         mockDb.users.updateOne({ id: userId }, { xp: updatedXP, badges });
+      }
+
+      // === AI Code Review (OpenRouter) ===
+      let aiReview = null;
+      try {
+        aiReview = await openRouterAI.reviewCode(
+          code,
+          language,
+          challenge.title,
+          challenge.description,
+          success
+        );
+        console.log(`✅ AI code review completed. Rating: ${aiReview.overallRating}/10`);
+      } catch (reviewErr) {
+        console.warn('AI code review unavailable:', reviewErr.message);
       }
 
       return res.status(200).json({
         success: true,
         results,
         xpAwarded: 200,
-        message: `🎉 Challenge solved successfully! +200 XP points awarded.`
+        message: `🎉 Challenge solved successfully! +200 XP points awarded.`,
+        aiReview
       });
     } else {
+      // === AI Hint for failed submissions (OpenRouter) ===
+      let aiReview = null;
+      try {
+        aiReview = await openRouterAI.reviewCode(
+          code,
+          language,
+          challenge.title,
+          challenge.description,
+          false
+        );
+        console.log(`✅ AI hint generated for failed submission`);
+      } catch (reviewErr) {
+        console.warn('AI hint unavailable:', reviewErr.message);
+      }
+
       return res.status(200).json({
         success: false,
         results,
-        message: "Code failed some validation test cases. Try optimizing your logic!"
+        message: 'Code failed some validation test cases. Try optimizing your logic!',
+        aiReview
       });
     }
   } catch (err) {

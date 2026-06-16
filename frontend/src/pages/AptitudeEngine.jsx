@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
 import { 
-  BookOpen, Clock, AlertCircle, CheckCircle, 
-  HelpCircle, RefreshCw, ChevronRight, Award,
-  Sliders, BookOpenCheck, Brain, ArrowLeft, BarChart2,
+  Clock, CheckCircle, 
+  RefreshCw, ChevronRight, Award,
+  Sliders, BookOpenCheck, Brain, ArrowLeft,
   Pause, Play
 } from 'lucide-react';
 import { API_BASE } from '../config';
@@ -31,7 +30,6 @@ export default function AptitudeEngine() {
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [timer, setTimer] = useState(180); // 3 minutes standard
-  const [maxTimer, setMaxTimer] = useState(180);
   const [isPaused, setIsPaused] = useState(false);
 
 
@@ -70,9 +68,7 @@ export default function AptitudeEngine() {
         setQuestions(data.questions);
         setAnswers({});
         setSubmitted(false);
-        setScore(0);
         setTimer(300); // 5 minutes for sets
-        setMaxTimer(300);
         setIsPaused(false);
         setView('quiz');
       }
@@ -102,7 +98,6 @@ export default function AptitudeEngine() {
         setScore(0);
         const allocatedTime = quizLength * 30; // 30 seconds per question
         setTimer(allocatedTime);
-        setMaxTimer(allocatedTime);
         setIsPaused(false);
         setView('quiz');
       }
@@ -123,10 +118,11 @@ export default function AptitudeEngine() {
     } else if (timer === 0 && view === 'quiz' && !submitted) {
       handleSubmit();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer, view, submitted, isPaused]);
 
   // Submit test answers
-  const handleSubmit = () => {
+  function handleSubmit() {
     let finalScore = 0;
     questions.forEach((q) => {
       if (answers[q.id] === q.correctIndex) finalScore += 1;
@@ -135,7 +131,7 @@ export default function AptitudeEngine() {
     setSubmitted(true);
     updateXp(finalScore * 30, "Aptitude Scholar"); // 30 XP per correct question
     setView('result');
-  };
+  }
 
   // Refresh and pull completely fresh questions
   const handleRefreshQuiz = async () => {
@@ -202,7 +198,7 @@ export default function AptitudeEngine() {
   }
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)] bg-darkBg text-slate-100">
+    <div className="space-y-8 pt-6 w-full bg-darkBg text-slate-100">
       
       {/* 1. LOBBY VIEW: Practice Sets Explorer & Custom Panel */}
       {view === 'lobby' && (

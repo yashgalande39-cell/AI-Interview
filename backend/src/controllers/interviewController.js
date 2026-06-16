@@ -1,4 +1,5 @@
 const mockDb = require('../models/mockDb');
+const openRouterAI = require('../services/openRouter');
 
 // Dynamic rule-based question synthesizer that mimics a world-class AI interviewer when Gemini is unavailable.
 // It parses the structured fields from real or mock resumes and generates genuine, highly tailored questions.
@@ -58,10 +59,23 @@ const synthesizeResumeQuestions = (type, difficulty, role, company, resume) => {
   return questions;
 };
 
-// Helper to simulate Gemini API prompting or fallback to rich rule-based generation
+// Helper to generate AI-powered interview questions via OpenRouter (primary) or rule-based fallback
 const generateAIQuestions = async (type, difficulty, role, company, language, resumeText, resumeObj) => {
+  // 1. Try OpenRouter first (best quality — LLaMA 3.3 70B)
+  try {
+    const questions = await openRouterAI.generateInterviewQuestions(
+      type, difficulty, role, company, language, resumeText
+    );
+    if (Array.isArray(questions) && questions.length >= 3) {
+      console.log(`✅ OpenRouter generated ${questions.length} ${type} questions for ${role}`);
+      return questions;
+    }
+  } catch (e) {
+    console.warn('OpenRouter question generation failed, trying Gemini fallback:', e.message);
+  }
+
+  // 2. Gemini fallback
   const apiKey = process.env.GEMINI_API_KEY;
-  
   if (apiKey) {
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
@@ -70,69 +84,57 @@ const generateAIQuestions = async (type, difficulty, role, company, language, re
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `You are an elite, senior technical interviewer from a top tech company (like Google or Netflix). Generate exactly 5 extremely realistic, genuine, and challenging ${difficulty} level interview questions for a ${role} position at ${company || 'a top tech company'}.
-The interview type is ${type}.
-Language/Domain: ${language || 'General'}.
-Candidate Context:
-${resumeText ? `Use these details from their resume to customize the questions, making them direct, genuine, and referring specifically to their achievements, projects, skills, or experience: ${resumeText}` : 'Treat them as a highly qualified candidate for this role.'}
-
-Format Instructions:
-- Return STRICTLY a JSON array of strings: ["question 1", "question 2", "question 3", "question 4", "question 5"].
-- Do NOT wrap it in Markdown formatting.
-- Address the candidate by name if available, and reference their resume naturally. Do not ask generic textbook questions.`
+              text: `You are an elite senior technical interviewer. Generate exactly 5 ${difficulty} level ${type} interview questions for a ${role} position at ${company || 'a top tech company'}. Language: ${language || 'General'}. ${resumeText ? 'Resume: ' + resumeText : ''} Return STRICTLY a JSON array: ["q1","q2","q3","q4","q5"]`
             }]
           }]
         })
       });
       const data = await response.json();
-      if (data.candidates && data.candidates[0].content.parts[0].text) {
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
         const text = data.candidates[0].content.parts[0].text;
         const cleanedText = text.replace(/```json|```/g, '').trim();
         return JSON.parse(cleanedText);
       }
     } catch (e) {
-      console.warn("Gemini API call failed, falling back to simulator:", e.message);
+      console.warn('Gemini fallback also failed, using rule-based synthesizer:', e.message);
     }
   }
 
-  // Simulator Fallback: If resume context exists, synthesize highly tailored questions
+  // 3. Rule-based synthesizer (always works offline)
   if (resumeObj) {
     return synthesizeResumeQuestions(type, difficulty, role, company, resumeObj);
   }
 
-  // General rule-based fallback without a resume:
   const questions = [];
-  if (type === "HR") {
+  if (type === 'HR') {
     questions.push(
-      `Tell me about yourself, walk me through your technical background, and explain what draws you to this ${role} position.`,
-      `Why are you interested in working at ${company || 'a top-tier company'} specifically, and how do you fit into our engineering culture?`,
-      `How do you handle high-pressure environments, competing priorities, and tight sprint deadlines?`,
-      `Tell me about a time you had a strong communication conflict with a team member or stakeholder. How did you resolve it?`,
+      `Tell me about yourself and what draws you to this ${role} position.`,
+      `Why are you interested in working at ${company || 'a top-tier company'}?`,
+      `How do you handle high-pressure environments and tight sprint deadlines?`,
+      `Tell me about a time you had a communication conflict with a team member. How did you resolve it?`,
       `What are your long-term career aspirations, and how does this role help you achieve them?`
     );
-  } else if (type === "Technical") {
+  } else if (type === 'Technical') {
     questions.push(
-      `What are the most critical software design patterns and architectural principles you consider when building a scalable ${role} application?`,
-      `Explain the difference between synchronous and asynchronous architectures, and when you would recommend using an event-driven model.`,
-      `How do you ensure data integrity, indexing efficiency, and query performance when designing databases for high-traffic workloads?`,
-      `How do you handle API security, authorization scopes, CORS, and rate-limiting to prevent malicious load spikes?`,
-      `Walk me through your end-to-end integration testing, CI/CD automated pipeline, and production deployment strategy for a modern application.`
+      `What software design patterns do you consider most critical when building a scalable ${role} application?`,
+      `Explain the difference between synchronous and asynchronous architectures.`,
+      `How do you ensure data integrity and query performance for high-traffic workloads?`,
+      `How do you handle API security, authorization scopes, and rate-limiting?`,
+      `Walk me through your CI/CD pipeline and production deployment strategy.`
     );
-  } else if (type === "Behavioral") {
+  } else if (type === 'Behavioral') {
     questions.push(
-      `Describe a technically complex challenge you faced in a past project. How did you analyze the choices and implement the solution?`,
-      `Tell me about a project that failed or missed its delivery deadline. What were the root causes, and what lessons did you take away?`,
-      `Give me an example of a time you had to make a critical technical decision with very limited information or severe time constraints.`,
-      `Describe a time you proposed a new framework or methodology to your team. How did you handle skepticism and obtain team buy-in?`,
-      `Walk me through a situation where you had to quickly acquire a brand new technical skill to solve an urgent project blocker.`
+      `Describe a technically complex challenge you faced. How did you implement the solution?`,
+      `Tell me about a project that missed its deadline. What were the root causes?`,
+      `Give an example of making a critical technical decision with limited information.`,
+      `Describe a time you proposed a new framework or methodology to your team.`,
+      `Walk me through acquiring a new technical skill to solve an urgent blocker.`
     );
   } else {
-    // Default matching questions
     const allQs = mockDb.questions.find({ type, difficulty });
-    let filtered = allQs.filter(q => q.company === company || q.company === "Common");
+    let filtered = allQs.filter(q => q.company === company || q.company === 'Common');
     if (filtered.length === 0) filtered = allQs;
-    const shuffled = filtered.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 5).map(q => q.question || q.description || q.question);
+    return filtered.sort(() => 0.5 - Math.random()).slice(0, 5).map(q => q.question || q.description);
   }
   return questions.slice(0, 5);
 };
@@ -144,6 +146,40 @@ exports.generateSession = async (req, res) => {
 
     if (!type || !difficulty || !role) {
       return res.status(400).json({ message: "Type, difficulty and role are required fields" });
+    }
+
+    // Plan Enforcement
+    const user = mockDb.users.findOne({ id: userId });
+    const userPlan = user ? (user.plan || 'free') : 'free';
+
+    if (userPlan === 'free') {
+      if (type !== 'HR') {
+        return res.status(403).json({ 
+          message: "Free plan users can only access HR mock interviews. Please upgrade to Pro for Technical, Behavioral, and Coding interviews.",
+          requiredPlan: 'pro',
+          userPlan
+        });
+      }
+
+      // Check current calendar month limit
+      const userInterviews = mockDb.interviews.find({ userId });
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      const currentMonthCount = userInterviews.filter(i => {
+        if (!i.startedAt) return false;
+        const d = new Date(i.startedAt);
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      }).length;
+
+      if (currentMonthCount >= 3) {
+        return res.status(403).json({
+          message: "Monthly mock interview limit (3) reached. Please upgrade to Pro for unlimited mock interviews.",
+          requiredPlan: 'pro',
+          userPlan
+        });
+      }
     }
 
     // Retrieve resume if attached (support real DB resumes and lobby mock presets)
@@ -279,19 +315,45 @@ exports.submitAnswer = async (req, res) => {
     // Total Answer Score
     const answerScore = Math.round((technicalAccuracy * 0.6) + (fluencyScore * 0.4));
 
+    // === AI-Powered Answer Evaluation (OpenRouter) ===
+    let aiEvaluation = null;
+    try {
+      aiEvaluation = await openRouterAI.evaluateAnswer(
+        qText,
+        answerText,
+        session.type,
+        session.role || 'Software Engineer'
+      );
+      console.log(`✅ AI evaluated answer with score: ${aiEvaluation.overallScore}`);
+    } catch (aiErr) {
+      console.warn('AI answer evaluation unavailable, using metric-based scoring:', aiErr.message);
+    }
+
+    // Merge AI scores with metric scores (AI takes priority if available)
+    const finalTechnicalAccuracy = aiEvaluation ? aiEvaluation.technicalScore : technicalAccuracy;
+    const finalFluencyScore = aiEvaluation ? aiEvaluation.communicationScore : fluencyScore;
+    const finalAnswerScore = aiEvaluation
+      ? Math.round((aiEvaluation.overallScore * 0.7) + (answerScore * 0.3))
+      : answerScore;
+
     // Record turn to transcript
     const turnData = {
       question: qText,
       answer: answerText,
       analysis: {
-        score: answerScore,
-        technicalAccuracy,
-        fluencyScore,
+        score: finalAnswerScore,
+        technicalAccuracy: finalTechnicalAccuracy,
+        fluencyScore: finalFluencyScore,
         wpm,
         fillerCount,
         stressScore,
         eyeContactScore: webcamStats?.eyeContactScore || 90,
-        emotion: webcamStats?.emotion || "Confident"
+        emotion: webcamStats?.emotion || 'Confident',
+        // AI-enhanced fields
+        aiStrengths: aiEvaluation?.strengths || [],
+        aiImprovements: aiEvaluation?.improvements || [],
+        idealAnswerHints: aiEvaluation?.idealAnswerHints || null,
+        keyMissingPoints: aiEvaluation?.keyMissingPoints || []
       }
     };
 
@@ -300,15 +362,23 @@ exports.submitAnswer = async (req, res) => {
     const isCompleted = nextIdx >= session.questions.length;
 
     // --- Adaptive Questioning Logic ---
-    // If the user answers incredibly well, increase the difficulty of subsequent questions!
     let nextDifficulty = session.difficulty;
-    if (answerScore >= 85 && session.difficulty === "Easy") nextDifficulty = "Medium";
-    if (answerScore >= 88 && session.difficulty === "Medium") nextDifficulty = "Hard";
-    // If the user struggles heavily, ease the difficulty
-    if (answerScore < 50 && session.difficulty === "Hard") nextDifficulty = "Medium";
-    if (answerScore < 45 && session.difficulty === "Medium") nextDifficulty = "Easy";
+    if (finalAnswerScore >= 85 && session.difficulty === 'Easy') nextDifficulty = 'Medium';
+    if (finalAnswerScore >= 88 && session.difficulty === 'Medium') nextDifficulty = 'Hard';
+    if (finalAnswerScore < 50 && session.difficulty === 'Hard') nextDifficulty = 'Medium';
+    if (finalAnswerScore < 45 && session.difficulty === 'Medium') nextDifficulty = 'Easy';
 
-    // Adaptive Question generation fallback: update upcoming question list if not completed
+    // AI Follow-up question generation for adaptive interviews
+    let aiFollowUp = null;
+    if (!isCompleted && finalAnswerScore > 0) {
+      try {
+        aiFollowUp = await openRouterAI.generateFollowUp(
+          qText, answerText, finalAnswerScore, session.role || 'Software Engineer'
+        );
+      } catch (_) { /* follow-up is optional */ }
+    }
+
+    // Adaptive Question generation: update upcoming question list if not completed
     let updatedQuestions = [...session.questions];
     if (!isCompleted && nextDifficulty !== session.difficulty) {
       console.log(`⚡ Adaptive AI Triggered: Changing difficulty to: ${nextDifficulty}`);
@@ -317,6 +387,10 @@ exports.submitAnswer = async (req, res) => {
         const selectedRep = replacementQs[Math.floor(Math.random() * replacementQs.length)];
         updatedQuestions[nextIdx] = { id: `adaptive_${nextIdx}`, text: selectedRep.question || selectedRep.description };
       }
+    }
+    // If AI generated a dynamic follow-up, inject as the next question
+    if (aiFollowUp && !isCompleted) {
+      updatedQuestions[nextIdx] = { id: `ai_followup_${nextIdx}`, text: aiFollowUp };
     }
 
     // Update DB
@@ -332,7 +406,7 @@ exports.submitAnswer = async (req, res) => {
     );
 
     return res.status(200).json({
-      message: "Answer submitted successfully",
+      message: 'Answer submitted successfully',
       isCompleted,
       analysis: turnData.analysis,
       nextQuestion: isCompleted ? null : updatedQuestions[nextIdx]
@@ -419,6 +493,25 @@ exports.finishSession = async (req, res) => {
       flashcards,
       completedAt: new Date().toISOString()
     };
+
+    // === AI-Powered Performance Feedback (OpenRouter) ===
+    let aiPerformanceFeedback = null;
+    try {
+      aiPerformanceFeedback = await openRouterAI.generatePerformanceFeedback(
+        scoreCard, session.role || 'Software Engineer', session.type || 'Technical'
+      );
+      console.log(`✅ OpenRouter generated personalized performance feedback`);
+      // Merge AI feedback into scorecard
+      scoreCard.aiVerdict = aiPerformanceFeedback.overallVerdict;
+      scoreCard.aiHiringLikelihood = aiPerformanceFeedback.hiringLikelihood;
+      scoreCard.aiPersonalizedFeedback = aiPerformanceFeedback.personalizedFeedback;
+      scoreCard.aiStrengths = aiPerformanceFeedback.top3Strengths;
+      scoreCard.aiImprovements = aiPerformanceFeedback.top3Improvements;
+      scoreCard.aiStudyPlan = aiPerformanceFeedback.studyPlan;
+      scoreCard.aiNextInterviewReady = aiPerformanceFeedback.nextInterviewReady;
+    } catch (aiErr) {
+      console.warn('AI performance feedback unavailable:', aiErr.message);
+    }
 
     // Update Interview status and save scorecard
     mockDb.interviews.updateOne(

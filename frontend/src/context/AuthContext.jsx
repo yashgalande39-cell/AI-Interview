@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext } from 'react';
 import { API_BASE } from '../config';
 
 const AuthContext = createContext();
@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [fontSize, setFontSize] = useState(parseInt(localStorage.getItem('font-size')) || 100);
+  const [plan, setPlan] = useState(localStorage.getItem('user_plan') || 'free');
 
   // Initialize and verify session on load
   useEffect(() => {
@@ -23,6 +24,10 @@ export const AuthProvider = ({ children }) => {
             const data = await res.json();
             setUser(data.user);
             setToken(storedToken);
+            if (data.user && data.user.plan) {
+              setPlan(data.user.plan);
+              localStorage.setItem('user_plan', data.user.plan);
+            }
           } else {
             // Token expired or invalid
             logout();
@@ -74,6 +79,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user_cache', JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
+      if (data.user && data.user.plan) {
+        setPlan(data.user.plan);
+        localStorage.setItem('user_plan', data.user.plan);
+      }
       return data;
     } catch (err) {
       console.warn("Register server call failed, using mock local register:", err.message);
@@ -112,6 +121,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user_cache', JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
+      if (data.user && data.user.plan) {
+        setPlan(data.user.plan);
+        localStorage.setItem('user_plan', data.user.plan);
+      }
       return data;
     } catch (err) {
       console.warn("Login server call failed, checking cached local registration:", err.message);
@@ -126,16 +139,18 @@ export const AuthProvider = ({ children }) => {
           return { user: cachedUser };
         }
       }
-      throw new Error("Invalid email or password (or server is offline)");
+      throw new Error("Invalid email or password (or server is offline)", { cause: err });
     }
   };
 
-  const logout = () => {
+  function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user_cache');
+    localStorage.removeItem('user_plan');
     setToken('');
     setUser(null);
-  };
+    setPlan('free');
+  }
 
   const updateXp = async (amount, badgeToEarn = null) => {
     try {
@@ -152,7 +167,7 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user);
         localStorage.setItem('user_cache', JSON.stringify(data.user));
       }
-    } catch (err) {
+    } catch {
       // Local offline state update
       if (user) {
         const updatedUser = { ...user };
@@ -174,11 +189,49 @@ export const AuthProvider = ({ children }) => {
     setFontSize(percent);
   };
 
+  const selectPlan = async (newPlan) => {
+    const validPlans = ['free', 'pro', 'teams'];
+    if (validPlans.includes(newPlan)) {
+      setPlan(newPlan);
+      localStorage.setItem('user_plan', newPlan);
+      // Update cached user plan
+      const cached = localStorage.getItem('user_cache');
+      if (cached) {
+        const u = JSON.parse(cached);
+        u.plan = newPlan;
+        localStorage.setItem('user_cache', JSON.stringify(u));
+      }
+
+      // Sync user plan to backend if token is available
+      const storedToken = localStorage.getItem('token') || token;
+      if (storedToken) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/plan`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${storedToken}`
+            },
+            body: JSON.stringify({ plan: newPlan })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setUser(data.user);
+            localStorage.setItem('user_cache', JSON.stringify(data.user));
+          }
+        } catch (e) {
+          console.warn("Failed to sync plan switch with backend database:", e.message);
+        }
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateXp, theme, toggleTheme, fontSize, setAccessibilitySize }}>
+    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateXp, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

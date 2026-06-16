@@ -1,5 +1,6 @@
 const mockDb = require('../models/mockDb');
 const pdfParse = require('pdf-parse');
+const openRouterAI = require('../services/openRouter');
 
 const computeATSAnalysis = (data) => {
   const { name, email, phone, role, skills, experience, projects, education } = data;
@@ -190,6 +191,23 @@ exports.analyzeResume = async (req, res) => {
       education
     });
 
+    // === AI-Powered ATS Suggestions (OpenRouter) ===
+    try {
+      const aiSuggestions = await openRouterAI.generateATSSuggestions(
+        { name, email, phone, skills, experience, projects, education },
+        role,
+        analysis.atsScore,
+        analysis.missingSkills
+      );
+      if (Array.isArray(aiSuggestions) && aiSuggestions.length > 0) {
+        // Merge AI suggestions with rule-based ones (AI takes priority)
+        analysis.suggestions = [...aiSuggestions, ...analysis.suggestions.slice(0, 1)];
+        console.log(`✅ OpenRouter generated ${aiSuggestions.length} AI ATS suggestions`);
+      }
+    } catch (aiErr) {
+      console.warn('AI ATS suggestions unavailable, using rule-based:', aiErr.message);
+    }
+
     // Save resume analytical record
     const savedRecord = mockDb.resumes.create({
       userId,
@@ -242,65 +260,38 @@ exports.uploadResume = async (req, res) => {
       return res.status(400).json({ message: "Uploaded file is empty or text could not be extracted" });
     }
 
-    // Call Gemini to extract structured info from the parsed text
-    const apiKey = process.env.GEMINI_API_KEY;
+    // === Try OpenRouter first for resume parsing (higher quality) ===
     let parsedData = {};
+    let parsedWithAI = false;
 
-    if (apiKey) {
-      try {
-        const prompt = `You are a high-performance resume parsing AI. Analyze the following resume raw text and extract structured candidate profile details.
-
-Resume Text:
-${rawText}
-
-Format your response STRICTLY as a single JSON object. Do not include any markdown format blocks or introductory text. The JSON object must follow this exact structure:
-{
-  "name": "Full Name",
-  "email": "Email Address",
-  "phone": "Phone Number",
-  "skills": ["Skill 1", "Skill 2", ...],
-  "experience": [
-    {
-      "company": "Company Name",
-      "role": "Job Role / Title",
-      "duration": "Duration (e.g., June 2023 - Present)",
-      "desc": "Key accomplishments, metrics and details"
+    try {
+      parsedData = await openRouterAI.parseResumeText(rawText);
+      parsedWithAI = true;
+      console.log(`✅ OpenRouter parsed resume for: ${parsedData.name}`);
+    } catch (e) {
+      console.warn('OpenRouter resume parsing failed, trying Gemini fallback:', e.message);
     }
-  ],
-  "projects": [
-    {
-      "title": "Project Title",
-      "desc": "Description and metrics",
-      "tech": "Technologies used (e.g. React, Node.js)"
-    }
-  ],
-  "education": [
-    {
-      "school": "University/School Name",
-      "degree": "Degree / Major",
-      "year": "Graduation Year (e.g. 2025)"
-    }
-  ],
-  "targetRole": "Identify which of these 5 roles the candidate is best suited for: 'Software Engineer', 'Web Developer', 'Data Analyst', 'AI/ML Engineer', 'Cybersecurity Analyst'."
-}`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }]
-          })
-        });
-        const data = await response.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          const respText = data.candidates[0].content.parts[0].text;
-          const cleaned = respText.replace(/```json|```/g, '').trim();
-          parsedData = JSON.parse(cleaned);
+    // Gemini fallback if OpenRouter failed
+    if (!parsedWithAI) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        try {
+          const prompt = `You are a resume parsing AI. Parse this resume and return ONLY a JSON object:\n${rawText.slice(0, 3000)}\n\nJSON structure: {"name":...,"email":...,"phone":...,"skills":[...],"experience":[{"company":...,"role":...,"duration":...,"desc":...}],"projects":[{"title":...,"desc":...,"tech":...}],"education":[{"school":...,"degree":...,"year":...}],"targetRole":...}`;
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          });
+          const data = await response.json();
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            const respText = data.candidates[0].content.parts[0].text;
+            parsedData = JSON.parse(respText.replace(/```json|```/g, '').trim());
+            parsedWithAI = true;
+          }
+        } catch (err) {
+          console.warn('Gemini fallback also failed, using regex extraction:', err.message);
         }
-      } catch (err) {
-        console.warn("Failed to parse resume with Gemini, using regex fallback:", err.message);
       }
     }
 

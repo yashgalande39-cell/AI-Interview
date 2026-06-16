@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { 
-  Users, MessageSquare, Mic, Play, Pause, 
-  ChevronRight, Award, AlertCircle, Copy, Link as LinkIcon, Users2, ShieldCheck
+  Pause, ChevronRight, Copy, Users2
 } from 'lucide-react';
 
 export default function GroupDiscussion() {
@@ -93,10 +92,11 @@ export default function GroupDiscussion() {
         socketRef.current.disconnect();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Text-To-Speech debating dialogs
-  const speakDialogue = (name, text) => {
+  function speakDialogue(name, text) {
     if ('speechSynthesis' in window && started) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -113,7 +113,7 @@ export default function GroupDiscussion() {
       };
       window.speechSynthesis.speak(utterance);
     }
-  };
+  }
 
   const triggerNextAiTurn = () => {
     if (!topic || speakingIndex >= topic.aiDialogueTemplates.length) {
@@ -228,7 +228,7 @@ export default function GroupDiscussion() {
   }
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+    <div className="space-y-8 pt-6 w-full">
       
       <div className="space-y-2">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 flex items-center gap-2">

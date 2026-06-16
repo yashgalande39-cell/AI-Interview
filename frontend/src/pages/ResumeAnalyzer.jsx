@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePlan } from '../hooks/usePlan';
 import { API_BASE } from '../config';
 import { 
   Plus, Trash2, UploadCloud, CheckCircle, 
-  AlertTriangle, ArrowRight, ShieldCheck, Download, Award,
-  Briefcase, Compass, FileText, Loader2, Star, CheckCircle2,
-  Settings, Palette, RefreshCw, LayoutTemplate
+  AlertTriangle, ShieldCheck, Download, 
+  Briefcase, Compass, FileText, Loader2, 
+  Settings, Palette, LayoutTemplate
 } from 'lucide-react';
 
 export default function ResumeAnalyzer() {
   const { token, updateXp } = useAuth();
+  const { isFreePlan } = usePlan();
 
   // Tab State: 'builder' or 'jobs'
   const [activeTab, setActiveTab] = useState('builder');
@@ -91,17 +93,6 @@ export default function ResumeAnalyzer() {
       desc: "Generate consumer analytics dashboards checking logistics flows."
     }
   ];
-
-  // Accent Styles Map
-  const colorStyles = {
-    indigo: { text: 'text-indigo-600', border: 'border-indigo-600', bg: 'bg-indigo-600', fill: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' },
-    emerald: { text: 'text-emerald-600', border: 'border-emerald-600', bg: 'bg-emerald-600', fill: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' },
-    violet: { text: 'text-violet-600', border: 'border-violet-600', bg: 'bg-violet-600', fill: 'bg-violet-500/10 border-violet-500/20 text-violet-400' },
-    rose: { text: 'text-rose-600', border: 'border-rose-600', bg: 'bg-rose-600', fill: 'bg-rose-500/10 border-rose-500/20 text-rose-400' },
-    slate: { text: 'text-slate-700', border: 'border-slate-700', bg: 'bg-slate-700', fill: 'bg-slate-500/10 border-slate-500/20 text-slate-400' }
-  };
-
-  const activeColor = colorStyles[cvColor] || colorStyles.indigo;
 
   // Add card elements
   const handleAddSkill = () => {
@@ -237,7 +228,19 @@ export default function ResumeAnalyzer() {
   };
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+    <div className="space-y-8 pt-6 w-full">
+      
+      {/* Free Plan Banner */}
+      {isFreePlan && (
+        <div className="upgrade-banner">
+          <span className="upgrade-banner-icon">📄</span>
+          <div>
+            <strong>Pro Feature:</strong> Resume ATS Builder &amp; Job Matcher require a Pro plan.{' '}
+            <a href="/#pricing" className="upgrade-banner-link">Upgrade to Pro</a>
+            {' '}to unlock full resume analysis, ATS scoring, and job matching.
+          </div>
+        </div>
+      )}
       
       {/* Dynamic Style Injection for standard high-fidelity prints */}
       <style dangerouslySetInnerHTML={{__html: `

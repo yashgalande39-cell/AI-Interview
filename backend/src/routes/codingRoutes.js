@@ -2,11 +2,15 @@ const express = require('express');
 const router = express.Router();
 const codingController = require('../controllers/codingController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { requirePlan } = require('../middleware/planMiddleware');
 
-// All coding endpoints are protected via JWT auth
-router.get('/challenges', authMiddleware, codingController.getChallenges);
-router.get('/challenges/:id', authMiddleware, codingController.getChallengeById);
-router.post('/run', authMiddleware, codingController.runCode);
-router.post('/submit', authMiddleware, codingController.submitCode);
+// Protect all coding endpoints with authentication and Pro plan gate
+router.use(authMiddleware);
+router.use(requirePlan('pro'));
+
+router.get('/challenges', codingController.getChallenges);
+router.get('/challenges/:id', codingController.getChallengeById);
+router.post('/run', codingController.runCode);
+router.post('/submit', codingController.submitCode);
 
 module.exports = router;

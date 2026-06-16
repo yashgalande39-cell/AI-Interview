@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Volume2, Mic, MicOff, Video, VideoOff, Play, Pause, 
-  RotateCcw, ShieldAlert, Award, FileSpreadsheet, Edit3, ArrowRight, Save,
-  Phone, PhoneOff, Grid, Volume1, HelpCircle
+  Mic, MicOff, Video, VideoOff, 
+  ShieldAlert, Edit3, ArrowRight,
+  Phone, PhoneOff, Grid, Volume1, Play
 } from 'lucide-react';
 
 export default function InterviewRoom() {
@@ -16,7 +16,7 @@ export default function InterviewRoom() {
 
   // Config overrides for offline/fallback mode
   const oType = searchParams.get('type') || 'HR';
-  const oDiff = searchParams.get('difficulty') || 'Easy';
+  const oDiff = searchParams.get('difficulty') || 'Medium';
   const oRole = searchParams.get('role') || 'Software Engineer';
   const oComp = searchParams.get('company') || 'Common';
   const oLang = searchParams.get('language') || 'JavaScript';
@@ -53,7 +53,21 @@ export default function InterviewRoom() {
   const [eyeContactFrames, setEyeContactFrames] = useState(0);
   const [goodEyeContactFrames, setGoodEyeContactFrames] = useState(0);
   const [stressValues, setStressValues] = useState([]);
-  const [emotionsList, setEmotionsList] = useState([]);
+  const [, setEmotionsList] = useState([]);
+
+  // Dialogue Transcript history list (to display conversation history)
+  const [dialogues, setDialogues] = useState([
+    {
+      time: "00:15",
+      sender: "AI Interviewer",
+      text: "Tell me about yourself, walk me through your technical background, and explain what draws you to this Software Engineer position."
+    }
+  ]);
+
+  // Biometric Live states for overlays (dynamically changing slightly)
+  const [stressLevelPercent, setStressLevelPercent] = useState(11.2);
+  const [pulseBPM, setPulseBPM] = useState(75);
+  const [gazeStable, setGazeStable] = useState("Good");
 
   // Refs
   const videoRef = useRef(null);
@@ -64,24 +78,20 @@ export default function InterviewRoom() {
 
   const boxXRef = useRef(60);
   const boxYRef = useRef(40);
-  const prevFrameRef = useRef(null);
 
   // Load Session
   useEffect(() => {
     const initSession = async () => {
       try {
-        // Try to fetch existing session if sessionId is a valid server ID
         if (sessionId && !sessionId.startsWith('int_mock_') && !sessionId.startsWith('mock_')) {
           const res = await fetch(`http://localhost:5000/api/interviews/session/${sessionId}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
           });
           if (res.ok) {
             const data = await res.json();
             if (data.session) {
               setSession(data.session);
-              setCurrentQuestion(data.session.questions[0]?.text || "Let's start the interview!");
+              setCurrentQuestion(data.session.questions[0]?.text || "Tell me about yourself, walk me through your technical background, and explain what draws you to this Software Engineer position.");
               setTotalQuestions(data.session.questions.length);
               setLoading(false);
               return;
@@ -89,7 +99,6 @@ export default function InterviewRoom() {
           }
         }
 
-        // If not retrieved, generate a new one
         const res = await fetch(`http://localhost:5000/api/interviews/generate`, {
           method: 'POST',
           headers: {
@@ -108,23 +117,21 @@ export default function InterviewRoom() {
         if (res.ok) {
           const data = await res.json();
           setSession(data.session);
-          setCurrentQuestion(data.session.questions[0]?.text || "Let's start the interview!");
+          setCurrentQuestion(data.session.questions[0]?.text || "Tell me about yourself, walk me through your technical background, and explain what draws you to this Software Engineer position.");
           setTotalQuestions(data.session.questions.length);
         } else {
           throw new Error("Init session failed");
         }
       } catch (err) {
         console.warn("Using local simulator fallback session details", err.message);
-        // Generates highly tailored local questions based on mock resume parameters!
         let mockQuestions = [
-          "Explain your core software development philosophy and how you handle tight project schedules.",
+          "Tell me about yourself, walk me through your technical background, and explain what draws you to this Software Engineer position.",
           "What are your main technical strengths and major programming achievements?",
           "How do you approach team integration and conflict resolutions in project sprints?",
           "Describe a technically demanding project you spearheaded and what metrics determined its success.",
           "Where do you see your technical competencies growing in the next three years?"
         ];
 
-        // Synthesize highly tailored local questions if a mock resume was chosen in offline mode!
         if (resumeId === "res_mock_1") {
           mockQuestions = [
             "Welcome Rahul Kumar. Explain your core software development philosophy, specifically referencing your IIT B.Tech background.",
@@ -161,12 +168,13 @@ export default function InterviewRoom() {
     };
 
     initSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, token]);
 
-  // Anti-Cheat: Screen blur warnings (disabled in telephony mode to match user intent)
+  // Anti-Cheat: Screen blur warnings (disabled in telephony mode)
   useEffect(() => {
     const handleBlur = () => {
-      if (telephonyMode) return; // Do not apply lock during phone simulation rounds
+      if (telephonyMode) return;
       setStrikeCount(prev => {
         const next = prev + 1;
         setWarnings(w => [...w, `⚠️ Warning Strike ${next}: Focus lost! Do not change browser tabs.`]);
@@ -179,6 +187,7 @@ export default function InterviewRoom() {
     };
     window.addEventListener('blur', handleBlur);
     return () => window.removeEventListener('blur', handleBlur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, telephonyMode]);
 
   // Speech Recognition setup (Web Speech API)
@@ -191,13 +200,10 @@ export default function InterviewRoom() {
       rec.lang = 'en-US';
 
       rec.onresult = (event) => {
-        let interimTranscript = '';
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
           }
         }
         if (finalTranscript) {
@@ -234,184 +240,132 @@ export default function InterviewRoom() {
         window.speechSynthesis.cancel();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQuestion, loading]);
 
-  // Webcam access & Face analysis canvas overlay simulator with real-time biometric telemetry
+  // Simulate dynamically fluctuating biometrics overlays
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStressLevelPercent(prev => {
+        const delta = (Math.random() - 0.5) * 0.4;
+        return parseFloat(Math.min(25, Math.max(5, prev + delta)).toFixed(1));
+      });
+      setPulseBPM(prev => {
+        const delta = Math.random() > 0.5 ? 1 : -1;
+        return Math.min(85, Math.max(65, prev + delta));
+      });
+      setGazeStable(Math.random() > 0.92 ? "Drifting..." : "Good");
+    }, 1200);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Webcam access & Face analysis canvas overlay
   useEffect(() => {
     let stream = null;
     let animId = null;
-    const waveHistory = []; // ECG wave history buffer
 
     const startCamera = async () => {
       if (cameraActive && !telephonyMode) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+          // Request high resolution, colourful video stream
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              width: { ideal: 640 }, 
+              height: { ideal: 480 },
+              facingMode: "user"
+            } 
+          });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.play();
           }
           
           const ctx = canvasRef.current.getContext('2d');
-          const video = videoRef.current;
           
-          const drawSim = () => {
+          const drawOverlay = () => {
             if (ctx && canvasRef.current) {
               const now = Date.now();
+              const width = canvasRef.current.width;
+              const height = canvasRef.current.height;
               
-              if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-                // 1. Draw video frame first so we can analyze it
-                ctx.drawImage(video, 0, 0, 320, 240);
-                
-                // Extract pixel data for analysis
-                const frame = ctx.getImageData(0, 0, 320, 240);
-                const data = frame.data;
-                
-                // Calculate average brightness
-                let totalBrightness = 0;
-                // Calculate motion center of mass
-                let sumX = 0;
-                let sumY = 0;
-                let motionCount = 0;
-                
-                const prevFrame = prevFrameRef.current;
-                
-                // Stride of 4 pixels to keep 60fps performance
-                for (let y = 0; y < 240; y += 4) {
-                  for (let x = 0; x < 320; x += 4) {
-                    const idx = (y * 320 + x) * 4;
-                    const r = data[idx];
-                    const g = data[idx+1];
-                    const b = data[idx+2];
-                    
-                    totalBrightness += (r * 0.299 + g * 0.587 + b * 0.114);
-                    
-                    if (prevFrame) {
-                      const prevData = prevFrame.data;
-                      const diff = Math.abs(r - prevData[idx]) + 
-                                   Math.abs(g - prevData[idx+1]) + 
-                                   Math.abs(b - prevData[idx+2]);
-                      if (diff > 75) {
-                        sumX += x;
-                        sumY += y;
-                        motionCount++;
-                      }
-                    }
-                  }
-                }
-                
-                prevFrameRef.current = frame;
-                
-                const avgBrightness = totalBrightness / (320 * 240 / 16);
-                const motionRatio = motionCount / (320 * 240 / 16);
-                
-                // Smooth bounding box interpolation based on motion
-                let targetBoxX = 60;
-                let targetBoxY = 40;
-                
-                if (motionCount > 5) {
-                  const motionCenterX = sumX / motionCount;
-                  const motionCenterY = sumY / motionCount;
-                  targetBoxX = motionCenterX - 100;
-                  targetBoxY = motionCenterY - 80;
-                  targetBoxX = Math.max(10, Math.min(110, targetBoxX));
-                  targetBoxY = Math.max(10, Math.min(70, targetBoxY));
-                }
-                
-                boxXRef.current = boxXRef.current + (targetBoxX - boxXRef.current) * 0.08;
-                boxYRef.current = boxYRef.current + (targetBoxY - boxYRef.current) * 0.08;
-                
-                const boxX = boxXRef.current;
-                const boxY = boxYRef.current;
-                
-                // Draw blocked state if extremely dark
-                if (avgBrightness < 18) {
-                  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-                  ctx.fillRect(0, 0, 320, 240);
-                  
-                  ctx.fillStyle = '#f43f5e';
-                  ctx.font = 'bold 12px Outfit';
-                  ctx.textAlign = 'center';
-                  ctx.fillText('⚠️ CAMERA BLOCKED / ULTRA LOW LIGHT', 160, 110);
-                  ctx.fillStyle = '#94a3b8';
-                  ctx.font = '9px Outfit';
-                  ctx.fillText('Please ensure your environment is well lit.', 160, 130);
-                  ctx.textAlign = 'left';
-                  
-                  // flatline ECG
-                  waveHistory.push((Math.random() - 0.5) * 0.02);
-                  if (waveHistory.length > 90) waveHistory.shift();
-                  drawECGWaves(ctx, waveHistory, now, isListening, 0);
-                  
-                  animId = requestAnimationFrame(drawSim);
-                  return;
-                }
-                
-                const lowLightWarning = avgBrightness < 45;
-                
-                // Biometrics
-                const baseHr = isListening ? 84 : 72;
-                const currentHr = Math.round(baseHr + Math.sin(now / 3000) * 3 + (motionRatio > 0.05 ? motionRatio * 15 : 0));
-                
-                const baseStress = isListening ? 25 : 10;
-                const stressVal = Math.min(100, Math.max(5, parseFloat((baseStress + (motionRatio * 120) + Math.sin(now / 1500) * 1.5).toFixed(1))));
-                
-                let stressLevel = "Neutral";
-                let stressColor = "#10b981";
-                let currentEmotion = "Neutral";
-                
-                if (stressVal > 15) {
-                  stressLevel = "Focused";
-                  stressColor = "#06b6d4";
-                  currentEmotion = "Focused";
-                }
-                if (stressVal > 28) {
-                  stressLevel = "Active / High Motion";
-                  stressColor = "#a855f7";
-                  currentEmotion = "Confident";
-                }
-                if (stressVal > 40) {
-                  stressLevel = "High Stress";
-                  stressColor = "#f43f5e";
-                  currentEmotion = "Anxious";
-                }
-                
-                // Gaze tracking drift
-                const gazeDrift = Math.sin(now / 4000) + (motionRatio > 0.12 ? (Math.random() - 0.5) * 1.2 : 0);
-                let gazeStatus = "Gaze Centered: SECURE";
-                let gazeColor = "#10b981";
-                let isCentered = true;
-                
-                if (Math.abs(gazeDrift) > 0.75) {
-                  gazeStatus = "Gaze Drift: Re-aligning...";
-                  gazeColor = "#f59e0b";
-                  isCentered = false;
-                }
-                
-                // Accumulate statistics if user is speaking
-                if (isListening) {
-                  setEyeContactFrames(prev => prev + 1);
-                  if (isCentered) {
-                    setGoodEyeContactFrames(prev => prev + 1);
-                  }
-                  setStressValues(prev => [...prev, stressVal]);
-                  setEmotionsList(prev => [...prev, currentEmotion]);
-                }
-                
-                const driftX = Math.round(Math.sin(now / 300) * 1.5);
-                const driftY = Math.round(Math.cos(now / 400) * 1.5);
-                
-                // Draw cybernetic overlay
-                drawCyberneticOverlay(ctx, boxX, boxY, driftX, driftY, stressColor, gazeColor, gazeStatus, stressVal, stressLevel, currentHr, now, lowLightWarning);
-                
-                // Draw ECG wave
-                drawECGWaves(ctx, waveHistory, now, isListening, stressVal);
-              } else {
-                drawFallbackLoader(ctx, now);
+              // Clear previous frames
+              ctx.clearRect(0, 0, width, height);
+
+              // Draw tracking bounding bracket box center interpolated
+              const boxX = boxXRef.current + Math.sin(now / 1000) * 1.5;
+              const boxY = boxYRef.current + Math.cos(now / 1200) * 1.5;
+              const boxWidth = 120;
+              const boxHeight = 130;
+
+              // Draw tracking box corners
+              ctx.strokeStyle = '#06b6d4'; // cyan-500
+              ctx.lineWidth = 2.5;
+              const size = 12;
+              
+              // Top-left corner
+              ctx.beginPath();
+              ctx.moveTo(boxX, boxY + size);
+              ctx.lineTo(boxX, boxY);
+              ctx.lineTo(boxX + size, boxY);
+              ctx.stroke();
+
+              // Top-right corner
+              ctx.beginPath();
+              ctx.moveTo(boxX + boxWidth - size, boxY);
+              ctx.lineTo(boxX + boxWidth, boxY);
+              ctx.lineTo(boxX + boxWidth, boxY + size);
+              ctx.stroke();
+
+              // Bottom-left corner
+              ctx.beginPath();
+              ctx.moveTo(boxX, boxY + boxHeight - size);
+              ctx.lineTo(boxX, boxY + boxHeight);
+              ctx.lineTo(boxX + size, boxY + boxHeight);
+              ctx.stroke();
+
+              // Bottom-right corner
+              ctx.beginPath();
+              ctx.moveTo(boxX + boxWidth - size, boxY + boxHeight);
+              ctx.lineTo(boxX + boxWidth, boxY + boxHeight);
+              ctx.lineTo(boxX + boxWidth, boxY + boxHeight - size);
+              ctx.stroke();
+
+              // Pupil eye tracking circles
+              const leftPupilX = boxX + 40 + Math.sin(now / 350) * 0.8;
+              const leftPupilY = boxY + 45 + Math.cos(now / 350) * 0.8;
+              const rightPupilX = boxX + 80 + Math.sin(now / 350) * 0.8;
+              const rightPupilY = boxY + 45 + Math.cos(now / 350) * 0.8;
+
+              ctx.strokeStyle = '#8b5cf6'; // purple-500
+              ctx.lineWidth = 1.5;
+              
+              ctx.beginPath();
+              ctx.arc(leftPupilX, leftPupilY, 4, 0, 2 * Math.PI);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.arc(rightPupilX, rightPupilY, 4, 0, 2 * Math.PI);
+              ctx.stroke();
+
+              // Connected horizontal reticle link
+              ctx.strokeStyle = 'rgba(139, 92, 246, 0.25)';
+              ctx.beginPath();
+              ctx.moveTo(leftPupilX, leftPupilY);
+              ctx.lineTo(rightPupilX, rightPupilY);
+              ctx.stroke();
+
+              // Accumulate statistics if user is speaking
+              if (isListening) {
+                setEyeContactFrames(prev => prev + 1);
+                setGoodEyeContactFrames(prev => prev + 1);
+                setStressValues(prev => [...prev, stressLevelPercent]);
+                setEmotionsList(prev => [...prev, "Confident"]);
               }
-              animId = requestAnimationFrame(drawSim);
+              
+              animId = requestAnimationFrame(drawOverlay);
             }
           };
-          animId = requestAnimationFrame(drawSim);
+          animId = requestAnimationFrame(drawOverlay);
         } catch (err) {
           console.warn("Camera blocks in sandbox mode:", err.message);
         }
@@ -428,6 +382,7 @@ export default function InterviewRoom() {
         cancelAnimationFrame(animId);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraActive, telephonyMode, isListening]);
 
   // Whiteboard drawing engine
@@ -511,29 +466,35 @@ export default function InterviewRoom() {
 
     setLoading(true);
 
-    // Compute average biometric stats from accumulators
-    let avgEyeContactScore = 95;
+    // Compute average biometric stats
+    let avgEyeContactScore = 82;
     if (eyeContactFrames > 0) {
       avgEyeContactScore = Math.round((goodEyeContactFrames / eyeContactFrames) * 100);
     }
     
-    let avgStress = 15;
+    let avgStress = Math.round(stressLevelPercent);
     if (stressValues.length > 0) {
       avgStress = Math.round(stressValues.reduce((a, b) => a + b, 0) / stressValues.length);
     }
     
     let dominantEmotion = "Confident";
-    if (emotionsList.length > 0) {
-      const counts = {};
-      let maxCount = 0;
-      emotionsList.forEach(e => {
-        counts[e] = (counts[e] || 0) + 1;
-        if (counts[e] > maxCount) {
-          maxCount = counts[e];
-          dominantEmotion = e;
-        }
-      });
-    }
+
+    // Format current timestamp string
+    const formatTime = (secs) => {
+      const m = Math.floor(secs / 60).toString().padStart(2, '0');
+      const s = (secs % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    };
+
+    // Push response to dialogue timeline
+    const answerTimestamp = formatTime(15 + speechTimer);
+    const newDialoguePair = [
+      {
+        time: answerTimestamp,
+        sender: "You",
+        text: answerText
+      }
+    ];
 
     try {
       const res = await fetch(`http://localhost:5000/api/interviews/submit-answer`, {
@@ -567,10 +528,20 @@ export default function InterviewRoom() {
       if (data.isCompleted) {
         handleFinishInterview();
       } else {
+        const nextQ = data.nextQuestion.text || data.nextQuestion.question;
+        setDialogues(prev => [
+          ...prev, 
+          ...newDialoguePair,
+          {
+            time: formatTime(25 + speechTimer),
+            sender: "AI Interviewer",
+            text: nextQ
+          }
+        ]);
         setAnswerText("");
         setSpeechTimer(0);
         setCurrentIndex(prev => prev + 1);
-        setCurrentQuestion(data.nextQuestion.text || data.nextQuestion.question);
+        setCurrentQuestion(nextQ);
         setLoading(false);
       }
     } catch (e) {
@@ -586,10 +557,20 @@ export default function InterviewRoom() {
       if (nextIdx >= totalQuestions) {
         handleFinishInterview();
       } else {
+        const nextQ = session.questions[nextIdx]?.text || "Answer the following topic:";
+        setDialogues(prev => [
+          ...prev, 
+          ...newDialoguePair,
+          {
+            time: formatTime(25 + speechTimer),
+            sender: "AI Interviewer",
+            text: nextQ
+          }
+        ]);
         setAnswerText("");
         setSpeechTimer(0);
         setCurrentIndex(nextIdx);
-        setCurrentQuestion(session.questions[nextIdx]?.text || "Answer the following topic:");
+        setCurrentQuestion(nextQ);
         setLoading(false);
       }
     }
@@ -606,7 +587,7 @@ export default function InterviewRoom() {
         },
         body: JSON.stringify({ sessionId: session.id })
       });
-      const data = await res.json();
+      await res.json();
       if (res.ok) {
         updateXp(150);
         navigate(`/feedback?sessionId=${session.id}`);
@@ -620,7 +601,6 @@ export default function InterviewRoom() {
   // Telephony controls
   const startPhoneCall = () => {
     setCallState('ringing');
-    // Ring for 2 seconds then connect
     setTimeout(() => {
       setCallState('connected');
       speakQuestion();
@@ -640,68 +620,162 @@ export default function InterviewRoom() {
 
   const handleKeypadPress = (val) => {
     setKeypadInput(prev => prev + val);
-    // Mimic standard DTMF frequency tones using browser audio context if available
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      osc.frequency.value = 400; // General keypad beep tone
+      osc.frequency.value = 400;
       gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
       osc.start();
       osc.stop(audioCtx.currentTime + 0.15);
-    } catch(e) {}
+    } catch {
+      // AudioContext blocks
+    }
   };
 
   if (loading && !session) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-accentViolet border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <div className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Structuring Adaptive Room...</div>
+          <div className="w-10 h-10 border-4 border-[#8B5CF6] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="text-xs text-gray-400 font-semibold tracking-wider uppercase">Structuring Adaptive Room...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-6 overflow-y-auto max-h-[calc(100vh-76px)]">
-      
-      {/* Top Details & Timer */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/40 p-4 border border-slate-900 rounded-2xl">
-        <div className="space-y-0.5">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Prep Room</span>
-          <div className="text-xs font-bold text-slate-200">{session?.role} Target at {session?.company}</div>
-        </div>
+    <div className="h-full w-full overflow-y-auto pt-6 px-8 pb-8 space-y-6 custom-scrollbar bg-[#050810] text-gray-100">
+      <style>{`
+        .panel-bg {
+          background-color: #151A2B;
+          border: 1px solid #1F2937;
+        }
+        .hero-gradient {
+          background: linear-gradient(90deg, rgba(21,26,43,1) 0%, rgba(30,27,75,0.6) 50%, rgba(21,26,43,1) 100%);
+        }
+        .soundwave {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          height: 32px;
+        }
+        .bar {
+          width: 4px;
+          background-color: #8B5CF6;
+          border-radius: 2px;
+          animation: sound 0ms -800ms linear infinite alternate;
+        }
+        @keyframes sound {
+          0% { height: 4px; opacity: 0.5; }
+          100% { height: 28px; opacity: 1; }
+        }
+        .bar:nth-child(1) { animation-duration: 474ms; }
+        .bar:nth-child(2) { animation-duration: 433ms; }
+        .bar:nth-child(3) { animation-duration: 407ms; }
+        .bar:nth-child(4) { animation-duration: 458ms; }
+        .bar:nth-child(5) { animation-duration: 400ms; }
+        .bar:nth-child(6) { animation-duration: 427ms; }
+
+        @keyframes glow-pulse {
+          0% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.2); }
+          100% { box-shadow: 0 0 35px rgba(139, 92, 246, 0.6); }
+        }
+        .animate-glow-pulse {
+          animation: glow-pulse 1s ease-in-out infinite alternate;
+        }
+      `}</style>
+
+      {/* Top Details & Timer Header Card */}
+      <section className="panel-bg rounded-2xl p-6 hero-gradient flex flex-col md:flex-row items-start md:items-center justify-between border-gray-800 relative overflow-hidden gap-6">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8B5CF6]/5 rounded-full blur-3xl -z-10"></div>
         
-        <div className="flex flex-wrap items-center gap-6">
-          <button
-            onClick={() => {
-              setTelephonyMode(true);
-              startPhoneCall();
-            }}
-            className="px-4 py-2.5 rounded-xl border border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 text-xs font-bold transition-all flex items-center gap-1.5"
-          >
-            📞 Switch to Mobile Call Simulator
-          </button>
-
-          <div className="text-right">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Fluency Clock</span>
-            <span className="text-sm font-extrabold text-accentCyan">{speechTimer}s</span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#8B5CF6] tracking-wider uppercase mb-2">
+            <Play className="w-3 h-3 fill-[#8B5CF6]" /> Active Prep Room
           </div>
-
-          <div className="text-right">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Question Progress</span>
-            <span className="text-sm font-extrabold text-accentViolet">{currentIndex + 1} / {totalQuestions}</span>
+          <h2 className="text-2xl font-bold text-white mb-4">
+            {session?.role || oRole} Target at {session?.company || oComp}
+          </h2>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700 flex items-center gap-1">
+              Difficulty <i className="fa-solid fa-chart-simple text-yellow-500 ml-1"></i> {session?.difficulty || oDiff}
+            </span>
+            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700">
+              Domain <span className="text-white ml-1 font-medium">{oLang}</span>
+            </span>
+            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700">
+              Experience <span className="text-white ml-1 font-medium">2-4 yrs</span>
+            </span>
           </div>
         </div>
-      </div>
 
-      {/* Warnings & Strikes */}
+        <div className="flex flex-wrap items-center gap-8">
+          {/* Fluency Clock */}
+          <div className="flex flex-col items-center">
+            <span className="text-xs text-gray-400 mb-2">Fluency Clock</span>
+            <div className="relative w-16 h-16 flex items-center justify-center rounded-full border-[3px] border-gray-700">
+              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <path 
+                  className="text-blue-500" 
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeDasharray={`${speechTimer * 2.5}, 100`} 
+                  strokeWidth="3"
+                ></path>
+              </svg>
+              <span className="text-lg font-bold text-white relative z-10">{speechTimer}s</span>
+            </div>
+          </div>
+
+          {/* Question Progress bar */}
+          <div className="w-48">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs text-gray-400">Question Progress</span>
+              <span className="text-xs text-gray-400">{Math.round(((currentIndex + 1) / totalQuestions) * 100)}%</span>
+            </div>
+            <div className="text-lg font-bold text-[#8B5CF6] mb-2">{currentIndex + 1} / {totalQuestions}</div>
+            <div className="w-full bg-gray-800 rounded-full h-2">
+              <div 
+                className="bg-[#8B5CF6] h-2 rounded-full transition-all duration-350" 
+                style={{ width: `${((currentIndex + 1) / totalQuestions) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {/* Switch Action */}
+          <button 
+            onClick={() => {
+              if (telephonyMode) {
+                endPhoneCall();
+              } else {
+                setTelephonyMode(true);
+                startPhoneCall();
+              }
+            }}
+            className="bg-[#1A2035] hover:bg-[#222942] border border-gray-700 rounded-xl p-4 flex items-center gap-4 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+              <Phone className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs text-gray-400">Switch to</p>
+              <p className="text-sm font-medium text-white">
+                {telephonyMode ? 'Visual Room' : 'Mobile Call Simulator'}
+              </p>
+            </div>
+            <i className="fa-solid fa-chevron-right text-gray-600 ml-2"></i>
+          </button>
+        </div>
+      </section>
+
+      {/* Strike warnings banner */}
       {warnings.length > 0 && !telephonyMode && (
         <div className="space-y-2">
-          {warnings.slice(-2).map((w, idx) => (
+          {warnings.slice(-1).map((w, idx) => (
             <div key={idx} className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-xl text-xs font-semibold">
               <ShieldAlert className="w-4 h-4 shrink-0" />
               <span>{w}</span>
@@ -713,10 +787,8 @@ export default function InterviewRoom() {
       {/* Immersive Phone Simulator Panel */}
       {telephonyMode ? (
         <div className="max-w-md mx-auto glass-panel rounded-3xl p-6 border-slate-800/80 bg-gradient-to-b from-[#0f172a] to-[#090d16] shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[500px]">
-          {/* Internal Speaker Reticle */}
           <div className="w-24 h-4 bg-slate-900 rounded-full mx-auto mb-6 border border-slate-800/60 shadow-inner"></div>
 
-          {/* Caller ID Section */}
           <div className="text-center space-y-2">
             <div className="w-20 h-20 rounded-full bg-violet-500/10 border-2 border-violet-500/30 flex items-center justify-center mx-auto text-violet-400 text-3xl">
               🤖
@@ -729,7 +801,6 @@ export default function InterviewRoom() {
             </div>
           </div>
 
-          {/* Connected Voice Audio waves or Ring status */}
           <div className="py-8 flex flex-col items-center justify-center h-48">
             {callState === 'ringing' ? (
               <div className="space-y-4 text-center">
@@ -742,28 +813,19 @@ export default function InterviewRoom() {
               </div>
             ) : callState === 'connected' ? (
               <div className="w-full space-y-4">
-                {/* Audio frequencies simulation */}
                 <div className="flex gap-1 justify-center items-end h-16">
                   {(aiSpeaking ? [2, 5, 8, 3, 7, 4, 9, 2, 6, 8, 3, 5] : isListening ? [4, 7, 3, 8, 2, 5, 3] : [1, 2, 1, 2, 1]).map((h, i) => (
                     <div 
                       key={i} 
-                      className={`w-1.5 rounded transition-all duration-150 ${aiSpeaking ? 'bg-accentCyan' : isListening ? 'bg-rose-400' : 'bg-slate-700'}`}
-                      style={{ height: `${h * 4 + 4}px`, transform: `scaleY(${aiSpeaking || isListening ? 1.2 : 0.8})` }}
+                      className={`w-1.5 rounded transition-all duration-150 ${aiSpeaking ? 'bg-cyan-400' : isListening ? 'bg-rose-400' : 'bg-slate-700'}`}
+                      style={{ height: `${h * 4 + 4}px` }}
                     ></div>
                   ))}
                 </div>
                 
-                {/* Visual captions panel inside phone */}
                 <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-900 text-left h-24 overflow-y-auto text-[11px] leading-normal font-medium space-y-2">
-                  <div className="text-accentCyan font-bold">Coach (Voice AI):</div>
-                  <p className="text-slate-350 font-semibold italic">"{currentQuestion}"</p>
-                  
-                  {answerText && (
-                    <>
-                      <div className="text-rose-400 font-bold mt-2">You (Speech Input):</div>
-                      <p className="text-slate-400 italic">"{answerText}"</p>
-                    </>
-                  )}
+                  <div className="text-cyan-400 font-bold">Coach (Voice AI):</div>
+                  <p className="text-slate-300 font-semibold italic">&quot;{currentQuestion}&quot;</p>
                 </div>
               </div>
             ) : (
@@ -771,9 +833,8 @@ export default function InterviewRoom() {
             )}
           </div>
 
-          {/* Interactive Telephone Keypad Grid overlay */}
           {showKeypad && callState === 'connected' && (
-            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-950 rounded-2xl border border-slate-900 mb-4 animate-fade-in">
+            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-950 rounded-2xl border border-slate-900 mb-4">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map(num => (
                 <button
                   key={num}
@@ -787,7 +848,6 @@ export default function InterviewRoom() {
             </div>
           )}
 
-          {/* Phone call utilities & controls */}
           <div className="space-y-6 pt-4 border-t border-slate-900/60">
             {callState === 'connected' && (
               <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold text-slate-400">
@@ -805,14 +865,13 @@ export default function InterviewRoom() {
                 </button>
                 <button 
                   onClick={() => setPhoneSpeaker(!phoneSpeaker)}
-                  className={`p-3 rounded-2xl border flex flex-col items-center gap-1 mx-auto ${phoneSpeaker ? 'bg-cyan-500/10 border-cyan-500/20 text-accentCyan' : 'bg-slate-950 border-slate-900'}`}
+                  className={`p-3 rounded-2xl border flex flex-col items-center gap-1 mx-auto ${phoneSpeaker ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-slate-950 border-slate-900'}`}
                 >
                   <Volume1 className="w-4 h-4" /> Speaker
                 </button>
               </div>
             )}
 
-            {/* Answer trigger grids */}
             <div className="flex gap-4 justify-center">
               {callState === 'ringing' ? (
                 <>
@@ -836,7 +895,7 @@ export default function InterviewRoom() {
                       onClick={toggleListening}
                       className={`w-full py-3 rounded-xl border text-xs font-bold transition-all active:scale-95 ${isListening ? 'bg-rose-500 text-white border-rose-600' : 'bg-slate-950 border-slate-900 text-slate-300'}`}
                     >
-                      {isListening ? '🎙️ Stop Recording answer' : '🎙️ Click to Speak Response'}
+                      {isListening ? 'Stop Recording' : '🎙️ Click to Speak'}
                     </button>
                   )}
                   
@@ -844,7 +903,7 @@ export default function InterviewRoom() {
                     {callState === 'connected' && (
                       <button
                         onClick={handleAnswerSubmit}
-                        className="flex-1 bg-glow-gradient py-3.5 rounded-xl text-xs font-bold text-white shadow hover:scale-[1.01] transition-all"
+                        className="flex-1 bg-gradient-to-r from-blue-500 to-brand-purple py-3.5 rounded-xl text-xs font-bold text-white shadow hover:scale-[1.01] transition-all"
                       >
                         Submit Response
                       </button>
@@ -862,309 +921,495 @@ export default function InterviewRoom() {
           </div>
         </div>
       ) : (
-        /* Original Visual workspace: Avatar grids + text answers */
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Pulsing Avatar & Questions */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 flex flex-col justify-between min-h-[350px] relative overflow-hidden bg-gradient-to-b from-slate-950/60 to-slate-900/40">
-              <div className="absolute top-4 left-4 text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">
-                AI Interviewer
-              </div>
-
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className={`w-28 h-28 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-4xl shadow-inner relative transition-transform ${aiSpeaking ? 'pulse-speech scale-105 border-accentCyan' : ''}`}>
-                  🤖
-                  {aiSpeaking && (
-                    <div className="absolute -top-1 -right-1 bg-accentCyan text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-full animate-bounce">
-                      SPEAKING
-                    </div>
-                  )}
+        /* Immersive Visual Dashboard Columns */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Left Column: AI Interviewer & Your Response Transcript */}
+          <div className="space-y-6">
+            
+            {/* AI Interviewer Panel */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800 flex flex-col h-[480px]">
+              <div className="flex items-center gap-2 mb-6 border-b border-gray-850 pb-3">
+                <i className="fa-solid fa-sparkles text-brand-purple"></i>
+                <div>
+                  <h3 className="font-semibold text-white">AI Interviewer</h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Your personal AI coach</p>
                 </div>
-                <div className="text-[10px] text-slate-500 font-bold tracking-wider uppercase mt-4">AI Coach</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-900 text-slate-200 text-sm font-bold text-center leading-relaxed">
-                "{currentQuestion}"
+              <div className="flex-grow flex flex-col items-center justify-center relative">
+                {/* Visual soundwaves left and right */}
+                <div className="absolute inset-0 flex items-center justify-between px-6 opacity-40 pointer-events-none">
+                  {/* Left soundwave */}
+                  <div className="soundwave">
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                  </div>
+                  {/* Right soundwave */}
+                  <div className="soundwave">
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                  </div>
+                </div>
+
+                {/* AI Coach Avatar */}
+                <div className="relative z-10 flex flex-col items-center">
+                  <div className="w-32 h-32 rounded-full border-2 border-[#8B5CF6]/50 flex items-center justify-center mb-4 bg-gradient-to-b from-[#1E2540] to-[#0B0F19] animate-glow-pulse">
+                    <span className="text-6xl select-none">🤖</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white">AI Coach</span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 text-[10px] font-medium rounded-full border border-green-500/20">
+                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Listening...
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center justify-center gap-3 mt-4">
+              {/* Speech bubble question */}
+              <div className="bg-[#1A2035] border border-gray-800 rounded-xl p-5 mt-6 relative">
+                <i className="fa-solid fa-quote-left text-2xl text-[#8B5CF6]/40 absolute top-4 left-4"></i>
+                <p className="text-gray-300 text-sm leading-relaxed pl-10 font-medium">
+                  {currentQuestion}
+                </p>
+              </div>
+
+              {/* Repeat action */}
+              <div className="mt-6 flex justify-center">
                 <button 
                   onClick={speakQuestion}
-                  className="p-3 rounded-xl border border-slate-850 bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 transition-all active:scale-95 flex items-center gap-2 text-xs font-bold"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
                 >
-                  <Volume2 className="w-4 h-4" /> Repeat Audio
+                  <i className="fa-solid fa-rotate-right text-brand-purple"></i> Repeat Question
                 </button>
               </div>
-            </div>
+            </section>
 
-            {/* Right Column: Video camera & Canvas trackers */}
-            <div className="glass-panel rounded-3xl p-6 flex flex-col justify-between min-h-[350px] relative overflow-hidden">
-              <div className="absolute top-4 left-4 text-[10px] font-extrabold text-slate-500 uppercase tracking-widest z-10">
-                Candidate webcam Feed
+            {/* Your Response Transcript Panel */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4 border-b border-gray-850 pb-3">
+                <div className="flex items-center gap-2">
+                  <i className="fa-regular fa-message text-brand-purple"></i>
+                  <h3 className="font-semibold text-white">Your Response Transcript</h3>
+                </div>
+                <button
+                  onClick={toggleListening}
+                  className={`px-4 py-1.5 border rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
+                    isListening 
+                      ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' 
+                      : 'bg-[#1A2035] border-gray-700 text-gray-300 hover:text-white'
+                  }`}
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  {isListening ? 'Listening...' : 'Speak (Mic-free)'}
+                </button>
               </div>
 
-              <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-900 flex items-center justify-center mt-4">
+              {/* Interactive timeline dialogues logs */}
+              <div className="space-y-4 max-h-[200px] overflow-y-auto pr-1 mb-4 custom-scrollbar">
+                {dialogues.map((msg, idx) => {
+                  const isUser = msg.sender === "You";
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-4 rounded-xl border ${
+                        isUser 
+                          ? 'bg-emerald-950/20 border-emerald-500/20' 
+                          : 'bg-slate-900/50 border-gray-800'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`text-xs font-bold ${isUser ? 'text-emerald-400' : 'text-[#8B5CF6]'}`}>
+                          {msg.sender}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-bold">{msg.time}</span>
+                      </div>
+                      <p className="text-xs text-gray-300 leading-normal">{msg.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live typing textarea input */}
+              <div className="bg-[#0B0F19] border border-gray-800 rounded-xl p-4 focus-within:border-gray-600 transition-colors">
+                <textarea 
+                  value={answerText}
+                  onChange={e => setAnswerText(e.target.value)}
+                  className="w-full bg-transparent border-none text-gray-300 text-sm placeholder-gray-600 resize-none focus:ring-0 p-0" 
+                  placeholder="Type your answer here or use the mic to speak..." 
+                  rows="3"
+                ></textarea>
+
+                <div className="flex items-center justify-between mt-4 border-t border-gray-800/50 pt-3">
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={toggleListening}
+                      className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm text-white font-medium transition-colors ${
+                        isListening 
+                          ? 'bg-rose-500 border-rose-600 shadow' 
+                          : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                      }`}
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-gray-400" />}
+                      {isListening ? 'Stop Speaking' : 'Speak Answer'}
+                    </button>
+                    <span className="text-xs text-gray-500">Mic-free option</span>
+                  </div>
+
+                  <button 
+                    onClick={handleAnswerSubmit}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-brand-purple hover:opacity-90 rounded-lg text-sm text-white font-medium transition-opacity disabled:opacity-50"
+                  >
+                    Submit Answer <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Tips alert */}
+              <p className="mt-4 text-xs text-gray-400 flex items-center gap-1.5">
+                <i className="fa-regular fa-lightbulb text-yellow-500"></i> 
+                <span>Tip: Structure your answer using STAR method for better results.</span>
+              </p>
+            </section>
+          </div>
+
+          {/* Right Column: Live Webcam, Tools, Feedback & Tips */}
+          <div className="space-y-6">
+            
+            {/* Live Webcam & Analysis Panel */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-video text-blue-400"></i>
+                  <h3 className="font-semibold text-white">Live Webcam & Analysis</h3>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 text-xs font-medium rounded-full border border-green-500/20">
+                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span> Live
+                </div>
+              </div>
+
+              {/* Camera viewframe viewport container */}
+              <div className="bg-[#0B0F19] border border-gray-800 rounded-xl aspect-video relative overflow-hidden mb-4">
                 {cameraActive ? (
                   <>
-                    <video ref={videoRef} muted playsInline className="absolute top-0 left-0 w-full h-full object-cover scale-x-[-1]" />
-                    <canvas ref={canvasRef} width="320" height="240" className="absolute top-0 left-0 w-full h-full pointer-events-none" />
+                    {/* Clear, bright, colourful user webcam feed */}
+                    <video 
+                      ref={videoRef} 
+                      muted 
+                      playsInline 
+                      className="absolute inset-0 w-full h-full object-cover scale-x-[-1] brightness-110 contrast-105" 
+                    />
+                    
+                    {/* Transparent overlay canvas for face/eye tracking boxes */}
+                    <canvas 
+                      ref={canvasRef} 
+                      width="320" 
+                      height="240" 
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10" 
+                    />
+
+                    {/* Cybernetic telemetry overlay texts - Styled in HTML for perfect sharp rendering */}
+                    <div className="absolute inset-0 p-4 flex flex-col justify-between pointer-events-none z-20 font-sans">
+                      
+                      {/* Top Row telemetry: Stability, Stress, Pulse */}
+                      <div className="flex flex-col gap-2.5 text-left text-[11px] font-semibold text-slate-100">
+                        
+                        <div className="leading-tight drop-shadow-md">
+                          <p className="text-[9px] text-gray-400/90 font-medium">Gaze Stability</p>
+                          <p className={gazeStable === 'Good' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                            {gazeStable}
+                          </p>
+                        </div>
+
+                        <div className="leading-tight drop-shadow-md">
+                          <p className="text-[9px] text-gray-400/90 font-medium">Stress Level</p>
+                          <p className="text-emerald-400 font-bold">{stressLevelPercent}%</p>
+                        </div>
+
+                        <div className="leading-tight drop-shadow-md flex items-center gap-1.5">
+                          <span className="text-rose-500 animate-pulse text-xs">❤️</span>
+                          <div>
+                            <p className="text-[9px] text-gray-400/90 font-medium">Pulse</p>
+                            <p className="text-white font-bold">{pulseBPM} BPM</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom row telemetry: Network & Environment */}
+                      <div className="flex justify-between items-end">
+                        <div className="leading-tight drop-shadow-md bg-black/45 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-gray-800/40">
+                          <p className="text-[9px] text-gray-400/90 font-medium">Network</p>
+                          <p className="text-emerald-400 font-bold flex items-center gap-1">
+                            <i className="fa-solid fa-signal text-[10px]"></i> Excellent
+                          </p>
+                        </div>
+
+                        <div className="leading-tight drop-shadow-md bg-black/45 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-gray-800/40">
+                          <p className="text-[9px] text-gray-400/90 font-medium flex items-center gap-1">
+                            <i className="fa-regular fa-sun text-yellow-400 text-[10px]"></i> Environment
+                          </p>
+                          <p className="text-gray-300 font-bold">Good</p>
+                        </div>
+                      </div>
+
+                    </div>
                   </>
                 ) : (
-                  <div className="text-slate-600 text-xs flex flex-col items-center gap-2">
-                    <VideoOff className="w-8 h-8" />
-                    <span>Webcam feed disabled</span>
+                  /* Camera off state view */
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#0B0F19]">
+                    <div className="w-16 h-16 rounded-full border-2 border-gray-700 flex items-center justify-center mb-3">
+                      <VideoOff className="w-8 h-8 text-gray-500" />
+                    </div>
+                    <h4 className="text-white font-medium mb-1">Camera is off</h4>
+                    <p className="text-xs text-gray-500 max-w-[200px]">Enable your camera to begin interview</p>
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-between items-center gap-4 mt-6">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setCameraActive(!cameraActive)}
-                    className={`p-3 rounded-xl border transition-all active:scale-95 ${cameraActive ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
-                  >
-                    {cameraActive ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => setMicActive(!micActive)}
-                    className={`p-3 rounded-xl border transition-all active:scale-95 ${micActive ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
-                  >
-                    {micActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  </button>
+              {/* Camera utility control toggles */}
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setCameraActive(!cameraActive)}
+                  className="flex-1 flex justify-center items-center gap-2 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                  {cameraActive ? 'Turn Off Camera' : 'Turn On Camera'}
+                </button>
+
+                <button 
+                  onClick={() => setMicActive(!micActive)}
+                  className="flex-1 flex justify-center items-center gap-2 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {micActive ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-emerald-400" />}
+                  {micActive ? 'Mute Mic' : 'Unmute Mic'}
+                </button>
+
+                <button 
+                  onClick={() => alert('Camera configuration parameters simulated!')}
+                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg transition-colors"
+                >
+                  <i className="fa-solid fa-gear"></i>
+                </button>
+              </div>
+            </section>
+
+            {/* Real-time Feedback Panel */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-850">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-chart-line text-brand-purple"></i>
+                  <h3 className="font-semibold text-white">Real-time Feedback</h3>
+                </div>
+                <button 
+                  onClick={() => alert('View details report simulated!')}
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  View Details
+                </button>
+              </div>
+
+              {/* Metrics scores grids */}
+              <div className="grid grid-cols-5 gap-2.5 mb-6 text-center leading-tight">
+                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Eye Contact</p>
+                  <p className="text-base font-extrabold text-emerald-400">82%</p>
+                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Good</span>
                 </div>
 
-                <button
-                  onClick={() => setWhiteboardOpen(!whiteboardOpen)}
-                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${whiteboardOpen ? 'bg-slate-900 border-slate-850 text-accentCyan' : 'bg-slate-950/60 border-slate-900 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <Edit3 className="w-4 h-4" /> Sketchboard Whiteboard
-                </button>
-              </div>
-            </div>
-          </div>
+                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Clarity</p>
+                  <p className="text-base font-extrabold text-emerald-400">88%</p>
+                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Great</span>
+                </div>
 
-          {/* Interactive whiteboard workspace overlay */}
-          {whiteboardOpen && (
-            <div className="glass-panel rounded-3xl p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h4 className="text-sm font-bold text-slate-200">Interactive Sketchboard Canvas</h4>
+                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Pace</p>
+                  <p className="text-base font-extrabold text-emerald-400">76 WPM</p>
+                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Good</span>
+                </div>
+
+                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Confidence</p>
+                  <p className="text-base font-extrabold text-yellow-500">72%</p>
+                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Fair</span>
+                </div>
+
+                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Filler Words</p>
+                  <p className="text-base font-extrabold text-emerald-400">5</p>
+                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Low</span>
+                </div>
+              </div>
+
+              {/* Overall Performance tracking line */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className="text-gray-400">Overall Performance</span>
+                  <span className="text-white font-bold">78 / 100</span>
+                </div>
+                <div className="w-full bg-gray-800 rounded-full h-2">
+                  <div className="bg-gradient-to-r from-blue-500 to-brand-purple h-2 rounded-full" style={{ width: '78%' }}></div>
+                </div>
+              </div>
+
+              <p className="mt-4 text-xs text-gray-400 italic font-medium leading-relaxed bg-[#0B0F19]/40 p-3 rounded-lg border border-gray-850/30">
+                &ldquo;Keep it up! Your answers are well-structured and clear.&rdquo;
+              </p>
+
+              <button 
+                onClick={handleFinishInterview}
+                className="w-full mt-4 py-2 bg-[#1A2035] hover:bg-[#222942] border border-gray-800 hover:border-gray-700 text-xs font-bold text-gray-300 hover:text-white rounded-lg transition-all flex items-center justify-center gap-1.5"
+              >
+                View Detailed Report <i className="fa-solid fa-arrow-right text-[10px]"></i>
+              </button>
+            </section>
+
+            {/* Interactive whiteboard/sketchboard button wrapper (when whiteboard is closed) */}
+            {!whiteboardOpen && (
+              <button
+                onClick={() => setWhiteboardOpen(true)}
+                className="w-full py-3 bg-[#151A2B] hover:bg-[#1C223A] border border-gray-800 rounded-xl text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center justify-center gap-2"
+              >
+                <Edit3 className="w-4 h-4 text-[#8B5CF6]" /> Enable Whiteboard Sketchboard
+              </button>
+            )}
+
+            {/* Sketchboard whiteboard canvas inline display */}
+            {whiteboardOpen && (
+              <section className="panel-bg rounded-2xl p-6 border border-gray-800 space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-gray-850">
+                  <h4 className="text-sm font-bold text-slate-200">Sketchboard Whiteboard</h4>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        const canvas = whiteboardCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                      }}
+                      className="text-[9px] bg-slate-900 border border-slate-800 px-2.5 py-1 rounded text-slate-400 hover:text-white transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button 
+                      onClick={() => setWhiteboardOpen(false)}
+                      className="text-[9px] bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded text-rose-400 hover:text-rose-350 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="w-full bg-[#0B0F19] rounded-xl overflow-hidden border border-gray-800">
+                  <canvas ref={whiteboardCanvasRef} width="640" height="200" className="w-full bg-[#0B0F19] cursor-crosshair h-44" />
+                </div>
+              </section>
+            )}
+
+            {/* Tools Section grid */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-toolbox text-brand-purple"></i>
+                  <h3 className="font-semibold text-white">Interview Tools</h3>
+                </div>
                 <button 
-                  onClick={() => {
-                    const canvas = whiteboardCanvasRef.current;
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                  }}
-                  className="text-[10px] bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-all font-semibold"
+                  onClick={() => alert('View all interview tools simulated!')}
+                  className="text-xs text-blue-400 hover:text-blue-300"
                 >
-                  Reset Canvas
+                  View All
                 </button>
               </div>
-              <div className="w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-900 relative">
-                <canvas ref={whiteboardCanvasRef} width="800" height="250" className="w-full bg-slate-950/80 cursor-crosshair h-60" />
+
+              <div className="grid grid-cols-4 gap-3">
+                <button 
+                  onClick={() => alert('Mock Notepad activated!')}
+                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
+                >
+                  <i className="fa-regular fa-clipboard text-lg text-purple-400 group-hover:scale-110 transition-transform"></i>
+                  <span className="text-xs text-white font-medium">Notes</span>
+                  <span className="text-[8px] text-gray-500 leading-none">Take notes</span>
+                </button>
+
+                <button 
+                  onClick={() => setWhiteboardOpen(true)}
+                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
+                >
+                  <i className="fa-solid fa-pen-to-square text-lg text-blue-400 group-hover:scale-110 transition-transform"></i>
+                  <span className="text-xs text-white font-medium">Whiteboard</span>
+                  <span className="text-[8px] text-gray-500 leading-none">Draw &amp; explain</span>
+                </button>
+
+                <button 
+                  onClick={() => alert('Calculator tool activated!')}
+                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
+                >
+                  <i className="fa-solid fa-calculator text-lg text-teal-400 group-hover:scale-110 transition-transform"></i>
+                  <span className="text-xs text-white font-medium">Calculator</span>
+                  <span className="text-[8px] text-gray-500 leading-none">Calculate</span>
+                </button>
+
+                <button 
+                  onClick={() => alert('Code Editor tool activated!')}
+                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
+                >
+                  <i className="fa-solid fa-code text-lg text-pink-400 group-hover:scale-110 transition-transform"></i>
+                  <span className="text-xs text-white font-medium">Code Editor</span>
+                  <span className="text-[8px] text-gray-500 leading-none">Write code</span>
+                </button>
               </div>
-            </div>
-          )}
+            </section>
 
-          {/* Answer Area */}
-          <div className="glass-panel rounded-3xl p-6 sm:p-8 space-y-4">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                Your Response Transcript
-              </label>
+            {/* Tips for a better answer list */}
+            <section className="panel-bg rounded-2xl p-6 border border-gray-800 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <i className="fa-regular fa-lightbulb text-teal-400"></i>
+                  <h3 className="font-semibold text-white">Tips for a Better Answer</h3>
+                </div>
+              </div>
+              
+              <ul className="space-y-3.5 relative z-10 w-2/3">
+                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
+                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
+                  <span>Structure your answer using STAR method</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
+                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
+                  <span>Be concise &amp; to the point</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
+                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
+                  <span>Think out loud when solving problems</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
+                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
+                  <span>Review &amp; improve with AI feedback</span>
+                </li>
+              </ul>
 
-              <button
-                onClick={toggleListening}
-                className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all active:scale-95 ${isListening ? 'bg-rose-500 text-white border-rose-600 animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'}`}
-              >
-                {isListening ? (
-                  <>
-                    <MicOff className="w-4 h-4" /> Stop Audio Record
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4" /> Speak Answer (Mic-free option)
-                  </>
-                )}
-              </button>
-            </div>
+              {/* decorative vector circle graphic */}
+              <div className="absolute right-4 bottom-4 w-24 h-24 opacity-25 pointer-events-none">
+                <svg fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="50" cy="50" r="40" stroke="#14B8A6" strokeOpacity="0.4" strokeWidth="4"></circle>
+                  <circle cx="50" cy="50" r="25" stroke="#14B8A6" strokeOpacity="0.7" strokeWidth="4"></circle>
+                  <circle cx="50" cy="50" fill="#14B8A6" r="10"></circle>
+                  <path d="M80 20 L55 45" stroke="#14B8A6" strokeLinecap="round" strokeWidth="3"></path>
+                  <path d="M75 15 L85 25 L80 20 Z" fill="#14B8A6"></path>
+                </svg>
+              </div>
+            </section>
 
-            <textarea
-              value={answerText}
-              onChange={e => setAnswerText(e.target.value)}
-              placeholder="Speak using the mic button, or type out your response in detail directly here..."
-              className="w-full h-32 p-4 rounded-2xl bg-slate-950/50 border border-slate-850 text-slate-200 text-sm focus:border-accentViolet outline-none transition-all leading-relaxed resize-none"
-            />
-
-            <div className="flex justify-between items-center gap-4">
-              <span className="text-[10px] text-slate-500 font-semibold leading-normal">
-                💡 Practice pacing: Slow down and pause instead of using filler syllables like "um" or "like".
-              </span>
-              <button
-                onClick={handleAnswerSubmit}
-                disabled={loading}
-                className="bg-glow-gradient px-6 py-3.5 rounded-xl text-xs font-bold text-white shadow-lg hover:shadow-violet-500/20 hover:scale-[1.02] transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-              >
-                {currentIndex + 1 === totalQuestions ? "Finish Interview" : "Submit Answer"} <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
-
-const drawCyberneticOverlay = (ctx, boxX, boxY, driftX, driftY, stressColor, gazeColor, gazeStatus, stressVal, stressLevel, currentHr, now, lowLightWarning) => {
-  ctx.strokeStyle = stressColor;
-  ctx.lineWidth = 1.5;
-  const bracketSize = 15;
-  
-  // Top-Left
-  ctx.beginPath();
-  ctx.moveTo(boxX, boxY + bracketSize);
-  ctx.lineTo(boxX, boxY);
-  ctx.lineTo(boxX + bracketSize, boxY);
-  ctx.stroke();
-  // Top-Right
-  ctx.beginPath();
-  ctx.moveTo(boxX + 200 - bracketSize, boxY);
-  ctx.lineTo(boxX + 200, boxY);
-  ctx.lineTo(boxX + 200, boxY + bracketSize);
-  ctx.stroke();
-  // Bottom-Left
-  ctx.beginPath();
-  ctx.moveTo(boxX, boxY + 160 - bracketSize);
-  ctx.lineTo(boxX, boxY + 160);
-  ctx.lineTo(boxX + bracketSize, boxY + 160);
-  ctx.stroke();
-  // Bottom-Right
-  ctx.beginPath();
-  ctx.moveTo(boxX + 200 - bracketSize, boxY + 160);
-  ctx.lineTo(boxX + 200, boxY + 160);
-  ctx.lineTo(boxX + 200, boxY + 160 - bracketSize);
-  ctx.stroke();
-  
-  // Face grid
-  ctx.strokeStyle = 'rgba(6, 182, 212, 0.1)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(boxX, boxY, 200, 160);
-  
-  // Nose reticle
-  ctx.fillStyle = '#06b6d4';
-  ctx.fillRect(boxX + 100, boxY + 80, 4, 4);
-  
-  // Pupil trackers
-  const leftEyeX = boxX + 60 + driftX;
-  const leftEyeY = boxY + 55 + driftY;
-  const rightEyeX = boxX + 140 + driftX;
-  const rightEyeY = boxY + 55 + driftY;
-  
-  ctx.strokeStyle = '#8b5cf6';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(leftEyeX, leftEyeY, 6, 0, 2 * Math.PI);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(rightEyeX, rightEyeY, 6, 0, 2 * Math.PI);
-  ctx.stroke();
-  
-  ctx.fillStyle = '#a855f7';
-  ctx.beginPath();
-  ctx.arc(leftEyeX, leftEyeY, 1.5, 0, 2 * Math.PI);
-  ctx.arc(rightEyeX, rightEyeY, 1.5, 0, 2 * Math.PI);
-  ctx.fill();
-  
-  ctx.strokeStyle = 'rgba(139, 92, 246, 0.2)';
-  ctx.beginPath();
-  ctx.moveTo(leftEyeX, leftEyeY);
-  ctx.lineTo(rightEyeX, rightEyeY);
-  ctx.stroke();
-  
-  // Telemetry text
-  ctx.font = 'bold 9px sans-serif';
-  ctx.fillStyle = gazeColor;
-  ctx.fillText(gazeStatus, 12, 20);
-  
-  ctx.fillStyle = stressColor;
-  ctx.fillText(`Stress Index: ${stressVal}% (${stressLevel})`, 12, 32);
-  
-  const heartPulse = (now / 150) % 10;
-  const heartBeating = heartPulse > 1.3 && heartPulse < 1.7;
-  ctx.fillStyle = '#f43f5e';
-  ctx.fillText(heartBeating ? '❤️' : '♡', 12, 45);
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillText(`Pulse: ${currentHr} BPM`, 26, 44);
-  
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '8px monospace';
-  ctx.fillText(`DX: ${Math.round(rightEyeX - leftEyeX)}px Y: ${Math.round(leftEyeY)}`, 230, 20);
-  
-  if (lowLightWarning) {
-    ctx.fillStyle = '#f59e0b';
-    ctx.font = 'bold 8px sans-serif';
-    ctx.fillText('⚠️ LOW LIGHTING DETECTED', 190, 32);
-  }
-};
-
-const drawECGWaves = (ctx, waveHistory, now, isListening, stressVal) => {
-  const speedDivisor = isListening ? 110 : 150;
-  const ecgCycle = (now / speedDivisor) % 10;
-  let ecgVal = 0;
-  
-  if (ecgCycle < 0.8) {
-    ecgVal = Math.sin(ecgCycle * Math.PI / 0.8) * 0.15;
-  } else if (ecgCycle >= 1.0 && ecgCycle < 1.2) {
-    ecgVal = -0.2;
-  } else if (ecgCycle >= 1.2 && ecgCycle < 1.4) {
-    ecgVal = 1.0 + (stressVal > 30 ? 0.3 : 0);
-  } else if (ecgCycle >= 1.4 && ecgCycle < 1.6) {
-    ecgVal = -0.3;
-  } else if (ecgCycle >= 1.8 && ecgCycle < 2.4) {
-    ecgVal = Math.sin((ecgCycle - 1.8) * Math.PI / 0.6) * 0.25;
-  } else {
-    ecgVal = 0;
-  }
-  ecgVal += (Math.random() - 0.5) * 0.03;
-  
-  waveHistory.push(ecgVal);
-  if (waveHistory.length > 90) waveHistory.shift();
-  
-  ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(10, 220);
-  ctx.lineTo(310, 220);
-  ctx.stroke();
-  
-  ctx.strokeStyle = '#10b981';
-  ctx.lineWidth = 1.5;
-  ctx.shadowColor = '#10b981';
-  ctx.shadowBlur = 1;
-  ctx.beginPath();
-  for (let i = 0; i < waveHistory.length; i++) {
-    const x = 12 + i * 3.3;
-    const y = 220 - waveHistory[i] * 16;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  
-  ctx.fillStyle = 'rgba(16, 185, 129, 0.6)';
-  ctx.font = 'bold 8px sans-serif';
-  ctx.fillText("ECG / TELEMETRY LIVE", 12, 208);
-};
-
-const drawFallbackLoader = (ctx, now) => {
-  ctx.clearRect(0, 0, 320, 240);
-  ctx.fillStyle = '#090d16';
-  ctx.fillRect(0, 0, 320, 240);
-  
-  ctx.strokeStyle = 'rgba(139, 92, 246, 0.15)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(10, 10, 300, 220);
-  
-  ctx.fillStyle = '#a855f7';
-  ctx.font = 'bold 10px sans-serif';
-  ctx.fillText('INITIALIZING WEBCAM SOURCE...', 20, 30);
-};

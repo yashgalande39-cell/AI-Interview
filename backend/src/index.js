@@ -10,6 +10,7 @@ const interviewRoutes = require('./routes/interviewRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const gamificationRoutes = require('./routes/gamificationRoutes');
 const codingRoutes = require('./routes/codingRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,6 +40,9 @@ app.use('/api/interviews', interviewRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/coding', codingRoutes);
+app.use('/api/ai', aiRoutes);
+
+console.log('🤖 OpenRouter AI service registered on /api/ai');
 
 // Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
 const io = new Server(server, {

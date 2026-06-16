@@ -33,7 +33,8 @@ exports.register = async (req, res) => {
       xp: 100, // starting XP
       streak: 1,
       lastActive: new Date().toISOString(),
-      badges: ["Novice Prep"]
+      badges: ["Novice Prep"],
+      plan: "free"
     });
 
     // Create JWT Token
@@ -232,6 +233,37 @@ exports.chatAssistant = async (req, res) => {
   } catch (err) {
     console.error("Chat Assistant Error:", err);
     return res.status(500).json({ message: "Failed to fetch response from AI assistant" });
+  }
+};
+
+exports.updatePlan = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { plan } = req.body;
+
+    const validPlans = ['free', 'pro', 'teams'];
+    if (!validPlans.includes(plan)) {
+      return res.status(400).json({ message: "Invalid plan type" });
+    }
+
+    const user = mockDb.users.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const updatedUser = mockDb.users.updateOne(
+      { id: userId },
+      { plan }
+    );
+
+    const { password: _, ...userWithoutPassword } = updatedUser;
+    return res.status(200).json({
+      message: "Plan updated successfully",
+      user: userWithoutPassword
+    });
+  } catch (err) {
+    console.error("Update Plan Error:", err);
+    return res.status(500).json({ message: "Server error updating plan" });
   }
 };
 

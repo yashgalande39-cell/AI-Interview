@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePlan } from '../hooks/usePlan';
 import { io } from 'socket.io-client';
 import { 
-  ShieldCheck, HelpCircle, AlertCircle, Compass, 
-  Sparkles, CheckSquare, Zap, PlayCircle, Loader2,
-  Users, MessageSquare, Send, PenTool, Trash2, Copy,
-  Check, ArrowRightLeft, BookOpen, RefreshCw, XCircle,
-  UploadCloud
+  ShieldCheck, AlertCircle, Sparkles, CheckSquare,
+  Zap, Loader2, Users, Send, Trash2,
+  Check, BookOpen, XCircle, UploadCloud
 } from 'lucide-react';
 
 export default function InterviewLobby() {
   const { token, user } = useAuth();
+  const { isFreePlan } = usePlan();
   const navigate = useNavigate();
 
   // Tab State: 'ai' (AI Interview) or 'peer' (Peer Matchmaker)
@@ -30,9 +30,8 @@ export default function InterviewLobby() {
 
   // Loaded lists
   const [resumes, setResumes] = useState([]);
-  const [loadingResumes, setLoadingResumes] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [coachActive, setCoachActive] = useState(true);
+  const coachActive = true;
 
   // Confidence Checklist
   const [confidenceCheck, setConfidenceCheck] = useState({
@@ -135,7 +134,6 @@ export default function InterviewLobby() {
           { id: "res_mock_1", filename: "Rahul_Kumar_CV.pdf", targetRole: "Software Engineer", atsScore: 84 },
           { id: "res_mock_2", filename: "Rahul_Kumar_WebDev.pdf", targetRole: "Web Developer", atsScore: 78 }
         ]);
-        setLoadingResumes(false);
       }
     };
 
@@ -214,12 +212,23 @@ export default function InterviewLobby() {
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to start interview');
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 400) {
+          alert(data.message);
+          setSubmitting(false);
+          return;
+        }
+        throw new Error(data.message || 'Failed to start interview');
+      }
       navigate(`/interview-room?sessionId=${data.session.id}&resumeId=${selectedResumeId}`);
     } catch (err) {
-      console.warn("Server generation offline, starting mock-backed session:", err.message);
-      const mockSessionId = 'int_mock_' + Date.now();
-      navigate(`/interview-room?sessionId=${mockSessionId}&type=${type}&difficulty=${difficulty}&role=${role}&company=${company}&language=${language}&resumeId=${selectedResumeId}`);
+      if (err.message.includes('Failed to fetch') || err.message.includes('fetch failed')) {
+        console.warn("Server generation offline, starting mock-backed session:", err.message);
+        const mockSessionId = 'int_mock_' + Date.now();
+        navigate(`/interview-room?sessionId=${mockSessionId}&type=${type}&difficulty=${difficulty}&role=${role}&company=${company}&language=${language}&resumeId=${selectedResumeId}`);
+      } else {
+        alert(err.message || "An error occurred starting the interview.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -292,7 +301,7 @@ export default function InterviewLobby() {
   };
 
   // Whiteboard drawing synchronizations
-  const drawPeerPath = (drawData) => {
+  function drawPeerPath(drawData) {
     const context = contextRef.current;
     if (!context) return;
     context.beginPath();
@@ -302,7 +311,7 @@ export default function InterviewLobby() {
     context.lineTo(drawData.x1, drawData.y1);
     context.stroke();
     context.closePath();
-  };
+  }
 
   const handleCanvasMouseDown = ({ nativeEvent }) => {
     const canvas = canvasRef.current;
@@ -353,12 +362,12 @@ export default function InterviewLobby() {
     isDrawingRef.current = false;
   };
 
-  const clearLocalCanvas = () => {
+  function clearLocalCanvas() {
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (!canvas || !context) return;
     context.clearRect(0, 0, canvas.width, canvas.height);
-  };
+  }
 
   const handleClearCanvas = () => {
     clearLocalCanvas();
@@ -385,8 +394,20 @@ export default function InterviewLobby() {
   };
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+    <div className="space-y-8 pt-6 w-full">
       
+      {/* Free Plan Banner */}
+      {isFreePlan && (
+        <div className="upgrade-banner">
+          <span className="upgrade-banner-icon">⚡</span>
+          <div>
+            <strong>Free Plan:</strong> You have 3 mock interviews per month.{' '}
+            <a href="/#pricing" className="upgrade-banner-link">Upgrade to Pro</a>
+            {' '}for unlimited interviews, coding evaluation, and advanced analytics.
+          </div>
+        </div>
+      )}
+
       {matchingState !== 'matched' && (
         <div className="space-y-4">
           <div className="space-y-2">
@@ -441,14 +462,20 @@ export default function InterviewLobby() {
                   {['HR', 'Technical', 'Behavioral', 'Aptitude', 'Coding'].map(t => (
                     <button
                       key={t}
-                      onClick={() => setType(t)}
-                      className={`py-3 px-2 rounded-xl text-xs font-bold transition-all border ${
+                      onClick={() => {
+                        if (isFreePlan && t !== 'HR') {
+                          alert(`The ${t} interview round requires the Pro Plan. Please upgrade.`);
+                          return;
+                        }
+                        setType(t);
+                      }}
+                      className={`py-3 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 ${
                         type === t 
                           ? 'bg-glow-gradient text-white border-violet-500/25 shadow-lg' 
                           : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
-                      }`}
+                      } ${isFreePlan && t !== 'HR' ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {t}
+                      {t} {isFreePlan && t !== 'HR' && '🔒'}
                     </button>
                   ))}
                 </div>

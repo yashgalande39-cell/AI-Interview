@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
-  ShieldAlert, Plus, Trash2, CheckCircle2, 
-  HelpCircle, Database, Server, BarChart3, Lock 
+  Plus, Trash2, CheckCircle2, Database 
 } from 'lucide-react';
 
 export default function AdminPanel() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   // New Question Form
   const [type, setType] = useState('HR');
@@ -29,7 +27,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/gamification/gd-topic', {
+        await fetch('http://localhost:5000/api/gamification/gd-topic', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         // We can just grab questions from local mock DB managers
@@ -41,7 +39,6 @@ export default function AdminPanel() {
           { id: "q_2", type: "Technical", difficulty: "Medium", role: "Software Engineer", company: "Google", question: "Explain the four main pillars of OOP with examples." },
           { id: "q_3", type: "Coding", difficulty: "Easy", role: "Software Engineer", company: "TCS", question: "Write a function reverseString(s) that takes a string." }
         ]);
-        setLoading(false);
       }
     };
 
@@ -74,7 +71,7 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-76px)]">
+    <div className="space-y-8 pt-6 w-full">
       
       <div className="space-y-2">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 flex items-center gap-2">
