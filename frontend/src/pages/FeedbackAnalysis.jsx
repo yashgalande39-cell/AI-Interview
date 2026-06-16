@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../config';
 import { 
   Trophy, ChevronRight, Printer, RefreshCw, X, HelpCircle, Sparkles
 } from 'lucide-react';
@@ -43,7 +44,7 @@ export default function FeedbackAnalysis() {
   useEffect(() => {
     const fetchScorecard = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/interviews/finish`, {
+        const res = await fetch(`${API_BASE}/interviews/finish`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

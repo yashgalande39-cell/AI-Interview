@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../config';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -23,13 +24,13 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${token}` };
-        const histRes = await fetch('http://localhost:5000/api/interviews/history', { headers });
+        const histRes = await fetch(`${API_BASE}/interviews/history`, { headers });
         if (histRes.ok) {
           const histData = await histRes.json();
           setHistory(histData.history || []);
         }
 
-        const resumeRes = await fetch('http://localhost:5000/api/resumes', { headers });
+        const resumeRes = await fetch(`${API_BASE}/resumes`, { headers });
         if (resumeRes.ok) {
           const resumeData = await resumeRes.json();
           setResumes(resumeData.resumes || []);

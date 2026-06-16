@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
+import { BACKEND_URL, API_BASE } from '../config';
 import { 
   Pause, ChevronRight, Copy, Users2
 } from 'lucide-react';
@@ -31,7 +32,7 @@ export default function GroupDiscussion() {
   useEffect(() => {
     const fetchTopic = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/gamification/gd-topic', {
+        const res = await fetch(`${API_BASE}/gamification/gd-topic`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -68,7 +69,7 @@ export default function GroupDiscussion() {
 
   // Socket.IO configurations for Real-time bridge
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
+    socketRef.current = io(BACKEND_URL);
 
     socketRef.current.on('connect', () => {
       console.log('🔌 Connected to Socket.IO signaling channel.');

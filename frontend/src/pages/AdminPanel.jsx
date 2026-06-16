@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../config';
 import { 
   Plus, Trash2, CheckCircle2, Database 
 } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        await fetch('http://localhost:5000/api/gamification/gd-topic', {
+        await fetch(`${API_BASE}/gamification/gd-topic`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         // We can just grab questions from local mock DB managers

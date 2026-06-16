@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlan } from '../hooks/usePlan';
 import { io } from 'socket.io-client';
+import { BACKEND_URL, API_BASE } from '../config';
 import { 
   ShieldCheck, AlertCircle, Sparkles, CheckSquare,
   Zap, Loader2, Users, Send, Trash2,
@@ -60,7 +61,7 @@ export default function InterviewLobby() {
 
   useEffect(() => {
     // Connect socket for matching & synchronized peer sessions
-    socketRef.current = io('http://localhost:5000');
+    socketRef.current = io(BACKEND_URL);
 
     socketRef.current.on('connect', () => {
       console.log('🔌 Peer Matchmaking Socket connected.');
@@ -112,7 +113,7 @@ export default function InterviewLobby() {
     const fetchResumes = async () => {
       let loadedResumes = [];
       try {
-        const res = await fetch('http://localhost:5000/api/resumes', {
+        const res = await fetch(`${API_BASE}/resumes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -152,7 +153,7 @@ export default function InterviewLobby() {
     formData.append('resume', file);
 
     try {
-      const res = await fetch('http://localhost:5000/api/resumes/upload', {
+      const res = await fetch(`${API_BASE}/resumes/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -196,7 +197,7 @@ export default function InterviewLobby() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/interviews/generate', {
+      const res = await fetch(`${API_BASE}/interviews/generate`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

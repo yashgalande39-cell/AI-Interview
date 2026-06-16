@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../config';
 import { 
   Mic, MicOff, Video, VideoOff, 
   ShieldAlert, Edit3, ArrowRight,
@@ -84,7 +85,7 @@ export default function InterviewRoom() {
     const initSession = async () => {
       try {
         if (sessionId && !sessionId.startsWith('int_mock_') && !sessionId.startsWith('mock_')) {
-          const res = await fetch(`http://localhost:5000/api/interviews/session/${sessionId}`, {
+          const res = await fetch(`${API_BASE}/interviews/session/${sessionId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (res.ok) {
@@ -99,7 +100,7 @@ export default function InterviewRoom() {
           }
         }
 
-        const res = await fetch(`http://localhost:5000/api/interviews/generate`, {
+        const res = await fetch(`${API_BASE}/interviews/generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -497,7 +498,7 @@ export default function InterviewRoom() {
     ];
 
     try {
-      const res = await fetch(`http://localhost:5000/api/interviews/submit-answer`, {
+      const res = await fetch(`${API_BASE}/interviews/submit-answer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -579,7 +580,7 @@ export default function InterviewRoom() {
   const handleFinishInterview = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/interviews/finish`, {
+      const res = await fetch(`${API_BASE}/interviews/finish`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
