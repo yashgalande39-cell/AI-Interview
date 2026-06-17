@@ -336,3 +336,137 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+// Firebase project ID — must match the one in frontend/.env
+const FIREBASE_PROJECT_ID = 'ai-interview-auth-530ed';
+
+/**
+ * Fetches Firebase's current public signing certificates (rotated by Google periodically).
+ * Firebase ID tokens are RS256 JWTs — NOT verifiable via oauth2.googleapis.com/tokeninfo.
+ */
+async function getFirebasePublicKeys() {
+  const res = await fetch(
+    'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
+  );
+  if (!res.ok) throw new Error('Failed to fetch Firebase public keys');
+  return res.json();
+}
+
+/**
+ * Verifies a Firebase ID token by:
+ * 1. Decoding the JWT header to find which key was used (kid)
+ * 2. Fetching Firebase's public certs
+ * 3. Verifying signature, audience, issuer and expiry via jsonwebtoken
+ */
+async function verifyFirebaseIdToken(idToken) {
+  // Decode header without verifying to get the key ID
+  const decoded = jwt.decode(idToken, { complete: true });
+  if (!decoded || !decoded.header || !decoded.header.kid) {
+    throw new Error('Malformed Firebase ID token');
+  }
+
+  const keys = await getFirebasePublicKeys();
+  const publicKey = keys[decoded.header.kid];
+  if (!publicKey) {
+    throw new Error('Unknown Firebase signing key — token may be outdated');
+  }
+
+  // Verify signature, expiry, audience, and issuer
+  const payload = jwt.verify(idToken, publicKey, {
+    algorithms: ['RS256'],
+    audience: FIREBASE_PROJECT_ID,
+    issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
+  });
+
+  return payload; // contains uid, email, name, picture, etc.
+}
+
+/**
+ * Google OAuth via Firebase ID Token
+ * Frontend sends the Firebase idToken after a successful Google popup sign-in.
+ * We verify it cryptographically, then find/create the user and return our own JWT.
+ */
+exports.googleAuth = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ message: 'Firebase ID token is required' });
+    }
+
+    // Cryptographically verify the Firebase token using Google's public certs
+    let firebasePayload;
+    try {
+      firebasePayload = await verifyFirebaseIdToken(idToken);
+    } catch (verifyErr) {
+      console.error('Firebase token verification failed:', verifyErr.message);
+      return res.status(401).json({ message: 'Invalid or expired Google token. Please try signing in again.' });
+    }
+
+    const {
+      uid: googleId,
+      email,
+      name,
+      picture,
+    } = firebasePayload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Google account must have an email address' });
+    }
+
+    // Find or create the user in our database
+    let user = mockDb.users.findOne({ email });
+
+    if (!user) {
+      // First-time Google login — auto-register the user
+      user = mockDb.users.create({
+        name: name || email.split('@')[0],
+        email,
+        password: '',           // OAuth users have no password
+        googleId,
+        avatar: picture || '',
+        collegeName: '',
+        branch: '',
+        graduationYear: '',
+        xp: 100,
+        streak: 1,
+        lastActive: new Date().toISOString(),
+        badges: ['Novice Prep'],
+        plan: 'free',
+        authProvider: 'google',
+      });
+      console.log(`✅ New Google user registered: ${email}`);
+    } else {
+      // Returning user — refresh streak and Google profile data
+      const now = new Date();
+      const lastActive = new Date(user.lastActive || now);
+      const diffDays = Math.ceil(Math.abs(now - lastActive) / (1000 * 60 * 60 * 24));
+      let streak = user.streak || 1;
+      if (diffDays === 1) streak += 1;
+      else if (diffDays > 1) streak = 1;
+
+      user = mockDb.users.updateOne(
+        { id: user.id },
+        {
+          lastActive: now.toISOString(),
+          streak,
+          googleId,
+          avatar: picture || user.avatar || '',
+        }
+      );
+      console.log(`✅ Returning Google user logged in: ${email}`);
+    }
+
+    // Issue our own application JWT
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const { password: _, ...userWithoutPassword } = user;
+
+    return res.status(200).json({
+      message: 'Google authentication successful',
+      token,
+      user: userWithoutPassword,
+    });
+  } catch (err) {
+    console.error('Google Auth Error:', err);
+    return res.status(500).json({ message: 'Server error during Google authentication' });
+  }
+};

@@ -1,4 +1,6 @@
 import { createContext, useState, useEffect, useContext } from 'react';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider, hasConfig as firebaseReady } from '../firebase';
 import { API_BASE } from '../config';
 
 const AuthContext = createContext();
@@ -143,6 +145,49 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async () => {
+    if (!firebaseReady || !auth || !googleProvider) {
+      throw new Error(
+        'Google login is not configured yet. Please add your Firebase credentials to frontend/.env — see frontend/.env.example for instructions.'
+      );
+    }
+
+    try {
+      // Open Google sign-in popup
+      const result = await signInWithPopup(auth, googleProvider);
+      const firebaseUser = result.user;
+
+      // Get the Firebase ID token to send to our backend for verification
+      const idToken = await firebaseUser.getIdToken();
+
+      // Exchange Firebase ID token for our app's JWT
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Google authentication failed');
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user_cache', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+      if (data.user && data.user.plan) {
+        setPlan(data.user.plan);
+        localStorage.setItem('user_plan', data.user.plan);
+      }
+      return data;
+    } catch (err) {
+      // Don't swallow popup-closed-by-user errors silently
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        throw new Error('Sign-in was cancelled. Please try again.');
+      }
+      throw err;
+    }
+  };
+
   function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user_cache');
@@ -258,7 +303,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateXp, updateProfile, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
+    <AuthContext.Provider value={{ user, token, loading, register, login, loginWithGoogle, firebaseReady, logout, updateXp, updateProfile, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
       {children}
     </AuthContext.Provider>
   );

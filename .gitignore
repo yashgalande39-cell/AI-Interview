@@ -10,6 +10,7 @@ frontend/dist/
 # Local Environment Variables
 .env
 backend/.env
+frontend/.env
 
 # Logs and system caches
 *.log
