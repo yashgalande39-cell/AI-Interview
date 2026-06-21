@@ -7,8 +7,9 @@ import { BACKEND_URL, API_BASE } from '../config';
 import { 
   ShieldCheck, AlertCircle, Sparkles, CheckSquare,
   Zap, Loader2, Users, Send, Trash2,
-  Check, BookOpen, XCircle, UploadCloud
+  Check, BookOpen, XCircle, UploadCloud, Video, Mic, Heart, HelpCircle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function InterviewLobby() {
   const { token, user } = useAuth();
@@ -389,30 +390,33 @@ export default function InterviewLobby() {
     Candidate: [
       "Task: Design a real-time rate limiting solution on the whiteboard.",
       "First clarify specifications: Read/Write load, latency limits.",
-      "Draw the blocks: Client $\rightarrow$ API Gateway $\rightarrow$ Redis Cache.",
+      "Draw the blocks: Client ➔ API Gateway ➔ Redis Cache.",
       "Explain sliding-window algorithm mechanics out loud."
     ]
   };
 
   return (
-    <div className="space-y-8 pt-6 w-full">
+    <div className="space-y-6 pt-2 pb-12 w-full text-left">
       
       {/* Free Plan Banner */}
       {isFreePlan && (
-        <div className="upgrade-banner">
-          <span className="upgrade-banner-icon">⚡</span>
-          <div>
-            <strong>Free Plan:</strong> You have 3 mock interviews per month.{' '}
-            <a href="/#pricing" className="upgrade-banner-link">Upgrade to Pro</a>
+        <div className="upgrade-banner rounded-2xl flex gap-3 items-center" style={{
+          background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(139,92,246,0.05))',
+          border: '1px solid rgba(139,92,246,0.2)'
+        }}>
+          <span className="upgrade-banner-icon text-lg">⚡</span>
+          <div className="text-sm">
+            <strong className="text-white">Free Plan:</strong> You have 3 mock interviews per month.{' '}
+            <a href="/#pricing" className="text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors">Upgrade to Pro</a>
             {' '}for unlimited interviews, coding evaluation, and advanced analytics.
           </div>
         </div>
       )}
 
       {matchingState !== 'matched' && (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 flex items-center gap-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2">
               🎙️ Mock Setup Lobby
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm">
@@ -421,348 +425,383 @@ export default function InterviewLobby() {
           </div>
 
           {/* Navigation tab switchers */}
-          <div className="flex border-b border-slate-900 gap-2">
+          <div className="flex p-1 rounded-xl bg-slate-950/60 border border-white/5 max-w-md print:hidden">
             <button
               onClick={() => setActiveTab('ai')}
-              className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+              className={`py-2 px-4 rounded-lg font-semibold text-xs transition-all flex items-center gap-2 ${
                 activeTab === 'ai' 
-                  ? 'border-violet-500 text-slate-200' 
-                  : 'border-transparent text-slate-500 hover:text-slate-350'
+                  ? 'bg-slate-800 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Zap className="w-4 h-4" /> AI Mock Interview
+              <Zap className="w-3.5 h-3.5" /> AI Mock Interview
             </button>
             <button
               onClick={() => setActiveTab('peer')}
-              className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+              className={`py-2 px-4 rounded-lg font-semibold text-xs transition-all flex items-center gap-2 ${
                 activeTab === 'peer' 
-                  ? 'border-violet-500 text-slate-200' 
-                  : 'border-transparent text-slate-500 hover:text-slate-350'
+                  ? 'bg-slate-800 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Users className="w-4 h-4" /> Peer-to-Peer Matchmaker
+              <Users className="w-3.5 h-3.5" /> Peer Matchmaker
             </button>
           </div>
         </div>
       )}
 
-      {activeTab === 'ai' && matchingState !== 'matched' && (
-        /* Original AI interview selector */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
-              <h3 className="text-lg font-bold text-slate-200 border-b border-slate-800/80 pb-4">
-                Configure Target Parameters
-              </h3>
+      <AnimatePresence mode="wait">
+        {activeTab === 'ai' && matchingState !== 'matched' && (
+          <motion.div 
+            key="ai-lobby"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+          >
+            <div className="lg:col-span-2 space-y-6">
+              <div className="rounded-3xl p-6 sm:p-8 space-y-6 bg-slate-900/20 border border-white/5">
+                <h3 className="text-sm font-black text-slate-200 border-b border-white/5 pb-4 uppercase tracking-wider">
+                  Configure Target Parameters
+                </h3>
 
-              <div className="space-y-3">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Interview Domain Type
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {['HR', 'Technical', 'Behavioral', 'Aptitude', 'Coding'].map(t => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        if (isFreePlan && t !== 'HR') {
-                          alert(`The ${t} interview round requires the Pro Plan. Please upgrade.`);
-                          return;
-                        }
-                        setType(t);
-                      }}
-                      className={`py-3 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 ${
-                        type === t 
-                          ? 'bg-glow-gradient text-white border-violet-500/25 shadow-lg' 
-                          : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200'
-                      } ${isFreePlan && t !== 'HR' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {t} {isFreePlan && t !== 'HR' && '🔒'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Target Job Role
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                    Interview Domain Type
                   </label>
-                  <select 
-                    value={role} 
-                    onChange={e => setRole(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
-                  >
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Target Company Preset
-                  </label>
-                  <select 
-                    value={company} 
-                    onChange={e => setCompany(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
-                  >
-                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Difficulty Rating
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Easy', 'Medium', 'Hard'].map(d => (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {['HR', 'Technical', 'Behavioral', 'Aptitude', 'Coding'].map(t => (
                       <button
-                        key={d}
-                        onClick={() => setDifficulty(d)}
-                        className={`py-3 rounded-xl text-xs font-semibold border transition-all ${
-                          difficulty === d 
-                            ? 'bg-slate-900 text-accentCyan border-accentCyan/30 shadow-md shadow-cyan-500/5' 
-                            : 'bg-slate-950/30 border-slate-900 text-slate-400 hover:text-slate-200'
-                        }`}
+                        key={t}
+                        onClick={() => {
+                          if (isFreePlan && t !== 'HR') {
+                            alert(`The ${t} interview round requires the Pro Plan. Please upgrade.`);
+                            return;
+                          }
+                          setType(t);
+                        }}
+                        className={`py-3 px-2 rounded-xl text-xs font-bold transition-all border flex flex-col items-center justify-center gap-1.5 ${
+                          type === t 
+                            ? 'bg-glow-gradient text-white border-violet-500/25 shadow-lg' 
+                            : 'bg-slate-950/40 border-white/5 text-slate-400 hover:text-white'
+                        } ${isFreePlan && t !== 'HR' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
-                        {d}
+                        <span className="text-base">
+                          {t === 'HR' && '👔'}
+                          {t === 'Technical' && '💻'}
+                          {t === 'Behavioral' && '🧠'}
+                          {t === 'Aptitude' && '📐'}
+                          {t === 'Coding' && '⚡'}
+                        </span>
+                        <span>
+                          {t} {isFreePlan && t !== 'HR' && '🔒'}
+                        </span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Language / Sub-Domain
-                  </label>
-                  <select 
-                    value={language} 
-                    disabled={type === 'HR' || type === 'Behavioral'}
-                    onChange={e => setLanguage(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all disabled:opacity-40"
-                  >
-                    {languages.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-4 border-t border-slate-900/60">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Associate ATS Resume (Optional)
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                    Tailors AI prompts
-                  </span>
-                </div>
-                <select
-                  value={selectedResumeId}
-                  onChange={e => setSelectedResumeId(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
-                >
-                  <option value="">Start without resume details (General)</option>
-                  {resumes.map(r => (
-                    <option key={r.id} value={r.id}>
-                      📄 {r.filename} (ATS Score: {r.atsScore}%)
-                    </option>
-                  ))}
-                </select>
-
-                {/* Resume upload uploader button / drop-zone */}
-                <div className="pt-2">
-                  <label className="relative flex flex-col items-center justify-center border border-dashed border-slate-800 hover:border-violet-500/40 hover:bg-violet-500/[0.02] transition-all rounded-xl p-4 cursor-pointer group">
-                    <input 
-                      type="file" 
-                      accept=".pdf,.txt" 
-                      onChange={handleResumeUpload} 
-                      className="hidden" 
-                      disabled={uploadingFile}
-                    />
-                    
-                    {uploadingFile ? (
-                      <div className="flex flex-col items-center gap-2 py-2">
-                        <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
-                        <span className="text-xs text-slate-400 font-semibold">Extracting & analyzing with AI...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-violet-400 group-hover:border-violet-500/20 transition-all">
-                          <UploadCloud className="w-4 h-4" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-xs font-bold text-slate-300">Upload new PDF or TXT Resume</p>
-                          <p className="text-[10px] text-slate-500 font-semibold">Let AI automatically analyze your capabilities</p>
-                        </div>
-                      </div>
-                    )}
-                  </label>
-                  
-                  {uploadSuccess && (
-                    <p className="text-[10px] text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
-                      <Check className="w-3 h-3 animate-pulse" /> Resume uploaded and parsed successfully!
-                    </p>
-                  )}
-                  {uploadError && (
-                    <p className="text-[10px] text-rose-400 font-bold mt-1.5 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> {uploadError}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={handleStartInterview}
-                disabled={submitting}
-                className="w-full bg-glow-gradient py-4 rounded-xl text-sm font-bold text-white shadow-xl hover:shadow-violet-500/25 hover:scale-[1.01] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Generating Adaptive Session...
-                  </>
-                ) : (
-                  <>
-                    🚀 Launch Virtual Interview Room
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {coachActive && (
-              <div className="glass-panel rounded-3xl p-6 border-violet-500/25 relative overflow-hidden bg-gradient-to-b from-violet-500/5 to-slate-950/40">
-                <div className="absolute -top-16 -right-16 w-32 h-32 bg-accentViolet/10 rounded-full blur-2xl pointer-events-none animate-pulse-slow"></div>
-                
-                <div className="flex items-center gap-2 text-violet-400 font-extrabold text-sm mb-4">
-                  <Sparkles className="w-5 h-5 fill-current animate-bounce" /> AI Interview Coach
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-3 rounded-2xl bg-slate-950/50 border border-slate-900 text-slate-300 leading-normal text-xs">
-                    <span className="font-bold text-slate-200">Coach Tip:</span> In {type} rounds, follow the <span className="font-bold text-accentCyan">STAR Method</span>: Describe the **S**ituation, **T**ask, **A**ction, and **R**esults. Focus heavily on metrics.
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                      Target Job Role
+                    </label>
+                    <select 
+                      value={role} 
+                      onChange={e => setRole(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-white/5 text-slate-350 text-xs outline-none focus:border-violet-500/50 transition-all font-semibold"
+                    >
+                      {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
                   </div>
 
-                  <div className="space-y-3 pt-2">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Verification Checklist
-                    </div>
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                      Target Company Preset
+                    </label>
+                    <select 
+                      value={company} 
+                      onChange={e => setCompany(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-white/5 text-slate-355 text-xs outline-none focus:border-violet-500/50 transition-all font-semibold"
+                    >
+                      {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
 
-                    <div className="space-y-2 text-xs">
-                      {Object.keys(confidenceCheck).map(key => (
-                        <button 
-                          key={key}
-                          onClick={() => toggleCheck(key)}
-                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-950/30 border border-slate-900 hover:border-slate-800 transition-colors text-left"
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                      Difficulty Rating
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['Easy', 'Medium', 'Hard'].map(d => (
+                        <button
+                          key={d}
+                          onClick={() => setDifficulty(d)}
+                          className={`py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            difficulty === d 
+                              ? 'bg-slate-800 text-cyan-400 border-cyan-500/30 shadow-md shadow-cyan-500/5' 
+                              : 'bg-slate-950/30 border-white/5 text-slate-400 hover:text-white'
+                          }`}
                         >
-                          <CheckSquare className={`w-4 h-4 shrink-0 transition-all ${confidenceCheck[key] ? 'text-accentCyan fill-current' : 'text-slate-600'}`} />
-                          <span className="text-slate-400">
-                            {key === 'micAccess' && 'Microphone plugged and active'}
-                            {key === 'camAccess' && 'Camera access cleared (for eye check)'}
-                            {key === 'deepBreath' && 'Took 3 deep breaths (Calms anxiety)'}
-                            {key === 'focusedMind' && 'Silence around is verified'}
-                          </span>
+                          {d}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-900/60 text-[10px] text-slate-500 font-semibold flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Compliance checks are secure.</span>
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                      Language / Sub-Domain
+                    </label>
+                    <select 
+                      value={language} 
+                      disabled={type === 'HR' || type === 'Behavioral'}
+                      onChange={e => setLanguage(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-white/5 text-slate-350 text-xs outline-none focus:border-violet-500/50 transition-all disabled:opacity-40 font-semibold"
+                    >
+                      {languages.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* Peer-to-Peer Matchmaking Search view */}
-      {activeTab === 'peer' && matchingState !== 'matched' && (
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 space-y-8 bg-gradient-to-b from-slate-950/50 to-slate-900/10">
-          
-          {matchingState === 'idle' ? (
-            <div className="max-w-xl mx-auto text-center space-y-6 py-6">
-              <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto text-violet-400">
-                <Users className="w-8 h-8 animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-slate-200">Find a Collaborative Peer Partner</h3>
-                <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                  Match with another tech student preparing for similar tracks. Conduct mutual interviews, sync drawing architectures, and improve together!
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-900 text-left space-y-4 max-w-md mx-auto">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
-                    Choose Target Category
-                  </label>
+                <div className="space-y-3 pt-4 border-t border-white/5 text-left">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Associate ATS Resume (Optional)
+                    </label>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+                      Tailors AI prompts
+                    </span>
+                  </div>
                   <select
-                    value={targetMatchRole}
-                    onChange={e => setTargetMatchRole(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-sm outline-none focus:border-accentViolet transition-all"
+                    value={selectedResumeId}
+                    onChange={e => setSelectedResumeId(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-white/5 text-slate-350 text-xs outline-none focus:border-violet-500/50 transition-all font-semibold"
                   >
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    <option value="">Start without resume details (General)</option>
+                    {resumes.map(r => (
+                      <option key={r.id} value={r.id}>
+                        📄 {r.filename} (ATS Score: {r.atsScore}%)
+                      </option>
+                    ))}
                   </select>
+
+                  {/* Resume upload uploader button / drop-zone */}
+                  <div className="pt-2">
+                    <label className="relative flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-violet-500/40 hover:bg-violet-500/[0.02] transition-all rounded-xl p-4 cursor-pointer group">
+                      <input 
+                        type="file" 
+                        accept=".pdf,.txt" 
+                        onChange={handleResumeUpload} 
+                        className="hidden" 
+                        disabled={uploadingFile}
+                      />
+                      
+                      {uploadingFile ? (
+                        <div className="flex flex-col items-center gap-2 py-2">
+                          <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                          <span className="text-xs text-slate-400 font-semibold">Extracting & analyzing with AI...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-white/5 flex items-center justify-center text-slate-400 group-hover:text-violet-400 group-hover:border-violet-500/20 transition-all">
+                            <UploadCloud className="w-4 h-4" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-300">Upload new PDF or TXT Resume</p>
+                            <p className="text-[10px] text-slate-500 font-semibold">Let AI automatically analyze your capabilities</p>
+                          </div>
+                        </div>
+                      )}
+                    </label>
+                    
+                    {uploadSuccess && (
+                      <p className="text-[10px] text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
+                        <Check className="w-3 h-3 animate-pulse" /> Resume uploaded and parsed successfully!
+                      </p>
+                    )}
+                    {uploadError && (
+                      <p className="text-[10px] text-rose-400 font-bold mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> {uploadError}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <button
-                  onClick={startPeerSearch}
-                  className="w-full bg-glow-gradient py-3.5 rounded-xl text-xs font-bold text-white shadow shadow-violet-500/10 transition-all hover:scale-101"
+                  onClick={handleStartInterview}
+                  disabled={submitting}
+                  className="w-full bg-glow-gradient py-4 rounded-xl text-sm font-bold text-white shadow-xl hover:shadow-violet-500/25 hover:scale-[1.01] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50 cursor-pointer"
                 >
-                  Initiate Matchmaking Search
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Generating Adaptive Session...
+                    </>
+                  ) : (
+                    <>
+                      🚀 Launch Virtual Interview Room
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-          ) : (
-            /* Searching state radar loader */
-            <div className="max-w-xl mx-auto text-center space-y-8 py-10">
-              <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
-                <div className="absolute inset-0 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-4 border-4 border-cyan-500/10 border-b-cyan-500 rounded-full animate-spin-reverse"></div>
-                <Users className="w-8 h-8 text-violet-400 animate-bounce" />
-              </div>
 
-              <div className="space-y-2">
-                <h3 className="text-lg font-bold text-slate-200">Scanning for peers...</h3>
-                <p className="text-xs text-slate-500">
-                  Filtering for active candidates in <span className="text-accentCyan font-bold">{targetMatchRole}</span> categories.
-                </p>
-              </div>
+            <div className="space-y-6">
+              {coachActive && (
+                <div className="rounded-3xl p-6 border border-violet-500/20 relative overflow-hidden bg-gradient-to-b from-violet-500/5 to-slate-950/40 text-left">
+                  <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                  
+                  <div className="flex items-center gap-2 text-violet-400 font-extrabold text-sm mb-4">
+                    <Sparkles className="w-5 h-5 fill-current animate-pulse" /> AI Interview Coach
+                  </div>
 
-              <button
-                onClick={cancelPeerSearch}
-                className="bg-slate-900 border border-slate-800 hover:bg-rose-500/10 hover:border-rose-500/20 hover:text-rose-400 px-6 py-3 rounded-xl text-xs font-semibold text-slate-400 transition-colors"
-              >
-                Cancel Search Queue
-              </button>
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-2xl bg-slate-950/50 border border-white/5 text-slate-300 leading-relaxed text-xs flex gap-2">
+                      <HelpCircle className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-slate-200">Coach Tip:</span> In {type} rounds, follow the <span className="font-bold text-cyan-400">STAR Method</span>: Describe the **S**ituation, **T**ask, **A**ction, and **R**esults. Focus heavily on metrics.
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">
+                        Verification Checklist
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        {Object.keys(confidenceCheck).map(key => (
+                          <button 
+                            key={key}
+                            onClick={() => toggleCheck(key)}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-950/30 border border-white/5 hover:border-slate-800 transition-colors text-left cursor-pointer"
+                          >
+                            <div className="flex items-center justify-center w-5 h-5 rounded-lg border border-white/10 shrink-0">
+                              {confidenceCheck[key] ? (
+                                <Check className="w-3.5 h-3.5 text-cyan-400" />
+                              ) : (
+                                <>
+                                  {key === 'micAccess' && <Mic size={12} className="text-slate-500" />}
+                                  {key === 'camAccess' && <Video size={12} className="text-slate-500" />}
+                                  {key === 'deepBreath' && <Heart size={12} className="text-slate-500" />}
+                                  {key === 'focusedMind' && <ShieldCheck size={12} className="text-slate-500" />}
+                                </>
+                              )}
+                            </div>
+                            <span className="text-slate-400 font-medium">
+                              {key === 'micAccess' && 'Microphone plugged and active'}
+                              {key === 'camAccess' && 'Camera access cleared (for eye check)'}
+                              {key === 'deepBreath' && 'Took 3 deep breaths (Calms anxiety)'}
+                              {key === 'focusedMind' && 'Silence around is verified'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/5 text-[10px] text-slate-500 font-semibold flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-450" />
+                      <span>Compliance checks are secure.</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </motion.div>
+        )}
+
+        {/* Peer-to-Peer Matchmaking Search view */}
+        {activeTab === 'peer' && matchingState !== 'matched' && (
+          <motion.div 
+            key="peer-lobby"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="rounded-3xl p-6 sm:p-8 border border-white/5 bg-slate-900/10 text-center"
+          >
+            {matchingState === 'idle' ? (
+              <div className="max-w-xl mx-auto text-center space-y-6 py-6">
+                <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto text-violet-400">
+                  <Users className="w-8 h-8 animate-pulse" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-slate-200">Find a Collaborative Peer Partner</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                    Match with another tech student preparing for similar tracks. Conduct mutual interviews, sync drawing architectures, and improve together!
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-slate-950/60 border border-white/5 text-left space-y-4 max-w-md mx-auto">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block pl-1">
+                      Choose Target Category
+                    </label>
+                    <select
+                      value={targetMatchRole}
+                      onChange={e => setTargetMatchRole(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/5 text-slate-350 text-xs outline-none focus:border-violet-500/50 transition-all font-semibold"
+                    >
+                      {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={startPeerSearch}
+                    className="w-full bg-glow-gradient py-3.5 rounded-xl text-xs font-bold text-white shadow shadow-violet-500/10 transition-all hover:scale-101 cursor-pointer"
+                  >
+                    Initiate Matchmaking Search
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Searching state radar loader */
+              <div className="max-w-xl mx-auto text-center space-y-8 py-10">
+                <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+                  <div className="absolute inset-0 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
+                  <div className="absolute inset-4 border-4 border-cyan-500/10 border-b-cyan-500 rounded-full animate-spin-reverse"></div>
+                  <Users className="w-8 h-8 text-violet-400 animate-bounce" />
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-lg font-bold text-slate-200 animate-pulse">Scanning for peers...</h3>
+                  <p className="text-xs text-slate-500 font-semibold">
+                    Filtering for active candidates in <span className="text-cyan-400">{targetMatchRole}</span> categories.
+                  </p>
+                </div>
+
+                <button
+                  onClick={cancelPeerSearch}
+                  className="bg-slate-900 border border-white/5 hover:bg-rose-500/10 hover:border-rose-500/25 hover:text-rose-455 px-6 py-3 rounded-xl text-xs font-bold text-slate-400 transition-all cursor-pointer"
+                >
+                  Cancel Search Queue
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Matched Real-Time Collaborative Workspace Panels */}
       {matchingState === 'matched' && matchedPeer && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 border border-slate-900 p-4 rounded-3xl">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 border border-white/5 p-4 rounded-3xl text-left">
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 text-xl flex items-center justify-center">
+              <span className="w-10 h-10 rounded-full bg-slate-900 border border-white/5 text-xl flex items-center justify-center">
                 {matchedPeer.avatar}
               </span>
-              <div className="text-left">
-                <span className="text-xs text-slate-500 font-bold block">PEER PARTNER</span>
+              <div>
+                <span className="text-[9px] text-slate-500 font-black block uppercase tracking-widest">PEER PARTNER</span>
                 <span className="font-extrabold text-slate-200 text-sm">{matchedPeer.name} ({matchedPeer.rating})</span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="text-left text-xs bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-xl font-bold text-violet-400">
+              <div className="text-xs bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-xl font-bold text-violet-400">
                 You are: {roleAssignment}
               </div>
-              <div className="h-8 w-px bg-slate-900"></div>
+              <div className="h-8 w-px bg-white/10"></div>
               <button
                 onClick={leavePeerSession}
-                className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl text-xs font-bold text-rose-400 transition-all flex items-center gap-1"
+                className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl text-xs font-bold text-rose-400 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" /> End Session
               </button>
@@ -773,12 +812,12 @@ export default function InterviewLobby() {
             
             {/* Whiteboard canvas design desk */}
             <div className="xl:col-span-2 space-y-4">
-              <div className="glass-panel rounded-3xl p-3 bg-slate-950 border-slate-800/80 relative">
-                <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl text-xs mb-2">
+              <div className="rounded-3xl p-3 bg-slate-950 border border-white/5 relative text-left">
+                <div className="flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl text-xs mb-2">
                   <div className="flex gap-2">
                     <button 
                       onClick={handleClearCanvas}
-                      className="px-3 py-1 rounded bg-slate-950 border border-slate-850 hover:text-rose-400 text-slate-400 flex items-center gap-1"
+                      className="px-3 py-1 rounded bg-slate-950 border border-white/5 hover:text-rose-455 text-slate-400 flex items-center gap-1.5 cursor-pointer font-bold text-[10px]"
                     >
                       <Trash2 className="w-3 h-3" /> Reset
                     </button>
@@ -792,7 +831,7 @@ export default function InterviewLobby() {
                         style={{ backgroundColor: c }}
                       />
                     ))}
-                    <span className="text-[10px] text-slate-500 font-bold ml-1">Color</span>
+                    <span className="text-[10px] text-slate-500 font-extrabold ml-1 uppercase">Color</span>
                   </div>
                 </div>
 
@@ -809,15 +848,15 @@ export default function InterviewLobby() {
               </div>
 
               {/* Guide card based on Role Assignment */}
-              <div className="glass-panel rounded-3xl p-5 border-cyan-500/10 bg-gradient-to-r from-cyan-500/5 to-slate-950/20 text-left space-y-3">
+              <div className="rounded-3xl p-5 border border-cyan-500/10 bg-cyan-950/5 text-left space-y-3">
                 <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-accentCyan" />
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
                   <span>Mock Role Guidelines - {roleAssignment}</span>
                 </div>
-                <ul className="space-y-1.5 text-[11px] text-slate-400">
+                <ul className="space-y-1.5 text-[11px] text-slate-450 font-medium">
                   {peerGuidelines[roleAssignment].map((g, i) => (
                     <li key={i} className="flex gap-2 items-start pl-1">
-                      <span className="text-accentCyan font-bold shrink-0">✓</span>
+                      <span className="text-cyan-400 font-bold shrink-0">✓</span>
                       <span>{g}</span>
                     </li>
                   ))}
@@ -826,31 +865,31 @@ export default function InterviewLobby() {
             </div>
 
             {/* Chat discussion feed */}
-            <div className="glass-panel rounded-3xl p-6 space-y-4 flex flex-col justify-between h-[520px]">
+            <div className="rounded-3xl p-6 bg-slate-900/10 border border-white/5 space-y-4 flex flex-col justify-between h-[520px] text-left">
               <div>
-                <h3 className="text-xs font-bold text-slate-400 border-b border-slate-800 pb-3 uppercase tracking-wider">LOBBY CHAT ENGINE</h3>
+                <h3 className="text-[10px] font-black text-slate-500 border-b border-white/5 pb-3 uppercase tracking-widest">LOBBY CHAT ENGINE</h3>
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-3 p-1">
                 {chatMessages.map((msg, i) => (
-                  <div key={i} className={`p-3 rounded-2xl border text-xs space-y-1 ${msg.sender.includes('You') ? 'bg-violet-500/5 border-violet-500/10' : msg.sender.includes('System') ? 'bg-slate-950/40 border-slate-900' : 'bg-emerald-500/5 border-emerald-500/10'}`}>
+                  <div key={i} className={`p-3 rounded-2xl border text-xs space-y-1 ${msg.sender.includes('You') ? 'bg-violet-500/5 border-violet-500/10' : msg.sender.includes('System') ? 'bg-slate-950/40 border-white/5' : 'bg-emerald-500/5 border-emerald-500/10'}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-350">{msg.avatar} {msg.sender}</span>
                     </div>
-                    <p className="text-slate-400 leading-normal pl-0.5">"{msg.text}"</p>
+                    <p className="text-slate-400 leading-normal pl-0.5 font-medium">"{msg.text}"</p>
                   </div>
                 ))}
               </div>
 
-              <form onSubmit={sendChatMessage} className="flex gap-2 border-t border-slate-900/60 pt-3">
+              <form onSubmit={sendChatMessage} className="flex gap-2 border-t border-white/5 pt-3">
                 <input
                   type="text"
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   placeholder="Write message to peer..."
-                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-xs text-slate-300 outline-none focus:border-accentViolet"
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-white/5 rounded-xl text-xs text-slate-300 outline-none focus:border-violet-500/50"
                 />
-                <button type="submit" className="p-2.5 bg-glow-gradient rounded-xl text-white hover:scale-102 transition-all">
+                <button type="submit" className="p-2.5 bg-glow-gradient rounded-xl text-white hover:scale-102 transition-all cursor-pointer">
                   <Send className="w-4 h-4" />
                 </button>
               </form>

@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
-import { 
-  Mic, MicOff, Video, VideoOff, 
+import {
+  Mic, MicOff, Video, VideoOff,
   ShieldAlert, Edit3, ArrowRight,
-  Phone, PhoneOff, Grid, Volume1, Play
+  Phone, PhoneOff, Grid, Volume1, Play,
+  ChevronRight, Clock, AlertTriangle, X,
+  Send, Square, BarChart2, Eye, Brain
 } from 'lucide-react';
+import MetricRing from '../components/ui/MetricRing';
 
 export default function InterviewRoom() {
   const { token, updateXp } = useAuth();
@@ -76,6 +79,10 @@ export default function InterviewRoom() {
   const whiteboardCanvasRef = useRef(null);
   const recognitionRef = useRef(null);
   const timerIntervalRef = useRef(null);
+
+  // Metric display refs (derived from session scorecards if available)
+  const avgTechnicalRef = session?.scoreCard?.technicalScore ?? 70;
+  const avgCommRef = session?.scoreCard?.communicationScore ?? 70;
 
   const boxXRef = useRef(60);
   const boxYRef = useRef(40);
@@ -648,769 +655,338 @@ export default function InterviewRoom() {
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto pt-6 px-8 pb-8 space-y-6 custom-scrollbar bg-[#050810] text-gray-100">
-      <style>{`
-        .panel-bg {
-          background-color: #151A2B;
-          border: 1px solid #1F2937;
-        }
-        .hero-gradient {
-          background: linear-gradient(90deg, rgba(21,26,43,1) 0%, rgba(30,27,75,0.6) 50%, rgba(21,26,43,1) 100%);
-        }
-        .soundwave {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          height: 32px;
-        }
-        .bar {
-          width: 4px;
-          background-color: #8B5CF6;
-          border-radius: 2px;
-          animation: sound 0ms -800ms linear infinite alternate;
-        }
-        @keyframes sound {
-          0% { height: 4px; opacity: 0.5; }
-          100% { height: 28px; opacity: 1; }
-        }
-        .bar:nth-child(1) { animation-duration: 474ms; }
-        .bar:nth-child(2) { animation-duration: 433ms; }
-        .bar:nth-child(3) { animation-duration: 407ms; }
-        .bar:nth-child(4) { animation-duration: 458ms; }
-        .bar:nth-child(5) { animation-duration: 400ms; }
-        .bar:nth-child(6) { animation-duration: 427ms; }
+    <div className="h-full w-full overflow-y-auto custom-scrollbar" style={{ background: 'var(--bg)' }}>
+      <div className="px-6 pb-6 pt-4 space-y-4">
 
-        @keyframes glow-pulse {
-          0% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.2); }
-          100% { box-shadow: 0 0 35px rgba(139, 92, 246, 0.6); }
-        }
-        .animate-glow-pulse {
-          animation: glow-pulse 1s ease-in-out infinite alternate;
-        }
-      `}</style>
-
-      {/* Top Details & Timer Header Card */}
-      <section className="panel-bg rounded-2xl p-6 hero-gradient flex flex-col md:flex-row items-start md:items-center justify-between border-gray-800 relative overflow-hidden gap-6">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8B5CF6]/5 rounded-full blur-3xl -z-10"></div>
-        
-        <div className="flex-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#8B5CF6] tracking-wider uppercase mb-2">
-            <Play className="w-3 h-3 fill-[#8B5CF6]" /> Active Prep Room
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-4">
-            {session?.role || oRole} Target at {session?.company || oComp}
-          </h2>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700 flex items-center gap-1">
-              Difficulty <i className="fa-solid fa-chart-simple text-yellow-500 ml-1"></i> {session?.difficulty || oDiff}
-            </span>
-            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700">
-              Domain <span className="text-white ml-1 font-medium">{oLang}</span>
-            </span>
-            <span className="px-3 py-1 bg-gray-800/80 rounded-full text-gray-300 border border-gray-700">
-              Experience <span className="text-white ml-1 font-medium">2-4 yrs</span>
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-8">
-          {/* Fluency Clock */}
-          <div className="flex flex-col items-center">
-            <span className="text-xs text-gray-400 mb-2">Fluency Clock</span>
-            <div className="relative w-16 h-16 flex items-center justify-center rounded-full border-[3px] border-gray-700">
-              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-                <path 
-                  className="text-blue-500" 
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeDasharray={`${speechTimer * 2.5}, 100`} 
-                  strokeWidth="3"
-                ></path>
-              </svg>
-              <span className="text-lg font-bold text-white relative z-10">{speechTimer}s</span>
-            </div>
-          </div>
-
-          {/* Question Progress bar */}
-          <div className="w-48">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-gray-400">Question Progress</span>
-              <span className="text-xs text-gray-400">{Math.round(((currentIndex + 1) / totalQuestions) * 100)}%</span>
-            </div>
-            <div className="text-lg font-bold text-[#8B5CF6] mb-2">{currentIndex + 1} / {totalQuestions}</div>
-            <div className="w-full bg-gray-800 rounded-full h-2">
-              <div 
-                className="bg-[#8B5CF6] h-2 rounded-full transition-all duration-350" 
-                style={{ width: `${((currentIndex + 1) / totalQuestions) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Switch Action */}
-          <button 
-            onClick={() => {
-              if (telephonyMode) {
-                endPhoneCall();
-              } else {
-                setTelephonyMode(true);
-                startPhoneCall();
-              }
-            }}
-            className="bg-[#1A2035] hover:bg-[#222942] border border-gray-700 rounded-xl p-4 flex items-center gap-4 transition-colors"
-          >
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
-              <Phone className="w-4 h-4" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-gray-400">Switch to</p>
-              <p className="text-sm font-medium text-white">
-                {telephonyMode ? 'Visual Room' : 'Mobile Call Simulator'}
-              </p>
-            </div>
-            <i className="fa-solid fa-chevron-right text-gray-600 ml-2"></i>
-          </button>
-        </div>
-      </section>
-
-      {/* Strike warnings banner */}
-      {warnings.length > 0 && !telephonyMode && (
-        <div className="space-y-2">
-          {warnings.slice(-1).map((w, idx) => (
-            <div key={idx} className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-xl text-xs font-semibold">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>{w}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Immersive Phone Simulator Panel */}
-      {telephonyMode ? (
-        <div className="max-w-md mx-auto glass-panel rounded-3xl p-6 border-slate-800/80 bg-gradient-to-b from-[#0f172a] to-[#090d16] shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[500px]">
-          <div className="w-24 h-4 bg-slate-900 rounded-full mx-auto mb-6 border border-slate-800/60 shadow-inner"></div>
-
-          <div className="text-center space-y-2">
-            <div className="w-20 h-20 rounded-full bg-violet-500/10 border-2 border-violet-500/30 flex items-center justify-center mx-auto text-violet-400 text-3xl">
-              🤖
-            </div>
+        {/* ── Session Header ── */}
+        <div className="rounded-2xl p-5 relative overflow-hidden"
+          style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: 'linear-gradient(90deg, rgba(59,130,246,0.04) 0%, rgba(139,92,246,0.06) 50%, rgba(59,130,246,0.04) 100%)' }} />
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative z-10">
             <div>
-              <h3 className="text-lg font-bold text-slate-200">Meridian AI Coach</h3>
-              <span className="text-[10px] text-slate-500 font-extrabold tracking-widest uppercase">
-                {callState === 'ringing' ? 'INCOMING CALL...' : callState === 'connected' ? 'ACTIVE TELEPHONY LINE' : 'DISCONNECTED'}
-              </span>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="recording-dot" />
+                <span className="text-[10px] font-bold tracking-widest uppercase text-rose-400">Live Session</span>
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">
+                {session?.role || oRole} <span className="text-slate-500">·</span> {session?.company || oComp}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {[session?.difficulty || oDiff, oLang, session?.type || oType, '2-4 yrs'].map(tag => (
+                  <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-medium"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="py-8 flex flex-col items-center justify-center h-48">
-            {callState === 'ringing' ? (
-              <div className="space-y-4 text-center">
-                <span className="text-xs text-slate-400 animate-pulse font-semibold">Ringing...</span>
-                <div className="flex gap-1 justify-center items-center">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="w-1.5 h-6 bg-violet-500/40 rounded animate-pulse" style={{ animationDelay: `${i * 0.15}s` }}></div>
+            <div className="flex items-center gap-6">
+              {/* Progress dots */}
+              <div>
+                <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-2 font-semibold">Questions</p>
+                <div className="flex gap-1.5 items-center">
+                  {Array.from({ length: totalQuestions }).map((_, i) => (
+                    <div key={i}
+                      className="rounded-full transition-all duration-300"
+                      style={{
+                        width: i === currentIndex ? 20 : 8, height: 8,
+                        background: i < currentIndex ? '#10B981' : i === currentIndex ? '#8B5CF6' : 'rgba(255,255,255,0.1)',
+                      }}
+                    />
                   ))}
                 </div>
+                <p className="text-xs text-slate-400 font-semibold mt-1">{currentIndex + 1} / {totalQuestions}</p>
               </div>
-            ) : callState === 'connected' ? (
-              <div className="w-full space-y-4">
-                <div className="flex gap-1 justify-center items-end h-16">
-                  {(aiSpeaking ? [2, 5, 8, 3, 7, 4, 9, 2, 6, 8, 3, 5] : isListening ? [4, 7, 3, 8, 2, 5, 3] : [1, 2, 1, 2, 1]).map((h, i) => (
-                    <div 
-                      key={i} 
-                      className={`w-1.5 rounded transition-all duration-150 ${aiSpeaking ? 'bg-cyan-400' : isListening ? 'bg-rose-400' : 'bg-slate-700'}`}
-                      style={{ height: `${h * 4 + 4}px` }}
-                    ></div>
-                  ))}
-                </div>
-                
-                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-900 text-left h-24 overflow-y-auto text-[11px] leading-normal font-medium space-y-2">
-                  <div className="text-cyan-400 font-bold">Coach (Voice AI):</div>
-                  <p className="text-slate-300 font-semibold italic">&quot;{currentQuestion}&quot;</p>
-                </div>
-              </div>
-            ) : (
-              <span className="text-xs text-rose-500 font-bold">Call Terminated</span>
-            )}
-          </div>
 
-          {showKeypad && callState === 'connected' && (
-            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-950 rounded-2xl border border-slate-900 mb-4">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map(num => (
+              {/* Timer ring */}
+              <div className="flex flex-col items-center">
+                <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-2 font-semibold">Elapsed</p>
+                <div className="relative w-14 h-14">
+                  <svg viewBox="0 0 48 48" className="w-full h-full">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3"/>
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="#8B5CF6" strokeWidth="3"
+                      strokeDasharray={`${Math.min(speechTimer * 2.1, 125)} 125`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 24 24)"
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(139,92,246,0.5))', transition: 'stroke-dasharray 1s linear' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-sm font-bold text-white">{speechTimer}s</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mode toggle */}
+              <div className="flex flex-col gap-2">
                 <button
-                  key={num}
-                  onClick={() => handleKeypadPress(num)}
-                  className="py-2 bg-slate-900 hover:bg-slate-800 rounded-xl font-bold text-slate-300 text-sm active:scale-95 transition-all"
-                >
-                  {num}
+                  onClick={() => { if (telephonyMode) { endPhoneCall(); } else { setTelephonyMode(true); startPhoneCall(); } }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+                  style={{ background: telephonyMode ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)', border: telephonyMode ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)', color: telephonyMode ? '#FCA5A5' : '#94A3B8' }}>
+                  {telephonyMode ? <PhoneOff size={14} /> : <Phone size={14} />}
+                  {telephonyMode ? 'End Call' : 'Phone Mode'}
                 </button>
-              ))}
-              <div className="col-span-3 text-[10px] text-center text-slate-500 font-bold">DTMF Dial: {keypadInput}</div>
-            </div>
-          )}
-
-          <div className="space-y-6 pt-4 border-t border-slate-900/60">
-            {callState === 'connected' && (
-              <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold text-slate-400">
-                <button 
-                  onClick={() => setPhoneMuted(!phoneMuted)}
-                  className={`p-3 rounded-2xl border flex flex-col items-center gap-1 mx-auto ${phoneMuted ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-slate-950 border-slate-900'}`}
-                >
-                  <MicOff className="w-4 h-4" /> Mute
-                </button>
-                <button 
-                  onClick={() => setShowKeypad(!showKeypad)}
-                  className={`p-3 rounded-2xl border flex flex-col items-center gap-1 mx-auto ${showKeypad ? 'bg-violet-500/10 border-violet-500/20 text-violet-400' : 'bg-slate-950 border-slate-900'}`}
-                >
-                  <Grid className="w-4 h-4" /> Keypad
-                </button>
-                <button 
-                  onClick={() => setPhoneSpeaker(!phoneSpeaker)}
-                  className={`p-3 rounded-2xl border flex flex-col items-center gap-1 mx-auto ${phoneSpeaker ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-slate-950 border-slate-900'}`}
-                >
-                  <Volume1 className="w-4 h-4" /> Speaker
+                <button
+                  onClick={() => setWhiteboardOpen(o => !o)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+                  style={{ background: whiteboardOpen ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.06)', border: whiteboardOpen ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(255,255,255,0.08)', color: whiteboardOpen ? '#A5B4FC' : '#94A3B8' }}>
+                  <Edit3 size={14} />
+                  {whiteboardOpen ? 'Hide Board' : 'Whiteboard'}
                 </button>
               </div>
-            )}
+            </div>
+          </div>
+        </div>
 
-            <div className="flex gap-4 justify-center">
-              {callState === 'ringing' ? (
+        {/* Strike warning */}
+        {strikeCount > 0 && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+            <AlertTriangle size={15} />
+            Anti-cheat: <strong>{strikeCount} strike{strikeCount > 1 ? 's' : ''}</strong>.
+            {warnings.length > 0 && <span className="text-rose-500/70 ml-1">{warnings[warnings.length - 1]}</span>}
+          </div>
+        )}
+
+        {/* ── Main Content Grid ── */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+          {/* Left: Camera + Controls */}
+          <div className="flex flex-col gap-4">
+
+            {/* Camera Studio */}
+            <div className={`studio-camera-frame ${isListening ? 'active' : ''}`} style={{ aspectRatio: '4/5' }}>
+              {cameraActive && !telephonyMode ? (
                 <>
-                  <button 
-                    onClick={() => setCallState('connected')} 
-                    className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center text-white text-xl animate-bounce shadow-lg shadow-emerald-500/20"
-                  >
-                    <Phone className="w-6 h-6" />
-                  </button>
-                  <button 
-                    onClick={endPhoneCall} 
-                    className="w-14 h-14 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center text-white text-xl shadow-lg shadow-rose-500/20"
-                  >
-                    <PhoneOff className="w-6 h-6" />
-                  </button>
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                  <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }} />
                 </>
               ) : (
-                <div className="flex flex-col gap-3 items-center w-full">
-                  {callState === 'connected' && (
-                    <button
-                      onClick={toggleListening}
-                      className={`w-full py-3 rounded-xl border text-xs font-bold transition-all active:scale-95 ${isListening ? 'bg-rose-500 text-white border-rose-600' : 'bg-slate-950 border-slate-900 text-slate-300'}`}
-                    >
-                      {isListening ? 'Stop Recording' : '🎙️ Click to Speak'}
-                    </button>
+                <div className="w-full h-full flex flex-col items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #0D1220, #111827)' }}>
+                  {telephonyMode ? (
+                    <>
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
+                        style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', boxShadow: '0 0 30px rgba(99,102,241,0.4)' }}>
+                        <Phone size={32} className="text-white" />
+                      </div>
+                      <p className="text-white font-semibold">Phone Interview</p>
+                      <p className="text-slate-500 text-sm mt-1">
+                        {callState === 'ringing' ? 'Calling...' : callState === 'connected' ? 'Connected' : 'Idle'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold mb-3"
+                        style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>Y</div>
+                      <p className="text-slate-500 text-sm">Camera is off</p>
+                    </>
                   )}
-                  
-                  <div className="flex gap-4 w-full">
-                    {callState === 'connected' && (
-                      <button
-                        onClick={handleAnswerSubmit}
-                        className="flex-1 bg-gradient-to-r from-blue-500 to-brand-purple py-3.5 rounded-xl text-xs font-bold text-white shadow hover:scale-[1.01] transition-all"
-                      >
-                        Submit Response
-                      </button>
-                    )}
-                    <button 
-                      onClick={endPhoneCall} 
-                      className="bg-rose-500 hover:bg-rose-600 p-4 rounded-xl flex items-center justify-center text-white shadow"
-                    >
-                      <PhoneOff className="w-5 h-5" />
-                    </button>
-                  </div>
                 </div>
               )}
+
+              {/* Overlays */}
+              <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                <div className="recording-indicator">
+                  <div className="recording-dot" /> REC
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
+                  style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', color: '#A5B4FC' }}>
+                  <Eye size={11} />
+                  {Math.round(stressLevelPercent)}%
+                </div>
+              </div>
+
+              {/* Biometric bottom strip */}
+              <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center justify-between"
+                style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', backdropFilter: 'blur(4px)' }}>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-2 h-2 rounded-full animate-recording-dot" style={{ background: pulseBPM > 90 ? '#EF4444' : '#10B981' }} />
+                  <span className="font-bold" style={{ color: pulseBPM > 90 ? '#FCA5A5' : '#6EE7B7' }}>{pulseBPM} BPM</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">{gazeStable}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      ) : (
-        /* Immersive Visual Dashboard Columns */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Left Column: AI Interviewer & Your Response Transcript */}
-          <div className="space-y-6">
-            
-            {/* AI Interviewer Panel */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800 flex flex-col h-[480px]">
-              <div className="flex items-center gap-2 mb-6 border-b border-gray-850 pb-3">
-                <i className="fa-solid fa-sparkles text-brand-purple"></i>
-                <div>
-                  <h3 className="font-semibold text-white">AI Interviewer</h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Your personal AI coach</p>
-                </div>
-              </div>
 
-              <div className="flex-grow flex flex-col items-center justify-center relative">
-                {/* Visual soundwaves left and right */}
-                <div className="absolute inset-0 flex items-center justify-between px-6 opacity-40 pointer-events-none">
-                  {/* Left soundwave */}
-                  <div className="soundwave">
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                  </div>
-                  {/* Right soundwave */}
-                  <div className="soundwave">
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                  </div>
-                </div>
+            {/* Camera Controls */}
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={() => setCameraActive(c => !c)}
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+                style={{
+                  background: !cameraActive ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)',
+                  border: !cameraActive ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                  color: !cameraActive ? '#FCA5A5' : '#94A3B8',
+                }}>
+                {cameraActive ? <Video size={18} /> : <VideoOff size={18} />}
+              </button>
+              <button onClick={toggleListening}
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${isListening ? 'mic-pulse' : ''}`}
+                style={{
+                  background: isListening ? 'rgba(239,68,68,0.2)' : 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                  border: isListening ? '2px solid rgba(239,68,68,0.6)' : '2px solid transparent',
+                  boxShadow: isListening ? '0 0 20px rgba(239,68,68,0.4)' : '0 4px 20px rgba(99,102,241,0.4)',
+                  color: 'white',
+                }}>
+                {isListening ? <Square size={20} /> : <Mic size={20} />}
+              </button>
+              <button onClick={() => setMicActive(m => !m)}
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+                style={{
+                  background: !micActive ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)',
+                  border: !micActive ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                  color: !micActive ? '#FCA5A5' : '#94A3B8',
+                }}>
+                {micActive ? <Volume1 size={18} /> : <MicOff size={18} />}
+              </button>
+            </div>
 
-                {/* AI Coach Avatar */}
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-32 h-32 rounded-full border-2 border-[#8B5CF6]/50 flex items-center justify-center mb-4 bg-gradient-to-b from-[#1E2540] to-[#0B0F19] animate-glow-pulse">
-                    <span className="text-6xl select-none">🤖</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white">AI Coach</span>
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 text-[10px] font-medium rounded-full border border-green-500/20">
-                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Listening...
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Speech bubble question */}
-              <div className="bg-[#1A2035] border border-gray-800 rounded-xl p-5 mt-6 relative">
-                <i className="fa-solid fa-quote-left text-2xl text-[#8B5CF6]/40 absolute top-4 left-4"></i>
-                <p className="text-gray-300 text-sm leading-relaxed pl-10 font-medium">
-                  {currentQuestion}
-                </p>
-              </div>
-
-              {/* Repeat action */}
-              <div className="mt-6 flex justify-center">
-                <button 
-                  onClick={speakQuestion}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
-                >
-                  <i className="fa-solid fa-rotate-right text-brand-purple"></i> Repeat Question
-                </button>
-              </div>
-            </section>
-
-            {/* Your Response Transcript Panel */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-850 pb-3">
-                <div className="flex items-center gap-2">
-                  <i className="fa-regular fa-message text-brand-purple"></i>
-                  <h3 className="font-semibold text-white">Your Response Transcript</h3>
-                </div>
-                <button
-                  onClick={toggleListening}
-                  className={`px-4 py-1.5 border rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
-                    isListening 
-                      ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' 
-                      : 'bg-[#1A2035] border-gray-700 text-gray-300 hover:text-white'
-                  }`}
-                >
-                  <Mic className="w-3.5 h-3.5" />
-                  {isListening ? 'Listening...' : 'Speak (Mic-free)'}
-                </button>
-              </div>
-
-              {/* Interactive timeline dialogues logs */}
-              <div className="space-y-4 max-h-[200px] overflow-y-auto pr-1 mb-4 custom-scrollbar">
-                {dialogues.map((msg, idx) => {
-                  const isUser = msg.sender === "You";
-                  return (
-                    <div 
-                      key={idx} 
-                      className={`p-4 rounded-xl border ${
-                        isUser 
-                          ? 'bg-emerald-950/20 border-emerald-500/20' 
-                          : 'bg-slate-900/50 border-gray-800'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className={`text-xs font-bold ${isUser ? 'text-emerald-400' : 'text-[#8B5CF6]'}`}>
-                          {msg.sender}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-bold">{msg.time}</span>
-                      </div>
-                      <p className="text-xs text-gray-300 leading-normal">{msg.text}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Live typing textarea input */}
-              <div className="bg-[#0B0F19] border border-gray-800 rounded-xl p-4 focus-within:border-gray-600 transition-colors">
-                <textarea 
-                  value={answerText}
-                  onChange={e => setAnswerText(e.target.value)}
-                  className="w-full bg-transparent border-none text-gray-300 text-sm placeholder-gray-600 resize-none focus:ring-0 p-0" 
-                  placeholder="Type your answer here or use the mic to speak..." 
-                  rows="3"
-                ></textarea>
-
-                <div className="flex items-center justify-between mt-4 border-t border-gray-800/50 pt-3">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={toggleListening}
-                      className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm text-white font-medium transition-colors ${
-                        isListening 
-                          ? 'bg-rose-500 border-rose-600 shadow' 
-                          : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
-                      }`}
-                    >
-                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-gray-400" />}
-                      {isListening ? 'Stop Speaking' : 'Speak Answer'}
-                    </button>
-                    <span className="text-xs text-gray-500">Mic-free option</span>
-                  </div>
-
-                  <button 
-                    onClick={handleAnswerSubmit}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-brand-purple hover:opacity-90 rounded-lg text-sm text-white font-medium transition-opacity disabled:opacity-50"
-                  >
-                    Submit Answer <ArrowRight className="w-4 h-4" />
+            {/* Whiteboard */}
+            {whiteboardOpen && (
+              <div className="rounded-xl overflow-hidden" style={{ background: '#0D1220', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-xs font-semibold text-slate-400">Whiteboard</span>
+                  <button onClick={() => setWhiteboardOpen(false)} className="text-slate-600 hover:text-white transition-colors">
+                    <X size={14} />
                   </button>
                 </div>
+                <canvas ref={whiteboardCanvasRef} width={360} height={200}
+                  className="w-full cursor-crosshair" style={{ touchAction: 'none' }} />
               </div>
-
-              {/* Tips alert */}
-              <p className="mt-4 text-xs text-gray-400 flex items-center gap-1.5">
-                <i className="fa-regular fa-lightbulb text-yellow-500"></i> 
-                <span>Tip: Structure your answer using STAR method for better results.</span>
-              </p>
-            </section>
+            )}
           </div>
 
-          {/* Right Column: Live Webcam, Tools, Feedback & Tips */}
-          <div className="space-y-6">
-            
-            {/* Live Webcam & Analysis Panel */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <i className="fa-solid fa-video text-blue-400"></i>
-                  <h3 className="font-semibold text-white">Live Webcam & Analysis</h3>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 text-xs font-medium rounded-full border border-green-500/20">
-                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span> Live
+          {/* Center: Chat + Question + Answer */}
+          <div className="xl:col-span-1 flex flex-col gap-4">
+
+            {/* Current Question */}
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                {aiSpeaking ? (
+                  <div className="soundwave flex-shrink-0">
+                    {[...Array(6)].map((_,i) => <div key={i} className="bar" />)}
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>
+                    <Brain size={14} className="text-white" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold text-indigo-400">AI Interviewer</p>
+                  {aiSpeaking && <p className="text-[10px] text-slate-600">Speaking...</p>}
                 </div>
               </div>
+              <p className="text-slate-200 text-sm leading-relaxed">{currentQuestion}</p>
+            </div>
 
-              {/* Camera viewframe viewport container */}
-              <div className="bg-[#0B0F19] border border-gray-800 rounded-xl aspect-video relative overflow-hidden mb-4">
-                {cameraActive ? (
-                  <>
-                    {/* Clear, bright, colourful user webcam feed */}
-                    <video 
-                      ref={videoRef} 
-                      muted 
-                      playsInline 
-                      className="absolute inset-0 w-full h-full object-cover scale-x-[-1] brightness-110 contrast-105" 
-                    />
-                    
-                    {/* Transparent overlay canvas for face/eye tracking boxes */}
-                    <canvas 
-                      ref={canvasRef} 
-                      width="320" 
-                      height="240" 
-                      className="absolute inset-0 w-full h-full pointer-events-none z-10" 
-                    />
-
-                    {/* Cybernetic telemetry overlay texts - Styled in HTML for perfect sharp rendering */}
-                    <div className="absolute inset-0 p-4 flex flex-col justify-between pointer-events-none z-20 font-sans">
-                      
-                      {/* Top Row telemetry: Stability, Stress, Pulse */}
-                      <div className="flex flex-col gap-2.5 text-left text-[11px] font-semibold text-slate-100">
-                        
-                        <div className="leading-tight drop-shadow-md">
-                          <p className="text-[9px] text-gray-400/90 font-medium">Gaze Stability</p>
-                          <p className={gazeStable === 'Good' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-                            {gazeStable}
-                          </p>
-                        </div>
-
-                        <div className="leading-tight drop-shadow-md">
-                          <p className="text-[9px] text-gray-400/90 font-medium">Stress Level</p>
-                          <p className="text-emerald-400 font-bold">{stressLevelPercent}%</p>
-                        </div>
-
-                        <div className="leading-tight drop-shadow-md flex items-center gap-1.5">
-                          <span className="text-rose-500 animate-pulse text-xs">❤️</span>
-                          <div>
-                            <p className="text-[9px] text-gray-400/90 font-medium">Pulse</p>
-                            <p className="text-white font-bold">{pulseBPM} BPM</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Bottom row telemetry: Network & Environment */}
-                      <div className="flex justify-between items-end">
-                        <div className="leading-tight drop-shadow-md bg-black/45 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-gray-800/40">
-                          <p className="text-[9px] text-gray-400/90 font-medium">Network</p>
-                          <p className="text-emerald-400 font-bold flex items-center gap-1">
-                            <i className="fa-solid fa-signal text-[10px]"></i> Excellent
-                          </p>
-                        </div>
-
-                        <div className="leading-tight drop-shadow-md bg-black/45 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-gray-800/40">
-                          <p className="text-[9px] text-gray-400/90 font-medium flex items-center gap-1">
-                            <i className="fa-regular fa-sun text-yellow-400 text-[10px]"></i> Environment
-                          </p>
-                          <p className="text-gray-300 font-bold">Good</p>
-                        </div>
-                      </div>
-
+            {/* Dialogue History */}
+            <div className="flex-1 rounded-2xl overflow-hidden flex flex-col"
+              style={{ background: 'rgba(13,18,32,0.8)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 200 }}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Conversation</p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                {dialogues.map((d, i) => (
+                  <div key={i} className={`flex ${d.sender === 'You' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`chat-bubble ${d.sender === 'You' ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
+                      <p className="text-[10px] font-bold mb-1" style={{ color: d.sender === 'You' ? '#818CF8' : '#6B7280' }}>
+                        {d.sender} · {d.time}
+                      </p>
+                      {d.text}
                     </div>
-                  </>
-                ) : (
-                  /* Camera off state view */
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#0B0F19]">
-                    <div className="w-16 h-16 rounded-full border-2 border-gray-700 flex items-center justify-center mb-3">
-                      <VideoOff className="w-8 h-8 text-gray-500" />
+                  </div>
+                ))}
+                {aiSpeaking && (
+                  <div className="flex justify-start">
+                    <div className="chat-bubble chat-bubble-ai">
+                      <div className="typing-indicator">
+                        <span /><span /><span />
+                      </div>
                     </div>
-                    <h4 className="text-white font-medium mb-1">Camera is off</h4>
-                    <p className="text-xs text-gray-500 max-w-[200px]">Enable your camera to begin interview</p>
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Camera utility control toggles */}
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setCameraActive(!cameraActive)}
-                  className="flex-1 flex justify-center items-center gap-2 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                  {cameraActive ? 'Turn Off Camera' : 'Turn On Camera'}
-                </button>
-
-                <button 
-                  onClick={() => setMicActive(!micActive)}
-                  className="flex-1 flex justify-center items-center gap-2 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {micActive ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-emerald-400" />}
-                  {micActive ? 'Mute Mic' : 'Unmute Mic'}
-                </button>
-
-                <button 
-                  onClick={() => alert('Camera configuration parameters simulated!')}
-                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg transition-colors"
-                >
-                  <i className="fa-solid fa-gear"></i>
-                </button>
-              </div>
-            </section>
-
-            {/* Real-time Feedback Panel */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-850">
+            {/* Answer Input */}
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <textarea
+                value={answerText}
+                onChange={e => setAnswerText(e.target.value)}
+                placeholder={isListening ? 'Listening... speak your answer' : 'Type or speak your answer...'}
+                rows={3}
+                className="glass-input w-full rounded-xl p-3 text-sm resize-none"
+                style={{ borderColor: isListening ? 'rgba(239,68,68,0.4)' : undefined }}
+              />
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-slate-600">{answerText.length} chars</span>
                 <div className="flex items-center gap-2">
-                  <i className="fa-solid fa-chart-line text-brand-purple"></i>
-                  <h3 className="font-semibold text-white">Real-time Feedback</h3>
-                </div>
-                <button 
-                  onClick={() => alert('View details report simulated!')}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  View Details
-                </button>
-              </div>
-
-              {/* Metrics scores grids */}
-              <div className="grid grid-cols-5 gap-2.5 mb-6 text-center leading-tight">
-                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Eye Contact</p>
-                  <p className="text-base font-extrabold text-emerald-400">82%</p>
-                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Good</span>
-                </div>
-
-                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Clarity</p>
-                  <p className="text-base font-extrabold text-emerald-400">88%</p>
-                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Great</span>
-                </div>
-
-                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Pace</p>
-                  <p className="text-base font-extrabold text-emerald-400">76 WPM</p>
-                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Good</span>
-                </div>
-
-                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Confidence</p>
-                  <p className="text-base font-extrabold text-yellow-500">72%</p>
-                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Fair</span>
-                </div>
-
-                <div className="bg-[#0B0F19] border border-gray-800/60 p-2.5 rounded-xl">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Filler Words</p>
-                  <p className="text-base font-extrabold text-emerald-400">5</p>
-                  <span className="text-[9px] text-gray-600 block mt-0.5 font-medium">Low</span>
-                </div>
-              </div>
-
-              {/* Overall Performance tracking line */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs font-semibold">
-                  <span className="text-gray-400">Overall Performance</span>
-                  <span className="text-white font-bold">78 / 100</span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-blue-500 to-brand-purple h-2 rounded-full" style={{ width: '78%' }}></div>
-                </div>
-              </div>
-
-              <p className="mt-4 text-xs text-gray-400 italic font-medium leading-relaxed bg-[#0B0F19]/40 p-3 rounded-lg border border-gray-850/30">
-                &ldquo;Keep it up! Your answers are well-structured and clear.&rdquo;
-              </p>
-
-              <button 
-                onClick={handleFinishInterview}
-                className="w-full mt-4 py-2 bg-[#1A2035] hover:bg-[#222942] border border-gray-800 hover:border-gray-700 text-xs font-bold text-gray-300 hover:text-white rounded-lg transition-all flex items-center justify-center gap-1.5"
-              >
-                View Detailed Report <i className="fa-solid fa-arrow-right text-[10px]"></i>
-              </button>
-            </section>
-
-            {/* Interactive whiteboard/sketchboard button wrapper (when whiteboard is closed) */}
-            {!whiteboardOpen && (
-              <button
-                onClick={() => setWhiteboardOpen(true)}
-                className="w-full py-3 bg-[#151A2B] hover:bg-[#1C223A] border border-gray-800 rounded-xl text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center justify-center gap-2"
-              >
-                <Edit3 className="w-4 h-4 text-[#8B5CF6]" /> Enable Whiteboard Sketchboard
-              </button>
-            )}
-
-            {/* Sketchboard whiteboard canvas inline display */}
-            {whiteboardOpen && (
-              <section className="panel-bg rounded-2xl p-6 border border-gray-800 space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-850">
-                  <h4 className="text-sm font-bold text-slate-200">Sketchboard Whiteboard</h4>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => {
-                        const canvas = whiteboardCanvasRef.current;
-                        const ctx = canvas.getContext('2d');
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                      }}
-                      className="text-[9px] bg-slate-900 border border-slate-800 px-2.5 py-1 rounded text-slate-400 hover:text-white transition-colors"
-                    >
-                      Clear
+                  {currentIndex < totalQuestions - 1 ? (
+                    <button onClick={handleAnswerSubmit}
+                      disabled={loading || !answerText.trim()}
+                      className="btn btn-shimmer text-white font-semibold text-sm px-5 py-2 rounded-xl disabled:opacity-40"
+                      style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', boxShadow: '0 4px 16px rgba(99,102,241,0.3)' }}>
+                      {loading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><ArrowRight size={14} /> Next</>}
                     </button>
-                    <button 
-                      onClick={() => setWhiteboardOpen(false)}
-                      className="text-[9px] bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded text-rose-400 hover:text-rose-350 transition-colors"
-                    >
-                      Close
+                  ) : (
+                    <button onClick={handleAnswerSubmit}
+                      disabled={loading || !answerText.trim()}
+                      className="btn btn-shimmer text-white font-semibold text-sm px-5 py-2 rounded-xl disabled:opacity-40"
+                      style={{ background: 'linear-gradient(135deg, #10B981, #06B6D4)', boxShadow: '0 4px 16px rgba(16,185,129,0.3)' }}>
+                      {loading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Send size={14} /> Submit</>}
                     </button>
-                  </div>
-                </div>
-                <div className="w-full bg-[#0B0F19] rounded-xl overflow-hidden border border-gray-800">
-                  <canvas ref={whiteboardCanvasRef} width="640" height="200" className="w-full bg-[#0B0F19] cursor-crosshair h-44" />
-                </div>
-              </section>
-            )}
-
-            {/* Tools Section grid */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <i className="fa-solid fa-toolbox text-brand-purple"></i>
-                  <h3 className="font-semibold text-white">Interview Tools</h3>
-                </div>
-                <button 
-                  onClick={() => alert('View all interview tools simulated!')}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  View All
-                </button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
-                <button 
-                  onClick={() => alert('Mock Notepad activated!')}
-                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
-                >
-                  <i className="fa-regular fa-clipboard text-lg text-purple-400 group-hover:scale-110 transition-transform"></i>
-                  <span className="text-xs text-white font-medium">Notes</span>
-                  <span className="text-[8px] text-gray-500 leading-none">Take notes</span>
-                </button>
-
-                <button 
-                  onClick={() => setWhiteboardOpen(true)}
-                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
-                >
-                  <i className="fa-solid fa-pen-to-square text-lg text-blue-400 group-hover:scale-110 transition-transform"></i>
-                  <span className="text-xs text-white font-medium">Whiteboard</span>
-                  <span className="text-[8px] text-gray-500 leading-none">Draw &amp; explain</span>
-                </button>
-
-                <button 
-                  onClick={() => alert('Calculator tool activated!')}
-                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
-                >
-                  <i className="fa-solid fa-calculator text-lg text-teal-400 group-hover:scale-110 transition-transform"></i>
-                  <span className="text-xs text-white font-medium">Calculator</span>
-                  <span className="text-[8px] text-gray-500 leading-none">Calculate</span>
-                </button>
-
-                <button 
-                  onClick={() => alert('Code Editor tool activated!')}
-                  className="bg-[#0B0F19] hover:bg-[#1A1F33] border border-gray-800 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors group"
-                >
-                  <i className="fa-solid fa-code text-lg text-pink-400 group-hover:scale-110 transition-transform"></i>
-                  <span className="text-xs text-white font-medium">Code Editor</span>
-                  <span className="text-[8px] text-gray-500 leading-none">Write code</span>
-                </button>
-              </div>
-            </section>
-
-            {/* Tips for a better answer list */}
-            <section className="panel-bg rounded-2xl p-6 border border-gray-800 relative overflow-hidden">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <i className="fa-regular fa-lightbulb text-teal-400"></i>
-                  <h3 className="font-semibold text-white">Tips for a Better Answer</h3>
+                  )}
                 </div>
               </div>
-              
-              <ul className="space-y-3.5 relative z-10 w-2/3">
-                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
-                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
-                  <span>Structure your answer using STAR method</span>
-                </li>
-                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
-                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
-                  <span>Be concise &amp; to the point</span>
-                </li>
-                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
-                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
-                  <span>Think out loud when solving problems</span>
-                </li>
-                <li className="flex items-start gap-2.5 text-xs text-gray-300 leading-tight">
-                  <i className="fa-solid fa-circle-check text-teal-500 mt-0.5"></i>
-                  <span>Review &amp; improve with AI feedback</span>
-                </li>
-              </ul>
+            </div>
+          </div>
 
-              {/* decorative vector circle graphic */}
-              <div className="absolute right-4 bottom-4 w-24 h-24 opacity-25 pointer-events-none">
-                <svg fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="50" cy="50" r="40" stroke="#14B8A6" strokeOpacity="0.4" strokeWidth="4"></circle>
-                  <circle cx="50" cy="50" r="25" stroke="#14B8A6" strokeOpacity="0.7" strokeWidth="4"></circle>
-                  <circle cx="50" cy="50" fill="#14B8A6" r="10"></circle>
-                  <path d="M80 20 L55 45" stroke="#14B8A6" strokeLinecap="round" strokeWidth="3"></path>
-                  <path d="M75 15 L85 25 L80 20 Z" fill="#14B8A6"></path>
-                </svg>
+          {/* Right: AI Insights */}
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)' }}>
+              <h3 className="text-white font-semibold text-sm mb-4">AI Insights</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <MetricRing value={100 - stressLevelPercent} size={76} label="Confidence" color="violet" animate />
+                <MetricRing value={Math.round(goodEyeContactFrames / Math.max(1, eyeContactFrames) * 100)} size={76} label="Eye Contact" color="cyan" animate />
+                <MetricRing value={avgTechnicalRef || 70} size={76} label="Technical" color="blue" animate />
+                <MetricRing value={avgCommRef || 70} size={76} label="Communication" color="emerald" animate />
               </div>
-            </section>
+            </div>
 
+            {/* Live stats */}
+            <div className="rounded-2xl p-5 space-y-3" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <h3 className="text-white font-semibold text-sm">Live Biometrics</h3>
+              {[
+                { label: 'Heart Rate', value: `${pulseBPM} BPM`, color: pulseBPM > 90 ? '#EF4444' : '#10B981' },
+                { label: 'Stress Level', value: `${Math.round(stressLevelPercent)}%`, color: stressLevelPercent > 30 ? '#F59E0B' : '#10B981' },
+                { label: 'Gaze Stability', value: gazeStable, color: gazeStable === 'Good' ? '#10B981' : '#F59E0B' },
+                { label: 'Answer Duration', value: `${speechTimer}s`, color: '#6366F1' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <span className="text-xs text-slate-500">{s.label}</span>
+                  <span className="text-xs font-bold" style={{ color: s.color }}>{s.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* End session */}
+            <button
+              onClick={() => navigate('/feedback')}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.12)'}
+            >
+              End Session
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
+

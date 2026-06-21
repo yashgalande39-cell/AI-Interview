@@ -3,16 +3,24 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import { 
-  Trophy, ChevronRight, Printer, RefreshCw, X, HelpCircle, Sparkles
+  Trophy, ChevronRight, ChevronLeft, Printer, RefreshCw, X, HelpCircle, Sparkles, 
+  AlertCircle, CheckCircle, BookOpen, Activity, Flame, MessageSquare, Loader2, Calendar, Clock, BarChart3
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import MetricRing from '../components/ui/MetricRing';
+import { 
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
+} from 'recharts';
 
 export default function FeedbackAnalysis() {
   const { token } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = searchParams.get('sessionId');
 
   const [scorecard, setScorecard] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   // Track flipped state for each flashcard index
   const [flippedCards, setFlippedCards] = useState({});
@@ -42,24 +50,49 @@ export default function FeedbackAnalysis() {
   ];
 
   useEffect(() => {
-    const fetchScorecard = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/interviews/finish`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ sessionId })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setScorecard(data.scoreCard);
-        } else {
-          throw new Error("Finish evaluation failed");
+    if (!token) return;
+
+    if (sessionId) {
+      setLoading(true);
+      const fetchScorecard = async () => {
+        // Skip mock/offline sessions — go straight to fallback
+        const isMockSession = !sessionId || sessionId.startsWith('int_mock_') || sessionId.startsWith('mock_');
+
+        if (!isMockSession) {
+          try {
+            // Step 1: Try to GET the already-finished session (avoids double-finish)
+            const res = await fetch(`${API_BASE}/interviews/session/${sessionId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.session?.scoreCard) {
+                setScorecard(data.session.scoreCard);
+                setLoading(false);
+                return;
+              }
+              // Session exists but not yet finished — call finish now
+              const finishRes = await fetch(`${API_BASE}/interviews/finish`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ sessionId })
+              });
+              if (finishRes.ok) {
+                const finishData = await finishRes.json();
+                setScorecard(finishData.scoreCard);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('Session fetch failed, using fallback scorecard:', err.message);
+          }
         }
-      } catch (err) {
-        console.warn("Using offline simulator scorecard details:", err.message);
+
+        // Fallback: show a convincing demo scorecard
         setScorecard({
           overallScore: 82,
           technicalScore: 84,
@@ -68,22 +101,101 @@ export default function FeedbackAnalysis() {
           averageWpm: 124,
           stressScore: 18,
           totalFillers: 6,
-          weakTopics: ["Dynamic Programming", "Speech Pace"],
+          weakTopics: ['Dynamic Programming', 'Speech Pace'],
           recommendations: [
-            "Maintain structural pacing under 130 WPM when answering deep technical loops.",
-            "Refine your understanding of Dynamic programming lookup tables."
+            'Maintain structural pacing under 130 WPM when answering deep technical loops.',
+            'Refine your understanding of Dynamic programming lookup tables.'
           ],
           flashcards: [
-            { front: "Explain DP Memoization", back: "Memoization is a top-down dynamic programming technique where subproblem solutions are cached to prevent duplicate compute loops." },
-            { front: "STAR Communication Strategy", back: "S: Situation (Context), T: Task (Requirement), A: Action (Your step), R: Result (Quantified outcomes)." }
+            { front: 'Explain DP Memoization', back: 'Memoization is a top-down dynamic programming technique where subproblem solutions are cached to prevent duplicate compute loops.' },
+            { front: 'STAR Communication Strategy', back: 'S: Situation (Context), T: Task (Requirement), A: Action (Your step), R: Result (Quantified outcomes).' }
           ]
         });
-      } finally {
         setLoading(false);
-      }
-    };
-
-    fetchScorecard();
+      };
+      fetchScorecard();
+    } else {
+      setLoadingHistory(true);
+      const fetchHistory = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/interviews/history`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setHistory(data.history || []);
+          } else {
+            throw new Error("Failed to fetch history");
+          }
+        } catch (err) {
+          console.warn("Using offline simulated history:", err.message);
+          setHistory([
+            {
+              id: "sim_1",
+              status: "completed",
+              type: "Technical",
+              difficulty: "Medium",
+              role: "Frontend Engineer",
+              company: "Vercel",
+              startedAt: "2026-06-18T10:15:30.000Z",
+              scoreCard: {
+                overallScore: 88,
+                technicalScore: 90,
+                communicationScore: 86,
+                eyeContactScore: 92,
+                averageWpm: 120,
+                stressScore: 12,
+                totalFillers: 3,
+                completedAt: "2026-06-18T10:35:00.000Z"
+              }
+            },
+            {
+              id: "sim_2",
+              status: "completed",
+              type: "Behavioral",
+              difficulty: "Easy",
+              role: "Software Engineer",
+              company: "Stripe",
+              startedAt: "2026-06-19T14:20:00.000Z",
+              scoreCard: {
+                overallScore: 82,
+                technicalScore: 78,
+                communicationScore: 85,
+                eyeContactScore: 88,
+                averageWpm: 128,
+                stressScore: 20,
+                totalFillers: 5,
+                completedAt: "2026-06-19T14:40:00.000Z"
+              }
+            },
+            {
+              id: "sim_3",
+              status: "completed",
+              type: "HR",
+              difficulty: "Medium",
+              role: "Fullstack Developer",
+              company: "Google",
+              startedAt: "2026-06-20T09:00:00.000Z",
+              scoreCard: {
+                overallScore: 92,
+                technicalScore: 94,
+                communicationScore: 90,
+                eyeContactScore: 95,
+                averageWpm: 115,
+                stressScore: 8,
+                totalFillers: 2,
+                completedAt: "2026-06-20T09:20:00.000Z"
+              }
+            }
+          ]);
+        } finally {
+          setLoadingHistory(false);
+        }
+      };
+      fetchHistory();
+    }
   }, [sessionId, token]);
 
   const handleQuizSubmit = () => {
@@ -102,12 +214,420 @@ export default function FeedbackAnalysis() {
     }));
   };
 
+  // 1. History overview loading view
+  if (loadingHistory && !sessionId) {
+    return (
+      <div className="space-y-6 pt-2 pb-12 w-full text-left text-white animate-fade-in">
+        {/* Banner skeleton */}
+        <div className="skeleton rounded-[24px] h-48 w-full" />
+        
+        {/* Grid skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass rounded-3xl p-5 border border-white/5 h-36">
+              <div className="skeleton skeleton-text w-24 h-3 mb-4" />
+              <div className="flex justify-between items-center">
+                <div className="skeleton w-12 h-8" />
+                <div className="skeleton w-16 h-16 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Chart + Table skeleton */}
+        <div className="space-y-6">
+          <div className="glass rounded-3xl p-6 border border-white/5 h-96">
+            <div className="skeleton skeleton-text w-48 h-4 mb-8" />
+            <div className="skeleton w-full h-64 rounded-xl" />
+          </div>
+          <div className="glass rounded-3xl p-6 border border-white/5 h-80">
+            <div className="skeleton skeleton-text w-36 h-4 mb-6" />
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-4 border-b border-white/5">
+                <div className="skeleton w-1/4 h-4" />
+                <div className="skeleton w-1/3 h-4" />
+                <div className="skeleton w-16 h-4" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. History overview main view
+  if (!sessionId) {
+    const completedInterviews = history.filter(h => h.status === 'completed' || h.scoreCard);
+    const totalSessions = completedInterviews.length;
+
+    let avgOverall = 0;
+    let avgTech = 0;
+    let avgComm = 0;
+    let avgEye = 0;
+    let avgWpm = 0;
+    let totalFillers = 0;
+
+    if (totalSessions > 0) {
+      const overallSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.overallScore || 0), 0);
+      const techSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.technicalScore || 0), 0);
+      const commSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.communicationScore || 0), 0);
+      const eyeSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.eyeContactScore || 0), 0);
+      const wpmSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.averageWpm || 0), 0);
+      const fillersSum = completedInterviews.reduce((sum, h) => sum + (h.scoreCard?.totalFillers || 0), 0);
+
+      avgOverall = Math.round(overallSum / totalSessions);
+      avgTech = Math.round(techSum / totalSessions);
+      avgComm = Math.round(commSum / totalSessions);
+      avgEye = Math.round(eyeSum / totalSessions);
+      avgWpm = Math.round(wpmSum / totalSessions);
+      totalFillers = fillersSum;
+    }
+
+    const chartData = [...completedInterviews]
+      .sort((a, b) => new Date(a.scoreCard?.completedAt || a.startedAt) - new Date(b.scoreCard?.completedAt || b.startedAt))
+      .map((session, index) => {
+        const dateObj = new Date(session.scoreCard?.completedAt || session.startedAt);
+        const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return {
+          name: `Session ${index + 1}`,
+          date: dateStr,
+          score: session.scoreCard?.overallScore || 0,
+          technical: session.scoreCard?.technicalScore || 0,
+          communication: session.scoreCard?.communicationScore || 0,
+          role: session.role || "Software Engineer",
+          company: session.company || "Common"
+        };
+      });
+
+    return (
+      <div className="space-y-6 pt-2 pb-12 w-full text-left text-white animate-fade-in">
+        {/* Overview Header Banner */}
+        <section className="relative w-full rounded-[24px] bg-slate-900/40 border border-white/5 overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/5 blur-[100px] rounded-full"></div>
+            <div className="absolute right-1/4 bottom-0 w-[400px] h-[200px] bg-purple-600/5 blur-[80px] rounded-full"></div>
+          </div>
+          <div className="relative z-10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-xl text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-widest mb-4 backdrop-blur-sm">
+                <BarChart3 className="w-3.5 h-3.5" />
+                Performance Dashboard
+              </div>
+              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Interview Analytics</h1>
+              <p className="text-slate-400 text-sm">Monitor your historical progression, speech pattern metrics, and AI recommendations across sessions.</p>
+            </div>
+            <div className="flex items-center gap-4 shrink-0">
+              <Link 
+                to="/lobby" 
+                className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-glow-gradient text-white text-xs font-bold shadow-lg hover:shadow-violet-500/20 transition-all hover:scale-102"
+              >
+                Start New Practice
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {completedInterviews.length === 0 ? (
+          <div className="bg-slate-900/20 rounded-3xl border border-white/5 p-12 text-center shadow-lg max-w-2xl mx-auto space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center mx-auto shadow-inner">
+              <BarChart3 className="w-8 h-8 text-violet-400" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">No Mock Interviews Logged</h3>
+              <p className="text-slate-400 text-xs leading-relaxed max-w-md mx-auto">
+                You haven't completed any mock interviews yet. Launch your first session in the lobby, and our AI coach will analyze your speech enunciation, stress levels, and answers to populate this dashboard.
+              </p>
+            </div>
+            <Link 
+              to="/lobby" 
+              className="inline-flex items-center gap-1.5 px-6 py-3 rounded-xl bg-glow-gradient text-white text-xs font-bold shadow-lg hover:shadow-violet-500/25 transition-all hover:scale-102"
+            >
+              Launch First Interview
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Aggregate Primary Grid */}
+            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              <div className="bg-slate-900/20 rounded-3xl p-5 border border-cyan-500/20 shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-colors">
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-wider uppercase mb-3">
+                      <Trophy className="w-4 h-4 text-cyan-400" />
+                      Avg Overall Score
+                    </div>
+                    <div className="text-4xl font-extrabold text-white mb-1">{avgOverall}%</div>
+                    <div className="text-cyan-400 font-bold text-xs mb-4">
+                      {avgOverall >= 85 ? "Excellent" : avgOverall >= 70 ? "Competent" : "Needs Practice"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">Across all sessions</div>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <MetricRing value={avgOverall} size={80} strokeWidth={6} label="" color="cyan" animate />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/20 rounded-3xl p-5 border border-purple-500/20 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-colors">
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-wider uppercase mb-3">
+                      <Flame className="w-4 h-4 text-purple-400" />
+                      Avg Technical Score
+                    </div>
+                    <div className="text-4xl font-extrabold text-white mb-1">{avgTech}%</div>
+                    <div className="text-purple-400 font-bold text-xs mb-4">
+                      {avgTech >= 80 ? "Proficient" : "Improving"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">Concept correctness</div>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <MetricRing value={avgTech} size={80} strokeWidth={6} label="" color="violet" animate />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/20 rounded-3xl p-5 border border-pink-500/20 shadow-lg relative overflow-hidden group hover:border-pink-500/40 transition-colors">
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-wider uppercase mb-3">
+                      <Activity className="w-4 h-4 text-pink-400" />
+                      Avg Fluency Score
+                    </div>
+                    <div className="text-4xl font-extrabold text-white mb-1">{avgComm}%</div>
+                    <div className="text-pink-400 font-bold text-xs mb-4">{avgWpm} Avg WPM</div>
+                    <div className="text-[10px] text-slate-500 font-medium">Communication skills</div>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <MetricRing value={avgComm} size={80} strokeWidth={6} label="" color="rose" animate />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/20 rounded-3xl p-5 border border-orange-500/20 shadow-lg relative overflow-hidden group hover:border-orange-500/40 transition-colors">
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-wider uppercase mb-3">
+                      <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+                        <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+                      </svg>
+                      Avg Gaze Alignment
+                    </div>
+                    <div className="text-4xl font-extrabold text-white mb-1">{avgEye}%</div>
+                    <div className="text-orange-400 font-bold text-xs mb-4">Focus Index</div>
+                    <div className="text-[10px] text-slate-500 font-medium">Camera eye alignment</div>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <MetricRing value={avgEye} size={80} strokeWidth={6} label="" color="amber" animate />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Secondary stats */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="bg-[#101420]/60 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                  <Calendar className="w-5 h-5 text-purple-400" />
+                </div>
+                <div className="text-left text-xs">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Total Interviews Taken</span>
+                  <span className="text-base font-extrabold text-white">{totalSessions} Completed</span>
+                </div>
+              </div>
+              
+              <div className="bg-[#101420]/60 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5 text-blue-400" />
+                </div>
+                <div className="text-left text-xs">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Average Speaking Speed</span>
+                  <span className="text-base font-extrabold text-white">{avgWpm} WPM</span>
+                </div>
+              </div>
+
+              <div className="bg-[#101420]/60 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-5 h-5 text-orange-400" />
+                </div>
+                <div className="text-left text-xs">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Total Filler Words Used</span>
+                  <span className="text-base font-extrabold text-white">{totalFillers} Words</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Score Progression Trend Chart */}
+            <div className="bg-slate-900/20 rounded-3xl border border-white/5 p-6 shadow-lg">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-base font-bold text-white tracking-wide">Score Progression Trend</h3>
+                    <p className="text-xs text-slate-400 font-medium">Historical performance visualization</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#64748B" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      dy={10}
+                    />
+                    <YAxis 
+                      stroke="#64748B" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      domain={[0, 100]}
+                      tickFormatter={(val) => `${val}%`}
+                    />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-[#0b0f19]/90 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-xl text-left text-xs space-y-1.5">
+                              <p className="text-slate-400 font-bold">{data.date}</p>
+                              <p className="text-purple-400 font-extrabold text-sm">{data.role} ({data.company})</p>
+                              <div className="h-px bg-white/5 my-1" />
+                              <p className="text-white font-medium">Overall Score: <span className="text-cyan-400 font-black">{data.score}%</span></p>
+                              <p className="text-white font-medium">Technical Score: <span className="text-purple-400 font-black">{data.technical}%</span></p>
+                              <p className="text-white font-medium">Fluency Score: <span className="text-pink-400 font-black">{data.communication}%</span></p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="score" 
+                      stroke="#8B5CF6" 
+                      strokeWidth={3} 
+                      fillOpacity={1} 
+                      fill="url(#colorScore)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Session Logs List */}
+            <div className="bg-slate-900/20 rounded-3xl border border-white/5 p-6 shadow-lg">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <Trophy className="w-5 h-5 text-purple-400" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-base font-bold text-white tracking-wide">Historical Mock Evaluations</h3>
+                  <p className="text-xs text-slate-400 font-medium">Click on any past session to review full AI feedback scorecard</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 text-slate-400 font-bold uppercase tracking-wider">
+                      <th className="pb-3 pl-4">Session Date</th>
+                      <th className="pb-3">Target Role & Company</th>
+                      <th className="pb-3">Type</th>
+                      <th className="pb-3">Difficulty</th>
+                      <th className="pb-3 text-center">Score</th>
+                      <th className="pb-3 pr-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {completedInterviews.map((session) => {
+                      const dateStr = new Date(session.scoreCard?.completedAt || session.startedAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+
+                      const score = session.scoreCard?.overallScore || 0;
+
+                      return (
+                        <tr 
+                          key={session.id} 
+                          className="group hover:bg-white/[0.02] transition-colors"
+                        >
+                          <td className="py-4 pl-4 font-semibold text-slate-350 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                            {dateStr}
+                          </td>
+                          <td className="py-4 font-bold text-white text-left">
+                            {session.role}
+                            <span className="text-slate-450 font-semibold ml-1.5 opacity-60">at {session.company}</span>
+                          </td>
+                          <td className="py-4 text-left">
+                            <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold text-[10px] uppercase tracking-wide">
+                              {session.type}
+                            </span>
+                          </td>
+                          <td className="py-4 text-left">
+                            <span className={`px-2.5 py-1 rounded-lg font-bold text-[10px] uppercase tracking-wide border ${
+                              session.difficulty?.toLowerCase() === 'hard' 
+                                ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' 
+                                : session.difficulty?.toLowerCase() === 'medium'
+                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                            }`}>
+                              {session.difficulty}
+                            </span>
+                          </td>
+                          <td className="py-4 text-center">
+                            <div className="inline-flex items-center justify-center font-black text-xs text-cyan-400 bg-cyan-500/10 w-11 h-7 rounded-lg border border-cyan-500/25">
+                              {score}%
+                            </div>
+                          </td>
+                          <td className="py-4 pr-4 text-right">
+                            <button 
+                              onClick={() => setSearchParams({ sessionId: session.id })}
+                              className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 hover:border-white/20 transition-all text-[11px] cursor-pointer"
+                            >
+                              View Report
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // 3. Scorecard detailed report loader
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8 bg-app-bg text-white">
+      <div className="flex-1 flex items-center justify-center p-8 text-white min-h-[50vh]">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-accent-purple border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <div className="text-xs text-app-textSecondary font-bold uppercase tracking-widest">Evaluating transcription scripts...</div>
+          <Loader2 className="w-10 h-10 text-violet-400 animate-spin mx-auto" />
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">Evaluating transcription scripts...</div>
         </div>
       </div>
     );
@@ -119,29 +639,29 @@ export default function FeedbackAnalysis() {
       topic: "DSA",
       question: "What is the time complexity of Dijkstra's algorithm?",
       answer: "O((V + E) log V) using a binary heap, where V is the number of vertices and E is the number of edges.",
-      colorClass: "from-[#2a1b4d] to-[#120b29] border-purple-500/20 hover:border-purple-500/50",
-      glowColor: "bg-purple-500/20"
+      colorClass: "from-purple-950/20 to-slate-900 border-purple-500/20 hover:border-purple-500/50",
+      glowColor: "bg-purple-500/10"
     },
     {
       topic: "System Design",
       question: "Design a Rate Limiter for an API gateway.",
       answer: "Implement Token Bucket, Leaky Bucket, or Sliding Window Log algorithms. Can be scaled using distributed Redis caches.",
-      colorClass: "from-[#1b2b4d] to-[#0b1529] border-blue-500/20 hover:border-blue-500/50",
-      glowColor: "bg-blue-500/20"
+      colorClass: "from-blue-950/20 to-slate-900 border-blue-500/20 hover:border-blue-500/50",
+      glowColor: "bg-blue-500/10"
     },
     {
       topic: "OS",
       question: "What is the difference between process and thread?",
       answer: "A process is an independent execution unit with dedicated memory, while a thread is a lightweight sub-unit sharing process resources.",
-      colorClass: "from-[#1b3a3d] to-[#0b1f21] border-teal-500/20 hover:border-teal-500/50",
-      glowColor: "bg-teal-500/20"
+      colorClass: "from-cyan-950/20 to-slate-900 border-cyan-500/20 hover:border-cyan-500/50",
+      glowColor: "bg-cyan-500/10"
     },
     {
       topic: "DBMS",
       question: "Explain ACID properties with examples.",
       answer: "Atomicity (all/nothing), Consistency (rules validation), Isolation (independent concurrency), Durability (persistent storage).",
-      colorClass: "from-[#301b3d] to-[#160b1f] border-pink-500/20 hover:border-pink-500/50",
-      glowColor: "bg-pink-500/20"
+      colorClass: "from-emerald-950/20 to-slate-900 border-emerald-500/20 hover:border-emerald-500/50",
+      glowColor: "bg-emerald-500/10"
     }
   ];
 
@@ -149,10 +669,10 @@ export default function FeedbackAnalysis() {
   const flashcardsList = scorecard?.flashcards && scorecard.flashcards.length > 0
     ? scorecard.flashcards.map((fc, idx) => {
         const themes = [
-          { topic: "DSA", colorClass: "from-[#2a1b4d] to-[#120b29] border-purple-500/20 hover:border-purple-500/50", glowColor: "bg-purple-500/20" },
-          { topic: "System Design", colorClass: "from-[#1b2b4d] to-[#0b1529] border-blue-500/20 hover:border-blue-500/50", glowColor: "bg-blue-500/20" },
-          { topic: "OS", colorClass: "from-[#1b3a3d] to-[#0b1f21] border-teal-500/20 hover:border-teal-500/50", glowColor: "bg-teal-500/20" },
-          { topic: "DBMS", colorClass: "from-[#301b3d] to-[#160b1f] border-pink-500/20 hover:border-pink-500/50", glowColor: "bg-pink-500/20" }
+          { topic: "DSA", colorClass: "from-purple-950/20 to-slate-900 border-purple-500/20 hover:border-purple-500/50", glowColor: "bg-purple-500/10" },
+          { topic: "System Design", colorClass: "from-blue-950/20 to-slate-900 border-blue-500/20 hover:border-blue-500/50", glowColor: "bg-blue-500/10" },
+          { topic: "OS", colorClass: "from-cyan-950/20 to-slate-900 border-cyan-500/20 hover:border-cyan-500/50", glowColor: "bg-cyan-500/10" },
+          { topic: "DBMS", colorClass: "from-emerald-950/20 to-slate-900 border-emerald-500/20 hover:border-emerald-500/50", glowColor: "bg-emerald-500/10" }
         ];
         const theme = themes[idx % themes.length];
         return {
@@ -170,93 +690,63 @@ export default function FeedbackAnalysis() {
     if (rec.toLowerCase().includes('pacing') || rec.toLowerCase().includes('wpm')) {
       return {
         title: "Maintain structural pacing",
-        icon: (
-          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-          </svg>
-        ),
+        icon: <Activity className="w-5 h-5 text-blue-400" />,
         bgColor: "bg-blue-500/10"
       };
     } else if (rec.toLowerCase().includes('dp') || rec.toLowerCase().includes('programming') || rec.toLowerCase().includes('dsa') || rec.toLowerCase().includes('lookup')) {
       return {
         title: "Refine DSA lookups",
-        icon: (
-          <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-          </svg>
-        ),
-        bgColor: "bg-teal-500/10"
+        icon: <BookOpen className="w-5 h-5 text-cyan-400" />,
+        bgColor: "bg-cyan-500/10"
       };
     } else {
       return {
         title: `Placement Tip #${index + 1}`,
-        icon: (
-          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-          </svg>
-        ),
+        icon: <Sparkles className="w-5 h-5 text-purple-400" />,
         bgColor: "bg-purple-500/10"
       };
     }
   };
 
-  // SVG Circumference for radius=42 -> ~264
-  const strokeCircumference = 264;
-  const getStrokeDashOffset = (percentage) => {
-    return strokeCircumference - (strokeCircumference * percentage) / 100;
-  };
-
   return (
-    <div className="space-y-6 pt-4 w-full text-white bg-app-bg pb-12" id="feedback-report">
+    <div className="space-y-6 pt-2 pb-12 w-full text-left text-white" id="feedback-report">
       
       {/* Performance Banner */}
-      <section className="relative w-full rounded-[20px] bg-gradient-to-r from-app-card via-[#0f172a] to-app-card border border-blue-500/20 overflow-hidden shadow-2xl">
+      <section className="relative w-full rounded-[24px] bg-slate-900/40 border border-white/5 overflow-hidden shadow-2xl">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/10 blur-[100px] rounded-full"></div>
-          <div className="absolute right-1/4 bottom-0 w-[400px] h-[200px] bg-purple-600/10 blur-[80px] rounded-full"></div>
-          <svg className="absolute right-10 top-0 h-full w-1/2 opacity-30" preserveAspectRatio="none" viewBox="0 0 400 200">
-            <path className="opacity-50" d="M0 150 Q 100 120 150 100 T 300 50 L 400 20" fill="none" stroke="url(#grad1)" strokeWidth="2"></path>
-            <path className="opacity-30" d="M50 180 Q 150 160 200 130 T 350 80 L 400 60" fill="none" stroke="url(#grad2)" strokeWidth="1"></path>
-            <circle cx="150" cy="100" fill="#60a5fa" r="3"></circle>
-            <circle cx="225" cy="75" fill="#a78bfa" r="4" className="animate-pulse"></circle>
-            <circle cx="300" cy="50" fill="#3b82f6" r="3"></circle>
-            <defs>
-              <linearGradient id="grad1" x1="0%" x2="100%" y1="100%" y2="0%">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0"></stop>
-                <stop offset="50%" stopColor="#8b5cf6" stopOpacity="1"></stop>
-                <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.5"></stop>
-              </linearGradient>
-              <linearGradient id="grad2" x1="0%" x2="100%" y1="100%" y2="0%">
-                <stop offset="0%" stopColor="#ec4899" stopOpacity="0"></stop>
-                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.8"></stop>
-              </linearGradient>
-            </defs>
-          </svg>
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/5 blur-[100px] rounded-full"></div>
+          <div className="absolute right-1/4 bottom-0 w-[400px] h-[200px] bg-purple-600/5 blur-[80px] rounded-full"></div>
         </div>
         <div className="relative z-10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-900/40 border border-cyan-500/30 text-cyan-400 text-xs font-semibold uppercase tracking-wide mb-4 backdrop-blur-sm">
+            <button 
+              onClick={() => setSearchParams({})}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-350 hover:text-white text-xs font-bold transition-all cursor-pointer mb-3.5"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Back to History
+            </button>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-widest mb-4 backdrop-blur-sm">
               <Trophy className="w-3.5 h-3.5" />
               Placement scorecard ready
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Performance Feedback Report</h1>
-            <p className="text-gray-400 text-sm">Your performance insights and improvement recommendations</p>
+            <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Performance Feedback Report</h1>
+            <p className="text-slate-400 text-sm">Your performance insights and improvement recommendations</p>
           </div>
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-4 shrink-0 print:hidden">
             <button 
               onClick={() => window.print()}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition-colors backdrop-blur-sm"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               Print Report
             </button>
-            <Link 
-              to="/dashboard" 
-              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-sm font-medium shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105"
+            <button 
+              onClick={() => setSearchParams({})}
+              className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-slate-800 border border-white/5 hover:bg-slate-700 text-white text-xs font-bold transition-all cursor-pointer"
             >
-              Open Dashboard
-              <ChevronRight className="w-4 h-4" />
-            </Link>
+              Close Report
+            </button>
           </div>
         </div>
       </section>
@@ -265,170 +755,86 @@ export default function FeedbackAnalysis() {
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         
         {/* Card 1: Overall Grade */}
-        <div className="bg-app-card rounded-2xl p-5 border border-cyan-500/20 shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-colors">
-          <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div className="bg-slate-900/20 rounded-3xl p-5 border border-cyan-500/20 shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-colors">
           <div className="flex justify-between items-start relative z-10">
             <div>
-              <div className="flex items-center gap-2 text-app-textSecondary text-xs font-semibold tracking-wider uppercase mb-3">
-                <Trophy className="w-4 h-4 text-cyan-450" />
+              <div className="flex items-center gap-2 text-slate-450 text-[10px] font-black tracking-wider uppercase mb-3">
+                <Trophy className="w-4 h-4 text-cyan-400" />
                 Overall Grade
               </div>
-              <div className="text-4xl font-bold text-white mb-1">{scorecard?.overallScore}%</div>
-              <div className="text-cyan-400 font-medium text-sm mb-4">Excellent</div>
+              <div className="text-4xl font-extrabold text-white mb-1">{scorecard?.overallScore}%</div>
+              <div className="text-cyan-400 font-bold text-xs mb-4">Excellent</div>
               <div className="flex items-center gap-1.5 text-xs">
-                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
-                <span className="text-green-500 font-medium">12%</span>
-                <span className="text-gray-500">vs last report</span>
+                <span className="text-green-500 font-bold">12%</span>
+                <span className="text-slate-500 font-medium">vs last report</span>
               </div>
             </div>
             {/* Circular Gauge */}
-            <div className="relative w-20 h-20 flex-shrink-0 glow-cyan rounded-full">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" fill="none" r="42" stroke="#1e293b" strokeWidth="8"></circle>
-                <circle 
-                  className="drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] transition-all duration-1000 ease-out" 
-                  cx="50" cy="50" fill="none" r="42" stroke="#06b6d4" 
-                  strokeDasharray={strokeCircumference} 
-                  strokeDashoffset={getStrokeDashOffset(scorecard?.overallScore || 82)} 
-                  strokeWidth="8"
-                ></circle>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-app-bg rounded-lg border border-cyan-500/30 flex items-center justify-center shadow-inner">
-                  <span className="text-xl font-bold text-cyan-400">A</span>
-                </div>
-              </div>
+            <div className="relative flex-shrink-0">
+              <MetricRing value={scorecard?.overallScore} size={80} strokeWidth={6} label="" color="cyan" animate />
             </div>
           </div>
         </div>
 
         {/* Card 2: Technical Score */}
-        <div className="bg-app-card rounded-2xl p-5 border border-purple-500/20 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-colors">
-          <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div className="bg-slate-900/20 rounded-3xl p-5 border border-purple-500/20 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-colors">
           <div className="flex justify-between items-start relative z-10">
             <div>
-              <div className="flex items-center gap-2 text-app-textSecondary text-xs font-semibold tracking-wider uppercase mb-3">
-                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
+              <div className="flex items-center gap-2 text-slate-450 text-[10px] font-black tracking-wider uppercase mb-3">
+                <Flame className="w-4 h-4 text-purple-400" />
                 Technical Score
               </div>
-              <div className="text-4xl font-bold text-white mb-1">{scorecard?.technicalScore}%</div>
-              <div className="text-gray-400 font-medium text-sm mb-4">Gaze Centered</div>
+              <div className="text-4xl font-extrabold text-white mb-1">{scorecard?.technicalScore}%</div>
+              <div className="text-purple-400 font-bold text-xs mb-4">Gaze Centered</div>
               <div className="flex items-center gap-1.5 text-xs">
-                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
-                <span className="text-green-500 font-medium">9%</span>
-                <span className="text-gray-500">vs last report</span>
+                <span className="text-green-500 font-bold">9%</span>
+                <span className="text-slate-500 font-medium">vs last report</span>
               </div>
             </div>
-            <div className="relative w-20 h-20 flex-shrink-0 glow-purple rounded-full">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" fill="none" r="42" stroke="#1e293b" strokeWidth="8"></circle>
-                <circle 
-                  className="drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" 
-                  cx="50" cy="50" fill="none" r="42" stroke="#a855f7" 
-                  strokeDasharray={strokeCircumference} 
-                  strokeDashoffset={getStrokeDashOffset(scorecard?.technicalScore || 84)} 
-                  strokeWidth="8"
-                ></circle>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-[#1a142c] rounded-full border border-purple-500/30 flex items-center justify-center shadow-inner">
-                  <span className="text-lg font-bold text-purple-400">&lt;/&gt;</span>
-                </div>
-              </div>
+            <div className="relative flex-shrink-0">
+              <MetricRing value={scorecard?.technicalScore} size={80} strokeWidth={6} label="" color="violet" animate />
             </div>
           </div>
         </div>
 
         {/* Card 3: Fluency Score */}
-        <div className="bg-app-card rounded-2xl p-5 border border-pink-500/20 shadow-lg relative overflow-hidden group hover:border-pink-500/40 transition-colors">
-          <div className="absolute inset-0 bg-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div className="bg-slate-900/20 rounded-3xl p-5 border border-pink-500/20 shadow-lg relative overflow-hidden group hover:border-pink-500/40 transition-colors">
           <div className="flex justify-between items-start relative z-10">
             <div>
-              <div className="flex items-center gap-2 text-app-textSecondary text-xs font-semibold tracking-wider uppercase mb-3">
-                <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
+              <div className="flex items-center gap-2 text-slate-450 text-[10px] font-black tracking-wider uppercase mb-3">
+                <Activity className="w-4 h-4 text-pink-400" />
                 Fluency Score
               </div>
-              <div className="text-4xl font-bold text-white mb-1">{scorecard?.communicationScore}%</div>
-              <div className="text-gray-400 font-medium text-sm mb-4">{scorecard?.averageWpm} Avg WPM</div>
+              <div className="text-4xl font-extrabold text-white mb-1">{scorecard?.communicationScore}%</div>
+              <div className="text-pink-400 font-bold text-xs mb-4">{scorecard?.averageWpm} Avg WPM</div>
               <div className="flex items-center gap-1.5 text-xs">
-                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
-                <span className="text-green-500 font-medium">8%</span>
-                <span className="text-gray-500">vs last report</span>
+                <span className="text-green-500 font-bold">8%</span>
+                <span className="text-slate-500 font-medium">vs last report</span>
               </div>
             </div>
-            <div className="relative w-20 h-20 flex-shrink-0 glow-pink rounded-full">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" fill="none" r="42" stroke="#1e293b" strokeWidth="8"></circle>
-                <circle 
-                  className="drop-shadow-[0_0_8px_rgba(236,72,153,0.8)]" 
-                  cx="50" cy="50" fill="none" r="42" stroke="#ec4899" 
-                  strokeDasharray={strokeCircumference} 
-                  strokeDashoffset={getStrokeDashOffset(scorecard?.communicationScore || 80)} 
-                  strokeWidth="8"
-                ></circle>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-[#2c141d] rounded-full border border-pink-500/30 flex items-center justify-center gap-0.5 shadow-inner">
-                  <div className="w-0.5 h-3 bg-pink-400 rounded-full"></div>
-                  <div className="w-0.5 h-5 bg-pink-400 rounded-full"></div>
-                  <div className="w-0.5 h-4 bg-pink-400 rounded-full"></div>
-                  <div className="w-0.5 h-6 bg-pink-400 rounded-full"></div>
-                  <div className="w-0.5 h-3 bg-pink-400 rounded-full"></div>
-                </div>
-              </div>
+            <div className="relative flex-shrink-0">
+              <MetricRing value={scorecard?.communicationScore} size={80} strokeWidth={6} label="" color="rose" animate />
             </div>
           </div>
         </div>
 
         {/* Card 4: Filler Words */}
-        <div className="bg-app-card rounded-2xl p-5 border border-orange-500/20 shadow-lg relative overflow-hidden group hover:border-orange-500/40 transition-colors">
-          <div className="absolute inset-0 bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div className="bg-slate-900/20 rounded-3xl p-5 border border-orange-500/20 shadow-lg relative overflow-hidden group hover:border-orange-500/40 transition-colors">
           <div className="flex justify-between items-start relative z-10">
             <div>
-              <div className="flex items-center gap-2 text-app-textSecondary text-xs font-semibold tracking-wider uppercase mb-3">
-                <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
+              <div className="flex items-center gap-2 text-slate-450 text-[10px] font-black tracking-wider uppercase mb-3">
+                <MessageSquare className="w-4 h-4 text-orange-400" />
                 Filler Words
               </div>
-              <div className="text-4xl font-bold text-white mb-1">{scorecard?.totalFillers}</div>
-              <div className="text-gray-400 font-medium text-sm mb-4">Um/Like/So logs</div>
+              <div className="text-4xl font-extrabold text-white mb-1">{scorecard?.totalFillers}</div>
+              <div className="text-orange-400 font-bold text-xs mb-4">Um/Like/So logs</div>
               <div className="flex items-center gap-1.5 text-xs">
-                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 14l-7 7m0 0l-7-7m7 7V3" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                </svg>
-                <span className="text-green-500 font-medium">3</span>
-                <span className="text-gray-500">vs last report</span>
+                <span className="text-green-500 font-bold">3 less</span>
+                <span className="text-slate-500 font-medium">vs last report</span>
               </div>
             </div>
-            <div className="relative w-20 h-20 flex-shrink-0 glow-orange rounded-full">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" fill="none" r="42" stroke="#1e293b" strokeWidth="8"></circle>
-                <circle 
-                  className="drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" 
-                  cx="50" cy="50" fill="none" r="42" stroke="#f59e0b" 
-                  strokeDasharray={strokeCircumference} 
-                  strokeDashoffset={264 - (264 * Math.min(30, scorecard?.totalFillers || 6)) / 30} 
-                  strokeWidth="8"
-                ></circle>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-[#2c2014] rounded-full border border-orange-500/30 flex items-center justify-center shadow-inner">
-                  <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                  </svg>
-                </div>
-              </div>
+            <div className="relative flex-shrink-0">
+              <MetricRing value={100 - (scorecard?.totalFillers || 6) * 5} size={80} strokeWidth={6} label="" color="amber" animate />
             </div>
           </div>
         </div>
@@ -438,7 +844,7 @@ export default function FeedbackAnalysis() {
       <section className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
         {/* Behavioral & Eye Gaze Analytics */}
-        <div className="lg:col-span-3 bg-app-card rounded-2xl border border-app-border p-6 shadow-lg">
+        <div className="lg:col-span-3 bg-slate-900/20 rounded-3xl border border-white/5 p-6 shadow-lg text-left">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,88 +852,92 @@ export default function FeedbackAnalysis() {
                 <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-white tracking-wide">Behavioral & Eye Gaze Analytics</h3>
+            <h3 className="text-base font-bold text-white tracking-wide">Behavioral & Eye Gaze Analytics</h3>
           </div>
           <div className="space-y-6">
             {/* Metric 1 */}
             <div>
               <div className="flex justify-between items-end mb-2">
-                <span className="text-sm font-medium text-gray-300">Camera Eye Alignment Gaze Score</span>
+                <span className="text-xs font-semibold text-slate-300">Camera Eye Alignment Gaze Score</span>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-white">{scorecard?.eyeContactScore}%</span>
-                  <p className="text-xs text-cyan-400 font-medium">Excellent</p>
+                  <span className="text-sm font-bold text-white">{scorecard?.eyeContactScore}%</span>
+                  <p className="text-[10px] text-cyan-400 font-bold">Excellent</p>
                 </div>
               </div>
-              <div className="w-full bg-[#1e293b] rounded-full h-2.5 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2.5 rounded-full drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" style={{ width: `${scorecard?.eyeContactScore || 88}%` }}></div>
+              <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" style={{ width: `${scorecard?.eyeContactScore || 88}%` }}></div>
               </div>
             </div>
             {/* Metric 2 */}
             <div>
               <div className="flex justify-between items-end mb-2">
-                <span className="text-sm font-medium text-gray-300">Estimated Stress Index (Pace / Voice jitter)</span>
+                <span className="text-xs font-semibold text-slate-300">Estimated Stress Index (Pace / Voice jitter)</span>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-white">{scorecard?.stressScore}%</span>
-                  <p className="text-xs text-green-400 font-medium">Low</p>
+                  <span className="text-sm font-bold text-white">{scorecard?.stressScore}%</span>
+                  <p className="text-[10px] text-green-400 font-bold">Low</p>
                 </div>
               </div>
-              <div className="w-full bg-[#1e293b] rounded-full h-2.5 overflow-hidden">
-                <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-2.5 rounded-full drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]" style={{ width: `${scorecard?.stressScore || 18}%` }}></div>
+              <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden">
+                <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-2 rounded-full drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]" style={{ width: `${scorecard?.stressScore || 18}%` }}></div>
               </div>
             </div>
             {/* Insight Box */}
-            <div className="mt-8 bg-blue-900/10 border border-blue-500/20 rounded-xl p-4 flex gap-4 items-start">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className="mt-8 bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 flex gap-4 items-start">
+              <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4z"></path>
                 </svg>
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-blue-400 mb-1">Insight</h4>
-                <p className="text-sm text-gray-300 leading-relaxed">Great eye alignment! Your stress levels are low. Keep maintaining a steady pace.</p>
+                <h4 className="text-xs font-extrabold text-blue-400 uppercase tracking-wider mb-1">Behavioral Insight</h4>
+                <p className="text-xs text-slate-300 leading-relaxed font-semibold">Great eye alignment! Your stress levels are low. Keep maintaining a steady pace.</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* AI Recommendations */}
-        <div className="lg:col-span-2 bg-app-card rounded-2xl border border-app-border p-6 shadow-lg flex flex-col">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-              </svg>
+        <div className="lg:col-span-2 bg-slate-900/20 rounded-3xl border border-white/5 p-6 shadow-lg flex flex-col justify-between text-left">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-white tracking-wide">AI Recommendations</h3>
             </div>
-            <h3 className="text-lg font-bold text-white tracking-wide">AI Placement Recommendations</h3>
-          </div>
-          <div className="space-y-3 flex-1">
-            {scorecard?.recommendations && scorecard.recommendations.length > 0 ? (
-              scorecard.recommendations.map((rec, i) => {
-                const details = getRecommendationDetails(rec, i);
-                return (
-                  <div 
-                    key={i} 
-                    onClick={() => setShowRecsModal(true)}
-                    className="bg-[#1a1e2b] border border-white/5 rounded-xl p-4 flex items-center gap-4 hover:bg-[#1f2433] transition-colors cursor-pointer group"
-                  >
-                    <div className={`w-10 h-10 rounded-lg ${details.bgColor} flex items-center justify-center flex-shrink-0`}>
-                      {details.icon}
+
+            <div className="space-y-3">
+              {scorecard?.recommendations && scorecard.recommendations.length > 0 ? (
+                scorecard.recommendations.map((rec, i) => {
+                  const details = getRecommendationDetails(rec, i);
+                  return (
+                    <div 
+                      key={i} 
+                      onClick={() => setShowRecsModal(true)}
+                      className="bg-[#101420] border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 hover:bg-[#151928] transition-colors cursor-pointer group"
+                    >
+                      <div className={`w-9 h-9 rounded-xl ${details.bgColor} flex items-center justify-center flex-shrink-0`}>
+                        {details.icon}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold text-white mb-0.5">{details.title}</h4>
+                        <p className="text-[11px] text-slate-400 leading-snug font-medium">{rec}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
                     </div>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-white mb-0.5">{details.title}</h4>
-                      <p className="text-[12px] text-gray-400 leading-snug">{rec}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-sm text-gray-450 italic p-4">No specific recommendations computed.</div>
-            )}
+                  );
+                })
+              ) : (
+                <div className="text-xs text-slate-500 italic p-4">No recommendations computed.</div>
+              )}
+            </div>
           </div>
+
           <button 
             onClick={() => setShowRecsModal(true)}
-            className="mt-4 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium py-2.5 rounded-lg transition-all shadow-[0_0_15px_rgba(99,102,241,0.2)] flex justify-center items-center gap-2"
+            className="mt-4 w-full bg-slate-800 border border-white/5 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl transition-all flex justify-center items-center gap-1.5 text-xs cursor-pointer"
           >
             View All Recommendations
             <ChevronRight className="w-4 h-4" />
@@ -536,84 +946,75 @@ export default function FeedbackAnalysis() {
       </section>
 
       {/* Flashcards Carousel */}
-      <section className="space-y-4">
+      <section className="space-y-4 print:hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
             </svg>
-            <h3 className="text-lg font-bold text-white">AI-generated study Flip Flashcards</h3>
+            <h3 className="text-base font-bold text-white">AI-generated study Flip Flashcards</h3>
           </div>
           <button 
             onClick={() => setShowFlashcardsModal(true)}
-            className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"
+            className="text-xs font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 cursor-pointer"
           >
             View All Flashcards
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
         
-        <div className="relative group">
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {flashcardsList.map((fc, index) => {
-              const isFlipped = !!flippedCards[index];
-              return (
-                <div 
-                  key={index} 
-                  onClick={() => toggleFlip(index)}
-                  className="h-44 perspective-1000 cursor-pointer"
-                >
-                  <div className={`w-full h-full relative transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
-                    {/* Front Side */}
-                    <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${fc.colorClass} rounded-2xl p-5 flex flex-col justify-between backface-hidden shadow-lg border overflow-hidden group/card`}>
-                      <div className={`absolute -right-10 -top-10 w-32 h-32 ${fc.glowColor} blur-2xl rounded-full`}></div>
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="px-2 py-0.5 rounded bg-white/10 border border-white/5 text-[10px] font-medium text-purple-200 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3 text-cyan-400" />
-                            Question
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-purple-500/20 text-[10px] font-medium text-purple-300">{fc.topic}</span>
-                        </div>
-                        <h4 className="text-white font-medium text-sm leading-snug pr-4">{fc.question}</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {flashcardsList.map((fc, index) => {
+            const isFlipped = !!flippedCards[index];
+            return (
+              <div 
+                key={index} 
+                onClick={() => toggleFlip(index)}
+                className="h-44 perspective-1000 cursor-pointer text-left"
+              >
+                <div className={`w-full h-full relative transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                  {/* Front Side */}
+                  <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${fc.colorClass} rounded-3xl p-5 flex flex-col justify-between backface-hidden shadow-lg border overflow-hidden`}>
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-2 py-0.5 rounded-lg bg-white/10 border border-white/5 text-[9px] font-bold text-purple-200 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-cyan-455 animate-pulse" />
+                          Question
+                        </span>
+                        <span className="px-2 py-0.5 rounded-lg bg-purple-500/20 text-[9px] font-bold text-purple-305">{fc.topic}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400 group-hover/card:text-white transition-colors relative z-10">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-                        </svg>
-                        Tap to flip
-                      </div>
+                      <h4 className="text-white font-bold text-xs leading-relaxed">{fc.question}</h4>
                     </div>
+                    <div className="text-[10px] text-slate-500 font-bold">Tap to flip answer</div>
+                  </div>
 
-                    {/* Back Side (Explanation) */}
-                    <div className="absolute inset-0 w-full h-full bg-[#120e29] border border-purple-500/30 rounded-2xl p-5 flex flex-col justify-between backface-hidden rotate-y-180 shadow-lg">
-                      <div>
-                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-cyan-400 block mb-2">AI Answer / Explanation</span>
-                        <p className="text-xs text-slate-350 leading-relaxed font-medium">
-                          {fc.answer}
-                        </p>
-                      </div>
-                      <span className="text-[9px] text-purple-400 font-bold text-center">TAP TO ROTATE BACK</span>
+                  {/* Back Side (Explanation) */}
+                  <div className="absolute inset-0 w-full h-full bg-[#120e29] border border-purple-500/30 rounded-3xl p-5 flex flex-col justify-between backface-hidden rotate-y-180 shadow-lg text-left">
+                    <div>
+                      <span className="text-[8px] uppercase tracking-widest font-black text-cyan-405 block mb-2">AI Explanation</span>
+                      <p className="text-xs text-slate-350 leading-relaxed font-semibold">
+                        {fc.answer}
+                      </p>
                     </div>
+                    <span className="text-[8px] text-purple-400 font-black text-center uppercase tracking-wider">TAP TO ROTATE BACK</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* Custom Gap Mini Quiz */}
-      <section className="bg-app-card rounded-3xl p-6 sm:p-8 border border-app-border space-y-6">
+      <section className="bg-slate-900/20 rounded-3xl p-6 sm:p-8 border border-white/5 space-y-6 print:hidden text-left">
         <div>
-          <span className="text-[10px] font-bold text-accent-purple uppercase tracking-widest">Adaptive Learning</span>
+          <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest pl-1">Adaptive Learning</span>
           <h3 className="text-lg font-bold text-white mt-0.5">Custom Gap Mini Quiz</h3>
         </div>
 
         <div className="space-y-6">
           {miniQuiz.map((item, idx) => (
-            <div key={idx} className="space-y-3 p-5 rounded-2xl bg-[#1a1e2b] border border-white/5 text-xs">
+            <div key={idx} className="space-y-3 p-5 rounded-2xl bg-[#101420] border border-white/5 text-xs text-left">
               <div className="font-bold text-slate-200 leading-normal flex gap-2 items-start">
                 <HelpCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                 <span>Question {idx + 1}: {item.q}</span>
@@ -626,10 +1027,10 @@ export default function FeedbackAnalysis() {
                       key={oIdx}
                       disabled={quizSubmitted}
                       onClick={() => setQuizAnswers(prev => ({ ...prev, [idx]: oIdx }))}
-                      className={`p-3.5 rounded-xl border text-left font-medium transition-all ${
+                      className={`p-3.5 rounded-xl border text-left font-bold transition-all cursor-pointer ${
                         isSelected 
-                          ? 'bg-accent-purple/10 border-accent-purple/40 text-purple-300' 
-                          : 'bg-[#0f131a] border-white/5 text-slate-400 hover:text-slate-200 hover:bg-[#181d29]'
+                          ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' 
+                          : 'bg-[#0a0d14] border-white/5 text-slate-400 hover:text-white hover:bg-[#121622]'
                       }`}
                     >
                       {opt}
@@ -641,9 +1042,9 @@ export default function FeedbackAnalysis() {
               {quizSubmitted && (
                 <div className="pt-2 text-[10px] leading-normal font-semibold">
                   {quizAnswers[idx] === item.correctIndex ? (
-                    <span className="text-emerald-400">✔ Correct!</span>
+                    <span className="text-emerald-450">✔ Correct!</span>
                   ) : (
-                    <span className="text-rose-400">❌ Incorrect. Correct answer: {item.options[item.correctIndex]}</span>
+                    <span className="text-rose-455">❌ Incorrect. Correct answer: {item.options[item.correctIndex]}</span>
                   )}
                   <p className="text-slate-500 font-normal mt-1 leading-normal">{item.explanation}</p>
                 </div>
@@ -654,7 +1055,7 @@ export default function FeedbackAnalysis() {
           {!quizSubmitted ? (
             <button
               onClick={handleQuizSubmit}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 px-6 py-3 rounded-xl text-xs font-bold text-white shadow shadow-purple-500/10 flex items-center gap-1.5 transition-all"
+              className="bg-glow-gradient px-6 py-3.5 rounded-xl text-xs font-bold text-white shadow shadow-purple-500/10 flex items-center gap-1.5 transition-all cursor-pointer"
             >
               Submit Quiz Answers
             </button>
@@ -663,7 +1064,7 @@ export default function FeedbackAnalysis() {
               <span>Quiz Complete! Score: {quizScore} / {miniQuiz.length}</span>
               <button 
                 onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }}
-                className="text-[10px] bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300 hover:text-slate-100 transition-all flex items-center gap-1"
+                className="text-[10px] bg-slate-900 border border-white/5 px-3 py-1.5 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Retry Quiz
               </button>
@@ -673,105 +1074,116 @@ export default function FeedbackAnalysis() {
       </section>
 
       {/* --- MODALS FOR INTERACTIVE WORKINGS --- */}
-      
-      {/* 1. Recommendations Modal */}
-      {showRecsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-app-card border border-app-border w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]">
-            <div className="p-6 border-b border-app-border flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-purple-400" />
-                <h3 className="text-lg font-bold text-white">Full Placement Recommendations</h3>
+      <AnimatePresence>
+        {/* 1. Recommendations Modal */}
+        {showRecsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 print:hidden">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#0b0f19] border border-white/5 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh] text-left"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-purple-400" />
+                  <h3 className="text-base font-bold text-white">Full Placement Recommendations</h3>
+                </div>
+                <button onClick={() => setShowRecsModal(false)} className="p-1.5 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button onClick={() => setShowRecsModal(false)} className="p-1 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto space-y-4">
-              <p className="text-sm text-app-textSecondary leading-normal">
-                Our AI has calculated these custom targets to improve your hiring probability based on your session's eye tracking, speaking pace, and coding metrics:
-              </p>
-              <div className="space-y-3">
-                {scorecard?.recommendations.map((rec, i) => {
-                  const details = getRecommendationDetails(rec, i);
-                  return (
-                    <div key={i} className="p-4 rounded-xl bg-[#1a1e2b] border border-white/5 flex gap-4 items-start">
-                      <div className={`w-10 h-10 rounded-lg ${details.bgColor} flex items-center justify-center shrink-0`}>
-                        {details.icon}
+              <div className="p-6 overflow-y-auto space-y-4">
+                <p className="text-xs text-slate-450 leading-normal font-semibold">
+                  Our AI has calculated these custom targets to improve your hiring probability based on your session's eye tracking, speaking pace, and coding metrics:
+                </p>
+                <div className="space-y-3">
+                  {scorecard?.recommendations.map((rec, i) => {
+                    const details = getRecommendationDetails(rec, i);
+                    return (
+                      <div key={i} className="p-4 rounded-2xl bg-[#101420] border border-white/5 flex gap-4 items-start">
+                        <div className={`w-10 h-10 rounded-xl ${details.bgColor} flex items-center justify-center shrink-0`}>
+                          {details.icon}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-white mb-1">{details.title}</h4>
+                          <p className="text-[11px] text-slate-350 leading-relaxed font-semibold">{rec}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-white mb-1">{details.title}</h4>
-                        <p className="text-xs text-slate-300 leading-relaxed">{rec}</p>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="p-4 bg-[#070b13] border-t border-white/5 text-right">
+                <button onClick={() => setShowRecsModal(false)} className="bg-slate-800 border border-white/5 text-white font-bold py-2 px-5 rounded-xl text-xs hover:bg-slate-700 cursor-pointer">
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 2. Flashcards Modal */}
+        {showFlashcardsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 print:hidden">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#0b0f19] border border-white/5 w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh] text-left"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                  <h3 className="text-base font-bold text-white">AI study Flashcards Bank</h3>
+                </div>
+                <button onClick={() => setShowFlashcardsModal(false)} className="p-1.5 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                {flashcardsList.map((fc, index) => {
+                  const isFlipped = !!flippedCards[`modal_${index}`];
+                  return (
+                    <div 
+                      key={index} 
+                      onClick={() => setFlippedCards(prev => ({ ...prev, [`modal_${index}`]: !isFlipped }))}
+                      className="h-44 perspective-1000 cursor-pointer text-left"
+                    >
+                      <div className={`w-full h-full relative transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                        {/* Front Side */}
+                        <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${fc.colorClass} rounded-3xl p-5 flex flex-col justify-between backface-hidden shadow-lg border overflow-hidden`}>
+                          <div className="relative z-10">
+                            <span className="px-2 py-0.5 rounded bg-purple-500/20 text-[9px] font-bold text-purple-300">{fc.topic}</span>
+                            <h4 className="text-white font-bold text-xs leading-normal mt-3">{fc.question}</h4>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-bold">CLICK TO FLIP</div>
+                        </div>
+
+                        {/* Back Side */}
+                        <div className="absolute inset-0 w-full h-full bg-[#120e29] border border-purple-500/30 rounded-3xl p-5 flex flex-col justify-between backface-hidden rotate-y-180 shadow-lg text-left">
+                          <div>
+                            <span className="text-[8px] uppercase tracking-widest font-black text-cyan-400 block mb-2">{fc.topic} - AI Answer</span>
+                            <p className="text-xs text-slate-350 leading-relaxed font-semibold">
+                              {fc.answer}
+                            </p>
+                          </div>
+                          <span className="text-[8px] text-purple-400 font-black uppercase tracking-wider">TAP TO ROTATE BACK</span>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-            <div className="p-4 bg-[#0f131a] border-t border-app-border text-right">
-              <button onClick={() => setShowRecsModal(false)} className="bg-gradient-to-r from-blue-600 to-purple-650 text-white font-semibold py-2 px-5 rounded-lg text-xs hover:opacity-90">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Flashcards Modal */}
-      {showFlashcardsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-app-card border border-app-border w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-app-border flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-lg font-bold text-white">AI study Flashcards Bank</h3>
+              <div className="p-4 bg-[#070b13] border-t border-white/5 text-right">
+                <button onClick={() => setShowFlashcardsModal(false)} className="bg-slate-800 border border-white/5 text-white font-bold py-2 px-5 rounded-xl text-xs hover:bg-slate-700 cursor-pointer">
+                  Close
+                </button>
               </div>
-              <button onClick={() => setShowFlashcardsModal(false)} className="p-1 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-              {flashcardsList.map((fc, index) => {
-                const isFlipped = !!flippedCards[`modal_${index}`];
-                return (
-                  <div 
-                    key={index} 
-                    onClick={() => setFlippedCards(prev => ({ ...prev, [`modal_${index}`]: !isFlipped }))}
-                    className="h-44 perspective-1000 cursor-pointer"
-                  >
-                    <div className={`w-full h-full relative transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
-                      {/* Front Side */}
-                      <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${fc.colorClass} rounded-2xl p-5 flex flex-col justify-between backface-hidden shadow-lg border overflow-hidden`}>
-                        <div className="relative z-10">
-                          <span className="px-2 py-0.5 rounded bg-purple-500/20 text-[9px] font-bold text-purple-300">{fc.topic}</span>
-                          <h4 className="text-white font-bold text-sm leading-snug mt-3">{fc.question}</h4>
-                        </div>
-                        <div className="text-xs text-purple-300/80 font-bold">CLICK TO FLIP</div>
-                      </div>
-
-                      {/* Back Side */}
-                      <div className="absolute inset-0 w-full h-full bg-[#120e29] border border-purple-500/30 rounded-2xl p-5 flex flex-col justify-between backface-hidden rotate-y-180 shadow-lg">
-                        <div>
-                          <span className="text-[9px] uppercase tracking-wider font-extrabold text-cyan-400 block mb-2">{fc.topic} - AI Answer</span>
-                          <p className="text-xs text-slate-350 leading-relaxed font-semibold">
-                            {fc.answer}
-                          </p>
-                        </div>
-                        <span className="text-[9px] text-purple-400 font-bold">CLICK TO FLIP FRONT</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-4 bg-[#0f131a] border-t border-app-border text-right">
-              <button onClick={() => setShowFlashcardsModal(false)} className="bg-gradient-to-r from-blue-600 to-purple-650 text-white font-semibold py-2 px-5 rounded-lg text-xs hover:opacity-90">
-                Close
-              </button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
     </div>
   );

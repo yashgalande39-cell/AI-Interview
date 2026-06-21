@@ -1,5 +1,7 @@
 const mockDb = require('../models/mockDb');
-const openRouterAI = require('../services/openRouter');
+const { generateInterviewQuestions, generateFollowUp } = require('../services/ai/interviewAgent');
+const { evaluateAnswer } = require('../services/ai/scoringEngine');
+const { generatePerformanceFeedback } = require('../services/ai/feedbackEngine');
 
 // Dynamic rule-based question synthesizer that mimics a world-class AI interviewer when Gemini is unavailable.
 // It parses the structured fields from real or mock resumes and generates genuine, highly tailored questions.
@@ -63,7 +65,7 @@ const synthesizeResumeQuestions = (type, difficulty, role, company, resume) => {
 const generateAIQuestions = async (type, difficulty, role, company, language, resumeText, resumeObj) => {
   // 1. Try OpenRouter first (best quality — LLaMA 3.3 70B)
   try {
-    const questions = await openRouterAI.generateInterviewQuestions(
+    const questions = await generateInterviewQuestions(
       type, difficulty, role, company, language, resumeText
     );
     if (Array.isArray(questions) && questions.length >= 3) {
@@ -318,7 +320,7 @@ exports.submitAnswer = async (req, res) => {
     // === AI-Powered Answer Evaluation (OpenRouter) ===
     let aiEvaluation = null;
     try {
-      aiEvaluation = await openRouterAI.evaluateAnswer(
+      aiEvaluation = await evaluateAnswer(
         qText,
         answerText,
         session.type,
@@ -372,7 +374,7 @@ exports.submitAnswer = async (req, res) => {
     let aiFollowUp = null;
     if (!isCompleted && finalAnswerScore > 0) {
       try {
-        aiFollowUp = await openRouterAI.generateFollowUp(
+        aiFollowUp = await generateFollowUp(
           qText, answerText, finalAnswerScore, session.role || 'Software Engineer'
         );
       } catch (_) { /* follow-up is optional */ }
@@ -425,8 +427,24 @@ exports.finishSession = async (req, res) => {
       return res.status(404).json({ message: "Interview session not found" });
     }
 
+    // If session was exited early (no answers), build a minimal fallback scorecard
     if (session.transcript.length === 0) {
-      return res.status(400).json({ message: "No transcript data available to calculate final scores" });
+      const fallbackScore = {
+        overallScore: 0,
+        technicalScore: 0,
+        communicationScore: 0,
+        eyeContactScore: 0,
+        averageWpm: 0,
+        stressScore: 0,
+        totalFillers: 0,
+        weakTopics: ['Interview Completion', 'Answer Depth'],
+        recommendations: ['Complete all interview questions to receive a full performance scorecard.', 'Practice answering at least 3-5 questions per session for meaningful metrics.'],
+        flashcards: [],
+        completedAt: new Date().toISOString(),
+        note: 'Incomplete session — no answers were submitted.'
+      };
+      mockDb.interviews.updateOne({ id: sessionId }, { status: 'completed', scoreCard: fallbackScore });
+      return res.status(200).json({ message: 'Session ended (no answers)', scoreCard: fallbackScore });
     }
 
     // Compute averages
@@ -497,7 +515,7 @@ exports.finishSession = async (req, res) => {
     // === AI-Powered Performance Feedback (OpenRouter) ===
     let aiPerformanceFeedback = null;
     try {
-      aiPerformanceFeedback = await openRouterAI.generatePerformanceFeedback(
+      aiPerformanceFeedback = await generatePerformanceFeedback(
         scoreCard, session.role || 'Software Engineer', session.type || 'Technical'
       );
       console.log(`✅ OpenRouter generated personalized performance feedback`);

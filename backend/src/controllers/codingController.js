@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const mockDb = require('../models/mockDb');
 const vm = require('vm');
-const openRouterAI = require('../services/openRouter');
+const { reviewCode } = require('../services/ai/scoringEngine');
 
 const QUESTIONS_PATH = path.join(__dirname, '../../data/dsa_questions.json');
 let dsaQuestions = [];
@@ -273,7 +273,7 @@ exports.submitCode = async (req, res) => {
       // === AI Code Review (OpenRouter) ===
       let aiReview = null;
       try {
-        aiReview = await openRouterAI.reviewCode(
+        aiReview = await reviewCode(
           code,
           language,
           challenge.title,
@@ -296,7 +296,7 @@ exports.submitCode = async (req, res) => {
       // === AI Hint for failed submissions (OpenRouter) ===
       let aiReview = null;
       try {
-        aiReview = await openRouterAI.reviewCode(
+        aiReview = await reviewCode(
           code,
           language,
           challenge.title,

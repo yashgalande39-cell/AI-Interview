@@ -1,6 +1,6 @@
 const mockDb = require('../models/mockDb');
 const pdfParse = require('pdf-parse');
-const openRouterAI = require('../services/openRouter');
+const { generateATSSuggestions, parseResumeText } = require('../services/ai/resumeAnalyzer');
 
 const computeATSAnalysis = (data) => {
   const { name, email, phone, role, skills, experience, projects, education } = data;
@@ -193,7 +193,7 @@ exports.analyzeResume = async (req, res) => {
 
     // === AI-Powered ATS Suggestions (OpenRouter) ===
     try {
-      const aiSuggestions = await openRouterAI.generateATSSuggestions(
+      const aiSuggestions = await generateATSSuggestions(
         { name, email, phone, skills, experience, projects, education },
         role,
         analysis.atsScore,
@@ -265,7 +265,7 @@ exports.uploadResume = async (req, res) => {
     let parsedWithAI = false;
 
     try {
-      parsedData = await openRouterAI.parseResumeText(rawText);
+      parsedData = await parseResumeText(rawText);
       parsedWithAI = true;
       console.log(`✅ OpenRouter parsed resume for: ${parsedData.name}`);
     } catch (e) {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Lock, Building, GraduationCap, Calendar, AlertCircle, ArrowRight, Eye, EyeOff, Mic, BarChart2, Code, Target } from 'lucide-react';
+import { User, Mail, Lock, Building, GraduationCap, Calendar, AlertCircle, ArrowRight, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-// Google "G" SVG Logo
-function GoogleLogo({ size = 20 }) {
+function GoogleLogo({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -15,19 +15,27 @@ function GoogleLogo({ size = 20 }) {
   );
 }
 
+const STATS = [
+  { value: '50K+', label: 'Students Trained' },
+  { value: '98%',  label: 'Success Rate' },
+  { value: '4.9',  label: 'User Rating' },
+];
+
+const COMPANIES = ['Google', 'Amazon', 'Microsoft', 'Meta', 'Netflix', 'Apple'];
+
 export default function Register() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [collegeName, setCollegeName] = useState('');
-  const [branch, setBranch] = useState('');
+  const [name, setName]                     = useState('');
+  const [email, setEmail]                   = useState('');
+  const [password, setPassword]             = useState('');
+  const [collegeName, setCollegeName]       = useState('');
+  const [branch, setBranch]                 = useState('');
   const [graduationYear, setGraduationYear] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError]                   = useState('');
+  const [loading, setLoading]               = useState(false);
+  const [googleLoading, setGoogleLoading]   = useState(false);
+  const [showPassword, setShowPassword]     = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,151 +66,142 @@ export default function Register() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-76px)] flex items-center justify-center p-6 lg:p-12 overflow-hidden bg-[#0d0620] text-[#e2e8f0]">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-grid z-0"></div>
-      <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] glow-ring z-0 opacity-40"></div>
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] glow-circle z-0 translate-x-1/4 -translate-y-1/4"></div>
-      <div className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-[#0a0518] to-transparent z-0"></div>
-      {/* Subtle stars/dots */}
-      <div className="absolute inset-0 z-0 opacity-50" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '100px 100px' }}></div>
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden pb-12" style={{ background: 'var(--bg)' }}>
+      {/* Background layers */}
+      <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 65%)' }} />
+      <div className="absolute top-0 left-0 w-96 h-96 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)', transform: 'translate(-40%, -40%)' }} />
+      <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)', transform: 'translate(30%, 30%)' }} />
 
-      <main className="relative z-10 w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-12 lg:gap-24 items-center">
-        {/* Left Content Section */}
-        <section className="flex-1 w-full flex flex-col gap-10 text-left">
-          {/* Header */}
+      <motion.main
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-12 px-6 py-12 items-center"
+      >
+        {/* Left — Branding */}
+        <div className="flex-1 w-full flex flex-col gap-8 text-left hidden lg:flex">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <span className="text-white font-bold text-xl tracking-tight">InterviewAI</span>
+          </div>
+
           <div>
-            <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight mb-4 text-gradient-primary pb-2">
-              Interview Success
+            <h1 className="text-4xl font-extrabold tracking-tight text-white leading-tight">
+              Create your account &<br/>
+              <span className="text-gradient">build confidence.</span>
             </h1>
-            <p className="text-lg lg:text-xl text-slate-300 max-w-md">
-              Practice smarter. Get real-time feedback.<br/>
-              Crack more interviews with confidence.
+            <p className="text-slate-400 mt-3 text-base leading-relaxed max-w-sm">
+              Practice with AI interviewers. Get real feedback. Track progress. Confidently walk into any interview.
             </p>
           </div>
 
-          {/* Features List */}
-          <div className="flex flex-col gap-8 mt-4">
-            <div className="flex gap-4 items-start">
-              <div className="icon-box text-purple-400 shrink-0"><Mic className="w-6 h-6" /></div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1">AI Interviewer</h3>
-                <p className="text-sm text-slate-400 max-w-sm">Realistic AI conversations tailored to your role and experience.</p>
+          {/* Stats */}
+          <div className="flex gap-6">
+            {STATS.map(s => (
+              <div key={s.label}>
+                <div className="text-2xl font-bold text-white">{s.value}</div>
+                <div className="text-xs text-slate-500 font-medium mt-0.5">{s.label}</div>
               </div>
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="icon-box text-blue-400 shrink-0"><BarChart2 className="w-6 h-6" /></div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1">Smart Analytics</h3>
-                <p className="text-sm text-slate-400 max-w-sm">Detailed insights to improve your communication and performance.</p>
-              </div>
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="icon-box text-fuchsia-400 shrink-0"><Code className="w-6 h-6" /></div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1">Coding Practice</h3>
-                <p className="text-sm text-slate-400 max-w-sm">Solve real coding problems with AI-powered hints and analysis.</p>
-              </div>
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="icon-box text-teal-400 shrink-0"><Target className="w-6 h-6" /></div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1">Track Progress</h3>
-                <p className="text-sm text-slate-400 max-w-sm">Monitor your improvement and stay interview ready.</p>
-              </div>
+            ))}
+          </div>
+
+          {/* Trusted */}
+          <div>
+            <p className="text-xs text-slate-600 mb-3 font-medium uppercase tracking-wider">Trusted by professionals at</p>
+            <div className="flex flex-wrap gap-4">
+              {COMPANIES.map(c => (
+                <span key={c} className="text-sm font-bold text-slate-600 hover:text-slate-400 transition-colors cursor-default">{c}</span>
+              ))}
             </div>
           </div>
 
-          {/* Stats Footer */}
-          <div className="glass-card rounded-2xl p-6 mt-8 max-w-xl">
-            <div className="flex flex-wrap items-center gap-8 mb-6">
-              <div className="avatar-stack">
-                <div className="bg-orange-500"></div>
-                <div className="bg-blue-400"></div>
-                <div className="bg-teal-400"></div>
-                <div className="bg-fuchsia-400 flex items-center justify-center text-[10px] font-bold text-white">+50K</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-white">50,000+</div>
-                <div className="text-[10px] font-semibold text-slate-400 tracking-wider">STUDENTS TRAINED</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-white">98%</div>
-                <div className="text-[10px] font-semibold text-slate-400 tracking-wider">SUCCESS RATE</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-white">4.9/5</div>
-                <div className="text-[10px] font-semibold text-slate-400 tracking-wider">USER RATING</div>
-              </div>
-            </div>
-            <div className="border-t border-white/10 pt-4">
-              <p className="text-xs text-slate-400 mb-3">Trusted by students and professionals at</p>
-              <div className="flex gap-6 items-center opacity-70 grayscale flex-wrap">
-                <span className="font-bold text-sm text-white">Google</span>
-                <span className="font-bold text-sm lowercase text-white">amazon</span>
-                <span className="font-bold text-sm text-white">Microsoft</span>
-                <span className="font-bold text-sm text-white">Meta</span>
-                <span className="font-bold text-sm tracking-widest text-red-500 grayscale-0">NETFLIX</span>
-              </div>
-            </div>
+          {/* Feature badges */}
+          <div className="flex flex-wrap gap-2 mt-2">
+            {['Voice AI Interviews', 'Real-time Feedback', 'Coding Arena', 'Resume Analyzer', 'Career Roadmap'].map(f => (
+              <span key={f}
+                className="text-[11px] font-medium px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
+                {f}
+              </span>
+            ))}
           </div>
-        </section>
+        </div>
 
-        {/* Right Register Form Section */}
-        <section className="w-full max-w-lg relative z-10">
-          <div className="glass-card glass-card-glow rounded-3xl p-8 lg:p-10">
-            <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-white mb-2">
-                <span className="text-gradient-primary">Create</span> Account 🚀
-              </h2>
-              <p className="text-sm text-slate-400">Join 50,000+ students and prepare for your dream tech role.</p>
+        {/* Right — Form Container */}
+        <div className="w-full max-w-2xl">
+          <div className="rounded-2xl p-8 lg:p-9"
+            style={{
+              background: 'rgba(13,18,32,0.9)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1)',
+            }}>
+
+            {/* Mobile logo */}
+            <div className="flex items-center gap-2 mb-6 lg:hidden">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>
+                <Sparkles size={16} className="text-white" />
+              </div>
+              <span className="text-white font-bold text-lg">InterviewAI</span>
             </div>
 
+            <h2 className="text-2xl font-bold text-white mb-1">Create Account 🚀</h2>
+            <p className="text-slate-500 text-sm mb-6">Join 50,000+ students and prepare for your dream tech role.</p>
+
+            {/* Alerts */}
             {error && (
-              <div className="flex items-center gap-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-xs mb-6 font-semibold">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm mb-5 font-medium"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+                <AlertCircle size={15} className="flex-shrink-0" />{error}
               </div>
             )}
 
-            {/* Google Sign Up — Quick Option */}
+            {/* Google SignUp Button */}
             <button
               id="google-signup-btn"
               onClick={handleGoogleSignUp}
               disabled={googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-all duration-200 disabled:opacity-50 mb-6 shadow-lg hover:shadow-white/5"
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-white font-semibold text-sm transition-all mb-5 disabled:opacity-50"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
             >
               {googleLoading ? (
-                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <GoogleLogo size={20} />
+                <GoogleLogo size={18} />
               )}
               {googleLoading ? 'Signing up with Google...' : 'Sign up with Google'}
             </button>
 
             {/* Divider */}
             <div className="relative flex items-center mb-5">
-              <div className="flex-grow border-t border-white/10"></div>
-              <span className="flex-shrink-0 mx-4 text-[10px] font-semibold text-slate-500 tracking-widest uppercase">Or register with email</span>
-              <div className="flex-grow border-t border-white/10"></div>
+              <div className="flex-grow h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+              <span className="flex-shrink-0 mx-4 text-[11px] font-semibold text-slate-600 uppercase tracking-widest">or register with email</span>
+              <div className="flex-grow h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
               {/* Name & Email Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-name">Full Name</label>
+                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-name">Full Name</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <User className="w-5 h-5" />
-                    </div>
+                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     <input
                       id="reg-name"
                       type="text"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
                       placeholder="Rahul Kumar"
                       autoComplete="name"
                     />
@@ -210,18 +209,16 @@ export default function Register() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-email">Email Address</label>
+                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-email">Email Address</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Mail className="w-5 h-5" />
-                    </div>
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     <input
                       id="reg-email"
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
                       placeholder="rahul@college.edu"
                       autoComplete="email"
                     />
@@ -231,18 +228,16 @@ export default function Register() {
 
               {/* Password */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-password">Password</label>
+                <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-password">Password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-5 h-5" />
-                  </div>
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   <input
                     id="reg-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="glass-input w-full rounded-xl py-3 pl-10 pr-10 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                    className="glass-input w-full rounded-xl py-3 pl-10 pr-10 text-sm"
                     placeholder="Min. 8 characters"
                     autoComplete="new-password"
                     minLength={6}
@@ -250,27 +245,25 @@ export default function Register() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
 
               {/* College / University */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-college">College / University</label>
+                <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-college">College / University</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Building className="w-5 h-5" />
-                  </div>
+                  <Building size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   <input
                     id="reg-college"
                     type="text"
                     required
                     value={collegeName}
                     onChange={(e) => setCollegeName(e.target.value)}
-                    className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                    className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
                     placeholder="IIT Bombay"
                   />
                 </div>
@@ -279,36 +272,32 @@ export default function Register() {
               {/* Branch & Graduation Year Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-branch">Branch / Major</label>
+                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-branch">Branch / Major</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <GraduationCap className="w-5 h-5" />
-                    </div>
+                    <GraduationCap size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     <input
                       id="reg-branch"
                       type="text"
                       required
                       value={branch}
                       onChange={(e) => setBranch(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
                       placeholder="Computer Science"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-300 uppercase pl-1" htmlFor="reg-year">Graduation Year</label>
+                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-year">Graduation Year</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Calendar className="w-5 h-5" />
-                    </div>
+                    <Calendar size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     <input
                       id="reg-year"
                       type="number"
                       required
                       value={graduationYear}
                       onChange={(e) => setGraduationYear(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm placeholder-slate-500 focus:ring-0 focus:border-purple-500"
+                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
                       placeholder="2027"
                       min="2024"
                       max="2035"
@@ -322,7 +311,11 @@ export default function Register() {
                 id="email-register-btn"
                 type="submit"
                 disabled={loading || googleLoading}
-                className="mt-4 w-full bg-gradient-primary hover:opacity-90 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="btn btn-shimmer mt-4 py-3 w-full text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{
+                  background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                  boxShadow: loading ? 'none' : '0 4px 20px rgba(99,102,241,0.3)',
+                }}
               >
                 {loading ? (
                   <>
@@ -332,18 +325,19 @@ export default function Register() {
                 ) : (
                   <>
                     Create Account
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight size={16} />
                   </>
                 )}
               </button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-slate-400">
-              Already have an account? <Link className="text-fuchsia-400 hover:text-fuchsia-300 font-semibold transition-colors" to="/login">Sign In</Link>
+            <div className="mt-6 text-center text-sm text-slate-500">
+              Already have an account?{' '}
+              <Link className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors" to="/login">Sign In</Link>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </motion.main>
     </div>
   );
 }

@@ -275,11 +275,79 @@ export default function JobAnalyzer() {
     }
   };
 
-  // Handle text area submission
-  const handleAnalyzeClick = () => {
+  // Handle text area submission — calls real AI then falls back to local analysis
+  const handleAnalyzeClick = async () => {
     if (!jobText.trim()) return;
+    setIsAnalyzing(true);
+    setAnalysisProgress(10);
+    setAnalysisStep('Sending to AI Analyzer...');
+
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/analyze-jd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ jobDescription: jobText })
+      });
+
+      setAnalysisProgress(70);
+      setAnalysisStep('Mapping skills and roadmap...');
+
+      const data = await res.json();
+      if (res.ok && data.analysis) {
+        const ai = data.analysis;
+        // Detect best matching preset template for rounds/roadmap
+        const lowerText = jobText.toLowerCase();
+        let matchTemplate = PRESETS.google_swe;
+        if (lowerText.includes('frontend') || lowerText.includes('react')) matchTemplate = PRESETS.stripe_frontend;
+        else if (lowerText.includes('machine learning') || lowerText.includes('ml')) matchTemplate = PRESETS.netflix_ai;
+        else if (lowerText.includes('data analyst') || lowerText.includes('tableau')) matchTemplate = PRESETS.amazon_data;
+
+        const matchScore = Math.min(98, Math.max(40, (ai.matchScore || 75) + (Math.random() > 0.5 ? 3 : -2)));
+
+        setAnalysis({
+          company: ai.company || matchTemplate.company,
+          role: ai.role || matchTemplate.role,
+          type: lowerText.includes('intern') ? 'Internship' : (lowerText.includes('contract') ? 'Contract' : 'Full-time'),
+          experience: ai.experienceLevel || matchTemplate.experience,
+          industry: matchTemplate.industry,
+          location: lowerText.includes('remote') ? 'Remote' : matchTemplate.location,
+          datePosted: 'Today',
+          matchScore,
+          skillsMatch: Math.min(100, matchScore + 5),
+          experienceMatch: Math.min(100, matchScore - 5),
+          roleMatch: Math.min(100, matchScore + 2),
+          locationMatch: lowerText.includes('remote') ? 100 : matchTemplate.locationMatch,
+          skills: ai.requiredSkills?.length > 0 ? ai.requiredSkills : matchTemplate.skills,
+          missingSkills: ai.niceToHave?.length > 0 ? ai.niceToHave : matchTemplate.missingSkills,
+          rounds: matchTemplate.rounds,
+          roadmap: matchTemplate.roadmap,
+          description: jobText,
+          aiInsights: {
+            responsibilities: ai.keyResponsibilities || [],
+            interviewTopics: ai.interviewTopics || [],
+            redFlags: ai.redFlags || []
+          }
+        });
+        setAnalysisProgress(100);
+        setAnalysisStep('Analysis Complete!');
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          updateXp(60);
+        }, 400);
+        return;
+      }
+    } catch (e) {
+      console.warn('AI job analysis unavailable, using local text parser:', e.message);
+    }
+
+    // Fallback: local text analysis
     runTextAnalysis(jobText);
   };
+
 
   // Triggered when file selected
   const handleFileChange = (e) => {

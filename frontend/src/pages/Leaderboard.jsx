@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../config';
 
 export default function Leaderboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   // Selected tab: 'season' | 'global' | 'friends'
   const [activeTab, setActiveTab] = useState('season');
@@ -15,11 +16,48 @@ export default function Leaderboard() {
   const [selectedSeason, setSelectedSeason] = useState('Season 1 Sprints');
   // Copied share state indicator
   const [copiedBadgeName, setCopiedBadgeName] = useState(false);
+  // Live leaderboard data from backend
+  const [liveLeaderboard, setLiveLeaderboard] = useState([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
 
-  // User particulars
+  // Fetch real leaderboard data on mount
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      setLoadingLeaderboard(true);
+      try {
+        const res = await fetch(`${API_BASE}/gamification/leaderboard`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.leaderboard && data.leaderboard.length > 0) {
+            setLiveLeaderboard(data.leaderboard.map((u, i) => ({
+              rank: i + 1,
+              name: u.name,
+              xp: u.xp || 0,
+              streak: u.streak || 1,
+              badges: u.badges || [],
+              isMe: u.name === (user?.name || ''),
+              initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
+            })));
+          }
+        }
+      } catch (err) {
+        console.warn('Leaderboard fetch failed, using local data:', err.message);
+      } finally {
+        setLoadingLeaderboard(false);
+      }
+    };
+    if (token) fetchLeaderboard();
+  }, [token, user?.name]);
+
+
+  // User particulars — prefer live data
   const currentUserName = user?.name || 'Yash';
   const currentUserXP = user?.xp || 5980;
   const currentUserStreak = user?.streak || 3;
+
+  // The season rankings are live data if available, else fallback to static
 
   // Static list of badges and their details
   const achievements = useMemo(() => [
@@ -74,49 +112,54 @@ export default function Leaderboard() {
   ], []);
 
   // Leaderboard data configurations for different tabs
-  const seasonRankingsList = useMemo(() => [
-    {
-      rank: 1,
-      name: currentUserName,
-      xp: currentUserXP,
-      streak: currentUserStreak,
-      badges: ['Novice Prep', 'Roadmap Pioneer'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
-      isMe: true
-    },
-    {
-      rank: 2,
-      name: 'Raj',
-      xp: 1380,
-      streak: 1,
-      badges: ['Novice Prep', 'Debating Scholar'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
-    },
-    {
-      rank: 3,
-      name: 'Test User',
-      xp: 460,
-      streak: 1,
-      badges: ['Novice Prep'],
-      initials: 'TU'
-    },
-    {
-      rank: 4,
-      name: 'Google Scholar',
-      xp: 100,
-      streak: 1,
-      badges: ['Novice Prep'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBAJtxbn2QN7lr0YnVJLttV6V5DK2enBDFHe8InTaz3yjNha5iyQrxr9tlzVU1iDB_dwUGR1c4c3nSZ8Xo8NAUFJKej8x_6P6jIMpQx0r9ZEdnj2H4xefDTBQpAY92tczhYRK-Nuymr4vDzB_Qj9pm8IV1oqNhUPIPBBCQCdMqDea6of2MxriFN6RgBaCbDNsNjfskygx1NdkFJgIpuH0-t8UeVeeFwnZZSN7TcL0aXg7NT111vfzm8MC1tr8cFo-qGw7zNc_g84D31'
-    },
-    {
-      rank: 5,
-      name: 'LinkedIn Scholar',
-      xp: 100,
-      streak: 1,
-      badges: ['Novice Prep'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVv2h0nexnAbOBa1T8JZVrbXfDl5_h8Nt1FivpLsTtO1pmcKNpzAtcphWJlJr8djHIfA4zY-IQHINWTmuiqLWwakoHz1SMz_DwVFp59lIw7NaNGzvJjaa1kq9Y_uTgjfXV4a-YNob_f__XykJ-HWUD4Ot9yAvIuLXDLbfM--toLcRUnjXVYiYaoLwhITN9sui8ZR03zPte2VFCWnIdaD6WMcF0urrx3v6-tMaUPV7rvu0OPRw26AjaE2rUpfX1I_4vU-ghT48E5WXP'
-    }
-  ], [currentUserName, currentUserXP, currentUserStreak]);
+  const seasonRankingsList = useMemo(() => {
+    // Use live leaderboard if populated
+    if (liveLeaderboard.length > 0) return liveLeaderboard;
+    // Static fallback
+    return [
+      {
+        rank: 1,
+        name: currentUserName,
+        xp: currentUserXP,
+        streak: currentUserStreak,
+        badges: ['Novice Prep', 'Roadmap Pioneer'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
+        isMe: true
+      },
+      {
+        rank: 2,
+        name: 'Raj',
+        xp: 1380,
+        streak: 1,
+        badges: ['Novice Prep', 'Debating Scholar'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
+      },
+      {
+        rank: 3,
+        name: 'Test User',
+        xp: 460,
+        streak: 1,
+        badges: ['Novice Prep'],
+        initials: 'TU'
+      },
+      {
+        rank: 4,
+        name: 'Google Scholar',
+        xp: 100,
+        streak: 1,
+        badges: ['Novice Prep'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBAJtxbn2QN7lr0YnVJLttV6V5DK2enBDFHe8InTaz3yjNha5iyQrxr9tlzVU1iDB_dwUGR1c4c3nSZ8Xo8NAUFJKej8x_6P6jIMpQx0r9ZEdnj2H4xefDTBQpAY92tczhYRK-Nuymr4vDzB_Qj9pm8IV1oqNhUPIPBBCQCdMqDea6of2MxriFN6RgBaCbDNsNjfskygx1NdkFJgIpuH0-t8UeVeeFwnZZSN7TcL0aXg7NT111vfzm8MC1tr8cFo-qGw7zNc_g84D31'
+      },
+      {
+        rank: 5,
+        name: 'LinkedIn Scholar',
+        xp: 100,
+        streak: 1,
+        badges: ['Novice Prep'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVv2h0nexnAbOBa1T8JZVrbXfDl5_h8Nt1FivpLsTtO1pmcKNpzAtcphWJlJr8djHIfA4zY-IQHINWTmuiqLWwakoHz1SMz_DwVFp59lIw7NaNGzvJjaa1kq9Y_uTgjfXV4a-YNob_f__XykJ-HWUD4Ot9yAvIuLXDLbfM--toLcRUnjXVYiYaoLwhITN9sui8ZR03zPte2VFCWnIdaD6WMcF0urrx3v6-tMaUPV7rvu0OPRw26AjaE2rUpfX1I_4vU-ghT48E5WXP'
+      }
+    ];
+  }, [liveLeaderboard, currentUserName, currentUserXP, currentUserStreak]);
 
   const globalRankingsList = useMemo(() => [
     {

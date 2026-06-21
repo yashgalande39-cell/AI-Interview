@@ -5,7 +5,11 @@
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/authMiddleware');
-const openRouterAI = require('../services/openRouter');
+const { callOpenRouter, MODELS } = require('../services/ai/openrouter');
+const { generateInterviewQuestions } = require('../services/ai/interviewAgent');
+const { analyzeResume, analyzeJobDescription } = require('../services/ai/resumeAnalyzer');
+const { evaluateAnswer, reviewCode } = require('../services/ai/scoringEngine');
+const { generatePerformanceFeedback } = require('../services/ai/feedbackEngine');
 const mockDb = require('../models/mockDb');
 const { requirePlan } = require('../middleware/planMiddleware');
 
@@ -22,7 +26,7 @@ router.post('/evaluate-answer', async (req, res) => {
     if (!question || !answer) {
       return res.status(400).json({ message: 'Question and answer are required' });
     }
-    const evaluation = await openRouterAI.evaluateAnswer(
+    const evaluation = await evaluateAnswer(
       question, answer, type || 'Technical', role || 'Software Engineer'
     );
     return res.status(200).json({ evaluation });
@@ -42,7 +46,7 @@ router.post('/review-code', requirePlan('pro'), async (req, res) => {
     if (!code || !language) {
       return res.status(400).json({ message: 'Code and language are required' });
     }
-    const review = await openRouterAI.reviewCode(
+    const review = await reviewCode(
       code, language,
       challengeTitle || 'Coding Challenge',
       challengeDesc || 'Solve the given problem',
@@ -78,7 +82,7 @@ router.post('/generate-questions', async (req, res) => {
         });
       }
     }
-    const questions = await openRouterAI.generateInterviewQuestions(
+    const questions = await generateInterviewQuestions(
       type, difficulty || 'Medium', role, company || 'Common', language || 'General', resumeText || ''
     );
     return res.status(200).json({ questions });
@@ -98,13 +102,35 @@ router.post('/analyze-jd', requirePlan('pro'), async (req, res) => {
     if (!jobDescription) {
       return res.status(400).json({ message: 'Job description text is required' });
     }
-    const analysis = await openRouterAI.analyzeJobDescription(jobDescription);
+    const analysis = await analyzeJobDescription(jobDescription);
     return res.status(200).json({ analysis });
   } catch (err) {
     console.error('AI analyze-jd error:', err.message);
     return res.status(500).json({ message: 'JD analysis failed', error: err.message });
   }
 });
+
+/**
+ * POST /api/ai/analyze-resume
+ * Run ATS analysis on a resume for a given target role
+ */
+router.post('/analyze-resume', requirePlan('pro'), async (req, res) => {
+  try {
+    const { resumeText, targetRole } = req.body;
+    if (!resumeText) {
+      return res.status(400).json({ message: 'Resume text is required' });
+    }
+    const analysis = await analyzeResume(
+      resumeText,
+      targetRole || 'Software Engineer'
+    );
+    return res.status(200).json({ analysis });
+  } catch (err) {
+    console.error('AI analyze-resume error:', err.message);
+    return res.status(500).json({ message: 'Resume analysis failed', error: err.message });
+  }
+});
+
 
 /**
  * POST /api/ai/performance-feedback
@@ -116,7 +142,7 @@ router.post('/performance-feedback', async (req, res) => {
     if (!scoreCard) {
       return res.status(400).json({ message: 'ScoreCard data is required' });
     }
-    const feedback = await openRouterAI.generatePerformanceFeedback(
+    const feedback = await generatePerformanceFeedback(
       scoreCard, role || 'Software Engineer', type || 'Technical'
     );
     return res.status(200).json({ feedback });
@@ -137,12 +163,12 @@ router.get('/status', async (req, res) => {
       return res.status(200).json({ status: 'unavailable', reason: 'No API key configured' });
     }
     // Quick ping test
-    const testText = await openRouterAI.callOpenRouter([
+    const testText = await callOpenRouter([
       { role: 'user', content: 'Say "OK" in one word.' }
-    ], openRouterAI.MODELS.fast, { max_tokens: 10 });
+    ], MODELS.fast, { max_tokens: 10 });
     return res.status(200).json({
       status: 'online',
-      model: openRouterAI.MODELS.primary,
+      model: MODELS.primary,
       testResponse: testText,
       timestamp: new Date().toISOString()
     });

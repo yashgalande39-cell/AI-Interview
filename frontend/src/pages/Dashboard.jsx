@@ -2,9 +2,17 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../config';
-import { 
+import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
+import {
+  TrendingUp, Mic, Code2, FileText, Flame, Zap,
+  ArrowRight, CheckCircle, Circle, Bot, X, Users,
+  BarChart3, Shield, MessagesSquare, Lightbulb, Send, Loader2
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import MetricRing from '../components/ui/MetricRing';
+import { SkeletonDashboard } from '../components/ui/SkeletonCard';
 
 export default function Dashboard() {
   const { user, token } = useAuth();
@@ -13,6 +21,50 @@ export default function Dashboard() {
   const [readinessScore, setReadinessScore] = useState(87);
   const [loading, setLoading] = useState(true);
   const [showAiBanner, setShowAiBanner] = useState(true);
+
+  // Aura Chatbot states
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'model', text: 'Hello! I am Aura, your AI interview preparation assistant. How can I help you optimize your tech prep today?' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMsg = { role: 'user', text: chatInput.trim() };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/chat-assistant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: userMsg.text,
+          chatHistory: chatMessages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text }))
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, { role: 'model', text: data.reply }]);
+      } else {
+        throw new Error('Failed to get response');
+      }
+    } catch (err) {
+      console.error(err);
+      setChatMessages(prev => [...prev, { role: 'model', text: 'Sorry, I am having trouble connecting to the server. Please try again later.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
 
   // Dynamic user details
@@ -193,653 +245,581 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0b0f19] text-[#e2e8f0]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium tracking-wide">Loading Dashboard...</p>
-        </div>
+      <div className="px-6 pt-6 flex-1">
+        <SkeletonDashboard />
       </div>
     );
   }
 
+  // Stat card configs
+  const STAT_CARDS = [
+    {
+      label: 'Hiring Readiness',
+      value: readinessScore,
+      suffix: '/100',
+      change: userStreak > 1 ? `+${userStreak * 2}% this week` : '+5% this week',
+      changePositive: true,
+      iconBg: 'linear-gradient(135deg, #10B981, #06B6D4)',
+      accentColor: '#10B981',
+      icon: <Shield size={16} className="text-white" />,
+      sublabel: readinessScore >= 85 ? 'Excellent' : readinessScore >= 70 ? 'Good' : 'Needs Work',
+    },
+    {
+      label: 'Interviews Done',
+      value: completedCount,
+      suffix: '',
+      change: completedCount > 0 ? `${completedCount} this week` : 'Start preparing',
+      changePositive: completedCount > 0,
+      iconBg: 'linear-gradient(135deg, #8B5CF6, #6366F1)',
+      accentColor: '#8B5CF6',
+      icon: <Mic size={16} className="text-white" />,
+      sublabel: 'Total sessions',
+    },
+    {
+      label: 'Coding Score',
+      value: codingScore,
+      suffix: '',
+      change: solvedCount > 0 ? `${solvedCount} problems solved` : 'No challenges yet',
+      changePositive: solvedCount > 0,
+      iconBg: 'linear-gradient(135deg, #3B82F6, #06B6D4)',
+      accentColor: '#3B82F6',
+      icon: <Code2 size={16} className="text-white" />,
+      sublabel: 'LeetCode equivalent',
+    },
+    {
+      label: 'Practice Streak',
+      value: userStreak,
+      suffix: '',
+      change: userStreak > 0 ? '🔥 Keep it up!' : 'Start your streak',
+      changePositive: userStreak > 0,
+      iconBg: 'linear-gradient(135deg, #F59E0B, #EF4444)',
+      accentColor: '#F59E0B',
+      icon: <Flame size={16} className="text-white" />,
+      sublabel: 'Day streak',
+    },
+  ];
+
+  const SCORE_BARS = [
+    { label: 'Technical Skills',  value: finalTechnical,      color: '#10B981', icon: <Code2 size={13} /> },
+    { label: 'Communication',     value: finalCommunication,  color: '#3B82F6', icon: <MessagesSquare size={13} /> },
+    { label: 'Problem Solving',   value: finalProblemSolving, color: '#F59E0B', icon: <Lightbulb size={13} /> },
+    { label: 'Leadership',        value: finalLeadership,     color: '#8B5CF6', icon: <Users size={13} /> },
+    { label: 'Confidence',        value: finalConfidence,     color: '#06B6D4', icon: <Shield size={13} /> },
+  ];
+
+  const QUICK_ACTIONS = [
+    { to: '/lobby',  icon: Mic,     label: 'AI Interview', color: '#8B5CF6', bg: 'rgba(139,92,246,0.12)' },
+    { to: '/coding', icon: Code2,   label: 'Coding',       color: '#10B981', bg: 'rgba(16,185,129,0.12)' },
+    { to: '/resume', icon: FileText,label: 'Resume',       color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
+    { to: '/feedback',icon: BarChart3, label: 'Analytics', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
+  ];
+
   return (
-    <div className="flex gap-6 w-full pt-6">
-          {/* Left Column (Stats & Main Content) */}
-          <div className="flex-1 flex flex-col gap-6 min-w-0">
-            {/* BEGIN: Top Stats Row */}
-            <div className="grid grid-cols-4 gap-4" data-purpose="key-metrics">
-              {/* Score Card */}
-              <div className="glass-card p-5 relative overflow-hidden group">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-gray-400 text-sm font-medium">Hiring Readiness Score</h3>
-                  <div className="w-8 h-8 rounded-full bg-green-900/30 flex items-center justify-center text-green-500">
-                    <i className="fa-solid fa-shield-halved"></i>
-                  </div>
-                </div>
-                <div className="flex items-end gap-4 mt-2">
-                  <div className="flex items-baseline">
-                    <span className="text-4xl font-bold text-white">{readinessScore}</span>
-                    <span className="text-gray-500 text-sm ml-1">/100</span>
-                  </div>
-                  {/* Gauge indicator */}
-                  <div className="w-12 h-12 rounded-full border-4 border-gray-700 border-t-green-500 border-r-green-500 transform -rotate-45 relative">
-                    <div className="absolute inset-0 m-auto w-8 h-8 bg-[#111827] rounded-full"></div>
-                  </div>
-                </div>
-                <p className="text-green-500 text-sm mt-3 font-medium">
-                  {readinessScore >= 85 ? "Excellent" : readinessScore >= 70 ? "Good" : readinessScore >= 55 ? "Average" : "Needs Prep"}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  <span className="text-green-500">{userStreak > 1 ? `↑ ${userStreak * 2}%` : '↑ 5%'}</span> this week
-                </p>
-              </div>
+    <div className="flex gap-5 w-full pt-5 px-5 pb-6">
 
-              {/* Interviews Completed */}
-              <div className="glass-card p-5 relative overflow-hidden">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-gray-400 text-sm font-medium">Interviews Completed</h3>
-                  <div className="w-8 h-8 rounded-full bg-purple-900/30 flex items-center justify-center text-purple-400">
-                    <i className="fa-solid fa-users"></i>
-                  </div>
-                </div>
-                <div className="text-4xl font-bold text-white mt-2">{completedCount}</div>
-                <p className="text-gray-400 text-sm mt-1">Total Sessions</p>
-                <p className="text-xs text-purple-400 mt-4">
-                  {completedCount > 0 ? `↑ ${completedCount} this week` : 'Start preparing'}
-                </p>
-              </div>
+      {/* ── Left Column ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col gap-5 min-w-0">
 
-              {/* Coding Score */}
-              <div className="glass-card p-5 relative overflow-hidden">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-gray-400 text-sm font-medium">Coding Score</h3>
-                  <div className="w-8 h-8 rounded-full bg-blue-900/30 flex items-center justify-center text-blue-400">
-                    <i className="fa-solid fa-code"></i>
-                  </div>
+        {/* ── Stats Row ── */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          {STAT_CARDS.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-2xl p-5 relative overflow-hidden card-hover cursor-default"
+              style={{
+                background: 'rgba(17,24,39,0.5)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderTop: `1px solid rgba(255,255,255,0.10)`,
+                borderLeft: `2px solid ${card.accentColor}40`,
+              }}
+            >
+              {/* Ambient glow */}
+              <div className="absolute top-0 right-0 w-24 h-24 rounded-full pointer-events-none opacity-20"
+                style={{ background: `radial-gradient(circle, ${card.accentColor}, transparent 70%)`, transform: 'translate(40%, -40%)' }} />
+              <div className="flex justify-between items-start mb-3">
+                <p className="text-slate-500 text-xs font-medium tracking-wide uppercase">{card.label}</p>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: card.iconBg }}>
+                  {card.icon}
                 </div>
-                <div className="text-4xl font-bold text-white mt-2">{codingScore}</div>
-                <p className="text-gray-400 text-sm mt-1">LeetCode Equivalent</p>
-                <p className="text-xs text-blue-400 mt-4">
-                  {solvedCount > 0 ? `↑ ${solvedCount * 10} pts` : 'No solved challenges'}
-                </p>
               </div>
-
-              {/* Days of Practice */}
-              <div className="glass-card p-5 relative overflow-hidden">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-gray-400 text-sm font-medium">Days of Practice</h3>
-                  <div className="w-8 h-8 rounded-full bg-yellow-900/30 flex items-center justify-center text-yellow-500">
-                    <i className="fa-regular fa-calendar-check"></i>
-                  </div>
-                </div>
-                <div className="text-4xl font-bold text-white mt-2">{userStreak}</div>
-                <p className="text-gray-400 text-sm mt-1">Current Streak</p>
-                <p className="text-xs text-yellow-500 mt-4 font-medium">🔥 Keep it up!</p>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-3xl font-bold text-white leading-none">{card.value}</span>
+                {card.suffix && <span className="text-slate-600 text-sm">{card.suffix}</span>}
               </div>
+              <p className="text-xs mt-2" style={{ color: card.accentColor }}>{card.change}</p>
+              <p className="text-[11px] text-slate-600 mt-0.5">{card.sublabel}</p>
             </div>
-            {/* END: Top Stats Row */}
+          ))}
+        </div>
 
-            {/* BEGIN: Middle Section (Learning & Upcoming) */}
-            <div className="grid grid-cols-2 gap-6" data-purpose="current-focus">
-              {/* Continue Learning */}
-              <div className="glass-card p-5 flex flex-col justify-between">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-white font-medium">Continue Learning</h3>
-                  <Link to="/roadmap" className="text-blue-400 text-sm hover:text-blue-300 flex items-center gap-1">View All <i className="fa-solid fa-arrow-right text-[10px]"></i></Link>
-                </div>
-                <div className="space-y-4 flex-1 flex flex-col justify-between">
-                  {/* Item 1 - Active Mock / Recent Completed */}
-                  {ongoingSession ? (
-                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">
-                            <i className="fa-solid fa-microphone"></i>
-                          </div>
-                          <div>
-                            <h4 className="text-white text-sm font-medium">Continue {ongoingSession.type} Mock</h4>
-                            <p className="text-xs text-gray-400">{ongoingSession.role} • {ongoingSession.company}</p>
-                          </div>
-                        </div>
-                        <Link to={`/interview-room?sessionId=${ongoingSession.id}`} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded transition-colors text-center font-medium">Resume</Link>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.round((ongoingSession.currentQuestionIndex / ongoingSession.questions.length) * 100)}%` }}></div>
-                        </div>
-                        <span className="text-xs text-gray-400">{Math.round((ongoingSession.currentQuestionIndex / ongoingSession.questions.length) * 100)}%</span>
-                      </div>
-                    </div>
-                  ) : history.length > 0 ? (
-                    (() => {
-                      const latestComp = history.find(h => h.status === 'completed' && h.scoreCard);
-                      return (
-                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">
-                                <i className="fa-solid fa-microphone"></i>
-                              </div>
-                              <div>
-                                <h4 className="text-white text-sm font-medium">Review {latestComp ? latestComp.type : 'Mock'} Interview</h4>
-                                <p className="text-xs text-gray-400">{latestComp ? `${latestComp.role} • ${latestComp.company}` : 'Mock ready to review'}</p>
-                              </div>
-                            </div>
-                            <Link to="/lobby" className="text-xs bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 px-3 py-1.5 rounded transition-colors text-center">Lobby</Link>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-purple-500 w-[100%] rounded-full"></div>
-                            </div>
-                            <span className="text-xs text-gray-400">100%</span>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">
-                            <i className="fa-solid fa-microphone"></i>
-                          </div>
-                          <div>
-                            <h4 className="text-white text-sm font-medium">Start Mock Interview</h4>
-                            <p className="text-xs text-gray-400">Practice HR, Tech or Behavioral</p>
-                          </div>
-                        </div>
-                        <Link to="/lobby" className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition-colors text-center font-medium">Lobby</Link>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500 w-[0%] rounded-full"></div>
-                        </div>
-                        <span className="text-xs text-gray-400">0%</span>
-                      </div>
-                    </div>
-                  )}
+        {/* ── Middle Row ── */}
+        <div className="grid grid-cols-2 gap-5">
 
-                  {/* Item 2 - Coding Arena solved count progress */}
-                  <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-green-900/30 flex items-center justify-center text-green-400">
-                          <i className="fa-solid fa-code"></i>
+          {/* Continue Learning */}
+          <div className="rounded-2xl p-5 flex flex-col glass-card-db">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold text-sm">Active Sessions</h3>
+              <Link to="/roadmap" className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                View All <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="space-y-3 flex-1">
+              {/* Session card helper */}
+              {[{
+                icon: Mic, label: ongoingSession ? `Continue ${ongoingSession.type} Mock` : history.length > 0 ? 'Review Latest Interview' : 'Start Mock Interview',
+                sublabel: ongoingSession ? `${ongoingSession.role} · ${ongoingSession.company}` : history.length > 0 ? `${history[0]?.role || 'Software Engineer'} · ${history[0]?.company || 'Google'}` : 'Practice HR, Tech or Behavioral',
+                progress: ongoingSession ? Math.round((ongoingSession.currentQuestionIndex / (ongoingSession.questions?.length || 5)) * 100) : history.length > 0 ? 100 : 0,
+                color: '#8B5CF6',
+                to: ongoingSession ? `/interview-room?sessionId=${ongoingSession.id}` : '/lobby',
+                cta: ongoingSession ? 'Resume' : history.length > 0 ? 'Lobby' : 'Start',
+              }, {
+                icon: Code2, label: 'DSA Coding Arena',
+                sublabel: `${solvedCount} problems solved`,
+                progress: Math.min(100, Math.round((solvedCount / 5) * 100)),
+                color: '#10B981',
+                to: '/coding',
+                cta: 'Continue',
+              }, {
+                icon: FileText, label: 'Resume Analyzer',
+                sublabel: latestResume ? 'ATS compliance score' : 'Optimize for job roles',
+                progress: latestResume ? (latestResume.atsScore || 0) : 0,
+                color: '#3B82F6',
+                to: '/resume',
+                cta: 'Analyze',
+              }].map((item, i) => {
+                const Icon = item.icon;
+                return (
+                  <div key={i} className="rounded-xl p-3 flex flex-col gap-2"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${item.color}15`, border: `1px solid ${item.color}25` }}>
+                          <Icon size={16} style={{ color: item.color }} />
                         </div>
                         <div>
-                          <h4 className="text-white text-sm font-medium">DSA Coding Arena</h4>
-                          <p className="text-xs text-gray-400">{solvedCount} solved challenges</p>
+                          <p className="text-white text-sm font-medium leading-tight">{item.label}</p>
+                          <p className="text-slate-500 text-xs mt-0.5">{item.sublabel}</p>
                         </div>
                       </div>
-                      <Link to="/coding" className="text-xs bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 px-3 py-1.5 rounded transition-colors text-center">Continue</Link>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, Math.round((solvedCount / 5) * 100))}%` }}></div>
-                      </div>
-                      <span className="text-xs text-gray-400">{Math.min(100, Math.round((solvedCount / 5) * 100))}%</span>
-                    </div>
-                  </div>
-
-                  {/* Item 3 - Resume Analyzer ATS score progress */}
-                  <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400">
-                          <i className="fa-regular fa-file-lines"></i>
-                        </div>
-                        <div>
-                          <h4 className="text-white text-sm font-medium">Resume Analyzer</h4>
-                          <p className="text-xs text-gray-400">{latestResume ? `Latest ATS compliance score` : 'Optimize for job roles'}</p>
-                        </div>
-                      </div>
-                      <Link to="/resume" className="text-xs bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 px-3 py-1.5 rounded transition-colors text-center">Continue</Link>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${latestResume ? latestResume.atsScore : 0}%` }}></div>
-                      </div>
-                      <span className="text-xs text-gray-400">{latestResume ? latestResume.atsScore : 0}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Upcoming Prep Target / Checklist */}
-              <div className="glass-card p-5 flex flex-col relative overflow-hidden neon-border">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                <div className="flex justify-between items-center mb-4 relative z-10">
-                  <h3 className="text-white font-medium">{ongoingSession ? 'Ongoing Session Progress' : 'Target Prep Checkpoint'}</h3>
-                  <Link to="/lobby" className="text-blue-400 text-sm hover:text-blue-300 flex items-center gap-1">Lobby <i className="fa-solid fa-arrow-right text-[10px]"></i></Link>
-                </div>
-                <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-4 mb-4 relative z-10">
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xl shrink-0">
-                        <i className="fa-regular fa-calendar-days"></i>
-                      </div>
-                      <div>
-                        {ongoingSession ? (
-                          <>
-                            <h4 className="text-white font-medium text-base">{ongoingSession.type} Mock Session</h4>
-                            <p className="text-blue-400 text-sm mt-0.5">{ongoingSession.role} • {ongoingSession.company}</p>
-                            <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
-                              <span className="flex items-center gap-1"><i className="fa-regular fa-clock"></i> Active session</span>
-                              <span className="flex items-center gap-1"><i className="fa-solid fa-stopwatch"></i> {ongoingSession.questions.length} questions</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <h4 className="text-white font-medium text-base">{targetRole} Interview</h4>
-                            <p className="text-blue-400 text-sm mt-0.5">{targetCompany}</p>
-                            <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
-                              <span className="flex items-center gap-1"><i className="fa-regular fa-clock"></i> Session on-demand</span>
-                              <span className="flex items-center gap-1"><i className="fa-solid fa-stopwatch"></i> 45-60 min</span>
-                            </div>
-                          </>
-                        )}
-                        <div className="flex gap-2 mt-3">
-                          <span className="px-2 py-1 rounded bg-gray-700/50 text-[10px] text-gray-300">{ongoingSession ? ongoingSession.difficulty : 'Medium'}</span>
-                          <span className="px-2 py-1 rounded bg-gray-700/50 text-[10px] text-gray-300">{ongoingSession ? ongoingSession.language : 'JavaScript'}</span>
-                          <span className="px-2 py-1 rounded bg-gray-700/50 text-[10px] text-gray-300">AI Panel</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                {/* Preparation Status */}
-                <div className="mt-auto relative z-10">
-                  <div className="flex justify-between text-xs text-gray-400 mb-2">
-                    <span>Interview Preparation</span>
-                    <span>{prepProgress}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-gray-700 rounded-full mb-4">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" style={{ width: `${prepProgress}%` }}></div>
-                  </div>
-                  <div className="flex justify-between items-end gap-2">
-                    <ul className="text-xs text-gray-400 space-y-1.5">
-                      <li className="flex items-center gap-2">
-                        <i className={`fa-solid ${checkResume ? 'fa-circle-check text-green-500' : 'fa-circle text-gray-600'} text-[10px]`}></i> 
-                        Resume Analyzed
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <i className={`fa-solid ${checkJob ? 'fa-circle-check text-green-500' : 'fa-circle text-gray-600'} text-[10px]`}></i> 
-                        Job Profile Selected
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <i className={`fa-solid ${checkQuestions ? 'fa-circle-check text-green-500' : 'fa-circle text-gray-600'} text-[10px]`}></i> 
-                        Mock Session Started
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <i className={`fa-solid ${checkReady ? 'fa-circle-check text-green-500' : 'fa-circle text-gray-600'} text-[10px]`}></i> 
-                        Mock Interview Ready
-                      </li>
-                    </ul>
-                    {ongoingSession ? (
-                      <Link 
-                        to={`/interview-room?sessionId=${ongoingSession.id}`} 
-                        className="btn-gradient text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-purple-500/20 text-center whitespace-nowrap"
-                      >
-                        Resume Interview <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                      <Link to={item.to}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
+                        style={{ background: `${item.color}18`, color: item.color, border: `1px solid ${item.color}30` }}>
+                        {item.cta}
                       </Link>
-                    ) : hasUploadedResume ? (
-                      <Link 
-                        to="/lobby" 
-                        className="btn-gradient text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-purple-500/20 text-center whitespace-nowrap"
-                      >
-                        Start Mock Interview <i className="fa-solid fa-arrow-right text-[10px]"></i>
-                      </Link>
-                    ) : (
-                      <Link 
-                        to="/resume" 
-                        className="btn-gradient text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-purple-500/20 text-center whitespace-nowrap"
-                      >
-                        Upload Resume <i className="fa-solid fa-arrow-right text-[10px]"></i>
-                      </Link>
-                    )}
+                    </div>
+                    {/* Progress bar */}
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <div className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${item.progress}%`, background: `linear-gradient(90deg, ${item.color}80, ${item.color})` }} />
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
-            {/* END: Middle Section */}
-
-            {/* BEGIN: Bottom Analytics Row */}
-            <div className="grid grid-cols-2 gap-6" data-purpose="detailed-analytics">
-              {/* Performance Overview Chart */}
-              <div className="glass-card p-5 relative flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-white font-medium">Performance Overview</h3>
-                    <select className="bg-gray-800 border-gray-700 text-gray-300 text-xs rounded-md focus:ring-blue-500 focus:border-blue-500 py-1 pl-2 pr-6">
-                      <option>This Month</option>
-                      <option>Last Month</option>
-                    </select>
-                  </div>
-                  {/* Chart Legend */}
-                  <div className="flex gap-4 mb-4 text-xs">
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span><span className="text-gray-400">Interviews</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span className="text-gray-400">Coding Score</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-400"></span><span className="text-gray-400">Readiness Score</span></div>
-                  </div>
-                </div>
-
-                {/* Area Chart Container */}
-                <div className="h-48 w-full relative mt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={areaChartData} margin={{ top: 10, right: 5, left: -25, bottom: 5 }}>
-                      <defs>
-                        <linearGradient id="readinessGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4ade80" stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="codingGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="interviewsGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#a855f7" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" stroke="#4b5563" strokeOpacity={0.5} fontSize={10} tickLine={false} />
-                      <YAxis stroke="#4b5563" strokeOpacity={0.5} fontSize={10} tickLine={false} domain={[0, 100]} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '8px' }}
-                        itemStyle={{ fontSize: '11px' }}
-                      />
-                      <Area type="monotone" dataKey="readiness" stroke="#4ade80" strokeWidth={1.5} fillOpacity={1} fill="url(#readinessGrad)" />
-                      <Area type="monotone" dataKey="coding" stroke="#3b82f6" strokeWidth={1.5} fillOpacity={1} fill="url(#codingGrad)" />
-                      <Area type="monotone" dataKey="interviews" stroke="#a855f7" strokeWidth={1.5} fillOpacity={1} fill="url(#interviewsGrad)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                  {/* Current Status Overview Card overlaying Recharts */}
-                  <div className="absolute right-4 top-2 bg-gray-900 border border-gray-700 rounded-lg p-2 text-[10px] z-10 shadow-lg pointer-events-none">
-                    <p className="text-white font-medium mb-1">Current Stats</p>
-                    <div className="space-y-1">
-                      <div className="flex justify-between gap-4"><span className="text-purple-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>Interviews</span><span className="text-white">{completedCount}</span></div>
-                      <div className="flex justify-between gap-4"><span className="text-blue-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Coding Score</span><span className="text-white">{codingScore}</span></div>
-                      <div className="flex justify-between gap-4"><span className="text-green-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>Readiness</span><span className="text-white">{readinessScore}</span></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Score Breakdown */}
-              <div className="glass-card p-5">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-white font-medium">Score Breakdown</h3>
-                  <Link to="/feedback" className="text-blue-400 text-sm hover:text-blue-300 flex items-center gap-1">View Analytics <i className="fa-solid fa-arrow-right text-[10px]"></i></Link>
-                </div>
-                <div className="space-y-5">
-                  {/* Bar 1 */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1 text-sm">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <i className="fa-solid fa-microchip text-green-400 w-4"></i> Technical Skills
-                      </div>
-                      <div><span className="text-white font-medium">{finalTechnical}</span><span className="text-gray-500 text-xs">/100</span></div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full">
-                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${finalTechnical}%` }}></div>
-                    </div>
-                  </div>
-                  {/* Bar 2 */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1 text-sm">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <i className="fa-regular fa-comments text-blue-400 w-4"></i> Communication
-                      </div>
-                      <div><span className="text-white font-medium">{finalCommunication}</span><span className="text-gray-500 text-xs">/100</span></div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${finalCommunication}%` }}></div>
-                    </div>
-                  </div>
-                  {/* Bar 3 */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1 text-sm">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <i className="fa-solid fa-puzzle-piece text-yellow-500 w-4"></i> Problem Solving
-                      </div>
-                      <div><span className="text-white font-medium">{finalProblemSolving}</span><span className="text-gray-500 text-xs">/100</span></div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full">
-                      <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${finalProblemSolving}%` }}></div>
-                    </div>
-                  </div>
-                  {/* Bar 4 */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1 text-sm">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <i className="fa-solid fa-users text-purple-400 w-4"></i> Leadership
-                      </div>
-                      <div><span className="text-white font-medium">{finalLeadership}</span><span className="text-gray-500 text-xs">/100</span></div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full">
-                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${finalLeadership}%` }}></div>
-                    </div>
-                  </div>
-                  {/* Bar 5 */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1 text-sm">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <i className="fa-solid fa-shield text-cyan-400 w-4"></i> Confidence
-                      </div>
-                      <div><span className="text-white font-medium">{finalConfidence}</span><span className="text-gray-500 text-xs">/100</span></div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full">
-                      <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${finalConfidence}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* END: Bottom Analytics Row */}
-
-            {/* BEGIN: AI Coach Banner */}
-            {showAiBanner && (
-              <div className="glass-card p-4 mt-2 bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/20 relative overflow-hidden" data-purpose="ai-coach-banner">
-                {/* Glow effect */}
-                <div className="absolute left-10 top-1/2 -translate-y-1/2 w-20 h-20 bg-blue-500/40 rounded-full blur-2xl"></div>
-                <div className="flex items-center gap-6 relative z-10">
-                  <div className="w-16 h-16 rounded-full border-2 border-blue-400/50 flex items-center justify-center bg-[#0b0f19] flex-shrink-0 relative">
-                    <i className="fa-solid fa-robot text-3xl text-blue-400"></i>
-                    {/* Robot ears/antenna glow */}
-                    <div className="absolute -left-1 top-1/2 w-1 h-3 bg-blue-400 rounded blur-[1px]"></div>
-                    <div className="absolute -right-1 top-1/2 w-1 h-3 bg-blue-400 rounded blur-[1px]"></div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-medium text-lg">AI Career Coach</h3>
-                      <span className="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded border border-blue-500/30">Beta</span>
-                    </div>
-                    <p className="text-sm text-gray-300 leading-relaxed">
-                      {coachMessage}
-                    </p>
-                  </div>
-                  <Link 
-                    to="/lobby"
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 flex items-center gap-2 shadow-lg shadow-blue-500/20 border border-blue-400/50 text-center"
-                  >
-                    Get AI Advice <i className="fa-solid fa-arrow-right text-[10px]"></i>
-                  </Link>
-                  <button 
-                    onClick={() => setShowAiBanner(false)}
-                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-300"
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-              </div>
-            )}
-            {/* END: AI Coach Banner */}
           </div>
 
-          {/* BEGIN: Right Sidebar */}
-          <div className="w-80 flex flex-col gap-6 flex-shrink-0" data-purpose="right-sidebar">
-            {/* Radar Chart Card */}
-            <div className="glass-card p-5 flex flex-col h-[340px]">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-white font-medium">Hiring Readiness Score</h3>
-                <Link to="/feedback" className="text-blue-400 text-sm hover:text-blue-300 flex items-center gap-1">View Report <i className="fa-solid fa-arrow-right text-[10px]"></i></Link>
-              </div>
-              <div className="flex-1 relative flex items-center justify-center">
-                {/* Pentagon Radar Chart Container */}
-                <div className="relative w-48 h-48">
-                  {/* Outer pentagon wireframe */}
-                  <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100">
-                    <polygon fill="none" points="50,5 95,38 78,95 22,95 5,38" stroke="#9ca3af" strokeWidth="1"></polygon>
-                    <polygon fill="none" points="50,25 80,48 68,80 32,80 20,48" stroke="#9ca3af" strokeWidth="1"></polygon>
-                    <polygon fill="none" points="50,45 65,55 58,70 42,70 35,55" stroke="#9ca3af" strokeWidth="1"></polygon>
-                    {/* spokes */}
-                    <line stroke="#9ca3af" strokeWidth="1" x1="50" x2="50" y1="50" y2="5"></line>
-                    <line stroke="#9ca3af" strokeWidth="1" x1="50" x2="95" y1="50" y2="38"></line>
-                    <line stroke="#9ca3af" strokeWidth="1" x1="50" x2="78" y1="50" y2="95"></line>
-                    <line stroke="#9ca3af" strokeWidth="1" x1="50" x2="22" y1="50" y2="95"></line>
-                    <line stroke="#9ca3af" strokeWidth="1" x1="50" x2="5" y1="50" y2="38"></line>
-                  </svg>
-                  {/* Data polygon (Blue/Purple gradient) */}
-                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-                    <defs>
-                      <linearGradient id="polyGrad" x1="0%" x2="100%" y1="0%" y2="100%">
-                        <stop offset="0%" stopColor="rgba(59, 130, 246, 0.6)"></stop>
-                        <stop offset="100%" stopColor="rgba(168, 85, 247, 0.6)"></stop>
-                      </linearGradient>
-                    </defs>
-                    <polygon fill="url(#polyGrad)" points={pointsString} stroke="#60a5fa" strokeWidth="2"></polygon>
-                    {/* Data points */}
-                    <circle cx={p0.x} cy={p0.y} fill="#fff" r="2"></circle>
-                    <circle cx={p1.x} cy={p1.y} fill="#fff" r="2"></circle>
-                    <circle cx={p2.x} cy={p2.y} fill="#fff" r="2"></circle>
-                    <circle cx={p3.x} cy={p3.y} fill="#fff" r="2"></circle>
-                    <circle cx={p4.x} cy={p4.y} fill="#fff" r="2"></circle>
-                  </svg>
-                  {/* Labels */}
-                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-gray-300 text-center w-full">Technical Skills<br /><span className="text-white">{finalTechnical}</span></span>
-                  <span className="absolute top-8 -right-8 text-[10px] text-gray-300 text-center">Communication<br /><span className="text-white">{finalCommunication}</span></span>
-                  <span className="absolute -bottom-4 right-2 text-[10px] text-gray-300 text-center">Leadership<br /><span className="text-white">{finalLeadership}</span></span>
-                  <span className="absolute -bottom-4 left-2 text-[10px] text-gray-300 text-center">Problem Solving<br /><span className="text-white">{finalProblemSolving}</span></span>
-                  <span className="absolute top-8 -left-8 text-[10px] text-gray-300 text-center">Confidence<br /><span className="text-white">{finalConfidence}</span></span>
+          {/* Prep Checkpoint */}
+          <div className="rounded-2xl p-5 flex flex-col relative overflow-hidden glass-card-db">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none opacity-15"
+              style={{ background: 'radial-gradient(circle, #6366F1, transparent 70%)', transform: 'translate(30%, -30%)' }} />
+            <div className="flex justify-between items-center mb-4 relative z-10">
+              <h3 className="text-white font-semibold text-sm">
+                {ongoingSession ? 'Ongoing Session' : 'Target Prep Checkpoint'}
+              </h3>
+              <Link to="/lobby" className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                Lobby <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            {/* Session info card */}
+            <div className="rounded-xl p-4 mb-4 relative z-10"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <div className="flex gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                  <Mic size={18} className="text-indigo-400" />
                 </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-800 flex items-center justify-between">
                 <div>
-                  <p className="text-white text-sm font-medium mb-1">
-                    You're in the top {Math.max(1, 100 - Math.round(readinessScore * 0.95))}% of candidates!
-                  </p>
-                  <p className="text-xs text-gray-400">Keep practicing to improve further.</p>
-                </div>
-                <div className="w-8 h-8 rounded bg-blue-900/30 flex items-center justify-center text-blue-400">
-                  <i className="fa-solid fa-arrow-trend-up"></i>
+                  <h4 className="text-white font-semibold text-sm">
+                    {ongoingSession ? `${ongoingSession.type} Mock Session` : `${targetRole} Interview`}
+                  </h4>
+                  <p className="text-indigo-400 text-xs mt-0.5">{targetCompany}</p>
+                  <div className="flex gap-2 mt-2">
+                    {['Medium', 'JavaScript', 'AI Panel'].map(t => (
+                      <span key={t} className="px-2 py-0.5 rounded text-[10px] font-medium"
+                        style={{ background: 'rgba(255,255,255,0.06)', color: '#64748B' }}>{t}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="glass-card p-5">
-              <h3 className="text-white font-medium mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <Link 
-                  to="/lobby" 
-                  className="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl p-3 flex flex-col items-start gap-2 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400">
-                    <i className="fa-solid fa-microphone"></i>
+            {/* Checklist */}
+            <div className="mt-auto relative z-10">
+              <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                <span>Interview preparation</span>
+                <span className="font-semibold text-white">{prepProgress}%</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full mb-4 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${prepProgress}%`, background: 'linear-gradient(90deg, #3B82F6, #8B5CF6)' }} />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-4">
+                {[
+                  [checkResume,    'Resume Analyzed'],
+                  [checkJob,       'Job Profile Set'],
+                  [checkQuestions, 'Session Started'],
+                  [checkReady,     'Interview Ready'],
+                ].map(([done, label]) => (
+                  <div key={label} className="flex items-center gap-1.5 text-xs">
+                    {done
+                      ? <CheckCircle size={12} className="text-emerald-400 flex-shrink-0" />
+                      : <Circle size={12} className="text-slate-700 flex-shrink-0" />}
+                    <span className={done ? 'text-slate-300' : 'text-slate-600'}>{label}</span>
                   </div>
-                  <div>
-                    <div className="text-white text-xs font-medium">Start AI Interview</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">Begin a new interview</div>
-                  </div>
-                </Link>
+                ))}
+              </div>
+              <Link
+                to={ongoingSession ? `/interview-room?sessionId=${ongoingSession.id}` : hasUploadedResume ? '/lobby' : '/resume'}
+                className="btn btn-shimmer w-full py-2.5 text-white font-semibold text-sm rounded-xl"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', boxShadow: '0 4px 16px rgba(99,102,241,0.3)' }}
+              >
+                {ongoingSession ? 'Resume Interview' : hasUploadedResume ? 'Start Mock Interview' : 'Upload Resume'}
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </div>
 
-                <Link 
-                  to="/coding" 
-                  className="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl p-3 flex flex-col items-start gap-2 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-green-900/30 flex items-center justify-center text-green-400">
-                    <i className="fa-solid fa-code"></i>
-                  </div>
-                  <div>
-                    <div className="text-white text-xs font-medium">Solve Problems</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">Practice coding</div>
-                  </div>
-                </Link>
-
-                <Link 
-                  to="/resume" 
-                  className="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl p-3 flex flex-col items-start gap-2 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-cyan-900/30 flex items-center justify-center text-cyan-400">
-                    <i className="fa-regular fa-file-lines"></i>
-                  </div>
-                  <div>
-                    <div className="text-white text-xs font-medium">Analyze Resume</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">Improve your resume</div>
-                  </div>
-                </Link>
-
-                <Link 
-                  to="/gd" 
-                  className="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl p-3 flex flex-col items-start gap-2 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-yellow-900/30 flex items-center justify-center text-yellow-500">
-                    <i className="fa-solid fa-briefcase"></i>
-                  </div>
-                  <div>
-                    <div className="text-white text-xs font-medium">Job Analyzer</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">Analyze job roles</div>
-                  </div>
-                </Link>
+        {/* ── Analytics Row ── */}
+        <div className="grid grid-cols-2 gap-5">
+          {/* Performance Chart */}
+          <div className="rounded-2xl p-5 flex flex-col glass-card-db">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold text-sm">Performance Overview</h3>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2 h-2 rounded-full bg-violet-500" />Interviews</span>
+                <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-500" />Coding</span>
+                <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2 h-2 rounded-full bg-emerald-500" />Readiness</span>
               </div>
             </div>
+            <div className="h-52 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={areaChartData} margin={{ top: 5, right: 5, left: -28, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="readinessGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="codingGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.12}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="interviewsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.12}/>
+                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} />
+                  <YAxis stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} domain={[0, 100]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'rgba(13,18,32,0.98)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '11px', backdropFilter: 'blur(12px)' }}
+                    itemStyle={{ color: '#94A3B8' }}
+                    labelStyle={{ color: '#F1F5F9', fontWeight: 600, marginBottom: 4 }}
+                  />
+                  <Area type="monotone" dataKey="readiness"  stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#readinessGrad)" />
+                  <Area type="monotone" dataKey="coding"     stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#codingGrad)" />
+                  <Area type="monotone" dataKey="interviews" stroke="#8B5CF6" strokeWidth={2} fillOpacity={1} fill="url(#interviewsGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-            {/* Recent Activity */}
-            <div className="glass-card p-5 flex-1">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-white font-medium">Recent Activity</h3>
-                <Link to="/feedback" className="text-blue-400 text-sm hover:text-blue-300 flex items-center gap-1">View All <i className="fa-solid fa-arrow-right text-[10px]"></i></Link>
-              </div>
-              <div className="space-y-4">
-                {history.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <p className="text-xs text-gray-500">No recent activity found.</p>
-                    <p className="text-[10px] text-gray-600 mt-1">Start a mock interview to see your reports here!</p>
-                  </div>
-                ) : (
-                  history.slice(0, 3).map((act, index) => (
-                    <div key={act.id || index} className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        act.status === 'completed'
-                          ? 'bg-green-950/30 border border-green-500/20 text-green-400'
-                          : 'bg-yellow-950/30 border border-yellow-500/20 text-yellow-400'
-                      }`}>
-                        <i className={`fa-solid ${
-                          act.type === 'Coding' ? 'fa-code' : 'fa-microphone'
-                        } text-sm`}></i>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-white text-sm font-medium truncate">
-                          {act.status === 'completed' ? 'Completed: ' : 'Ongoing: '}
-                          {act.type} Interview
-                        </h4>
-                        <p className="text-[10px] text-gray-500 mt-0.5">
-                          {act.role} • {getRelativeTime(act.startedAt || act.createdAt)}
-                        </p>
-                      </div>
-                      <div className={`text-xs font-medium px-2 py-1 rounded ${
-                        act.status === 'completed'
-                          ? 'text-green-500 bg-green-500/10'
-                          : 'text-yellow-500 bg-yellow-500/10'
-                      }`}>
-                        {act.scoreCard ? `${act.scoreCard.overallScore}%` : 'Ongoing'}
-                      </div>
+          {/* Score Breakdown */}
+          <div className="rounded-2xl p-5 glass-card-db">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-white font-semibold text-sm">Skill Breakdown</h3>
+              <Link to="/feedback" className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                Analytics <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="space-y-4">
+              {SCORE_BARS.map(bar => (
+                <div key={bar.label}>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2 text-slate-400 text-xs" style={{ color: '#94A3B8' }}>
+                      <span style={{ color: bar.color }}>{bar.icon}</span>
+                      {bar.label}
                     </div>
-                  ))
+                    <div className="text-xs font-bold" style={{ color: bar.color }}>{bar.value}<span className="text-slate-600 font-normal">/100</span></div>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${bar.value}%`, background: `linear-gradient(90deg, ${bar.color}80, ${bar.color})` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── AI Coach Banner ── */}
+        {showAiBanner && (
+          <div className="rounded-2xl p-5 relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(139,92,246,0.08) 100%)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              backdropFilter: 'blur(12px)',
+            }}>
+            <div className="absolute top-0 left-0 w-40 h-40 rounded-full pointer-events-none opacity-20"
+              style={{ background: 'radial-gradient(circle, #3B82F6, transparent 70%)', transform: 'translate(-30%, -30%)' }} />
+            <button onClick={() => setShowAiBanner(false)}
+              className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-all">
+              <X size={14} />
+            </button>
+            <div className="flex items-start gap-5 relative z-10">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
+                <Bot size={24} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-white font-bold text-base">AI Career Coach</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: 'rgba(99,102,241,0.2)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.3)' }}>BETA</span>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed">{coachMessage}</p>
+              </div>
+              <Link to="/lobby"
+                className="btn btn-shimmer flex-shrink-0 text-white font-semibold text-sm px-5 py-2.5 rounded-xl hidden sm:flex items-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', boxShadow: '0 4px 16px rgba(59,130,246,0.3)' }}>
+                Practice Now <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Right Sidebar ─────────────────────────── */}
+      <div className="w-72 flex flex-col gap-5 flex-shrink-0">
+
+        {/* Radar Chart */}
+        <div className="rounded-2xl p-5 glass-card-db">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-semibold text-sm">Skill Profile</h3>
+            <Link to="/feedback" className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1">
+              Report <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="flex items-center justify-center">
+            <div className="relative w-44 h-44">
+              {/* Radar background */}
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+                <polygon fill="none" points="50,5 95,38 78,95 22,95 5,38" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+                <polygon fill="none" points="50,25 80,48 68,80 32,80 20,48" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+                <polygon fill="none" points="50,40 65,52 58,68 42,68 35,52" stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>
+                <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="50" y2="5"/>
+                <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="95" y2="38"/>
+                <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="78" y2="95"/>
+                <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="22" y2="95"/>
+                <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="5" y2="38"/>
+              </svg>
+              {/* Data polygon */}
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="polyGrad2" x1="0%" x2="100%" y1="0%" y2="100%">
+                    <stop offset="0%" stopColor="rgba(59,130,246,0.5)"/>
+                    <stop offset="100%" stopColor="rgba(139,92,246,0.5)"/>
+                  </linearGradient>
+                </defs>
+                <polygon fill="url(#polyGrad2)" points={pointsString}
+                  stroke="#6366F1" strokeWidth="1.5"
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.4))' }}/>
+                {[p0,p1,p2,p3,p4].map((p,i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="white" opacity="0.9"
+                    style={{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.8))' }}/>
+                ))}
+              </svg>
+              {/* Labels */}
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] text-slate-400 text-center whitespace-nowrap">Technical<br/><span className="text-white font-bold">{finalTechnical}</span></span>
+              <span className="absolute top-6 -right-9 text-[9px] text-slate-400 text-center">Comm.<br/><span className="text-white font-bold">{finalCommunication}</span></span>
+              <span className="absolute -bottom-5 right-1 text-[9px] text-slate-400 text-center">Lead.<br/><span className="text-white font-bold">{finalLeadership}</span></span>
+              <span className="absolute -bottom-5 left-1 text-[9px] text-slate-400 text-center">Problem<br/><span className="text-white font-bold">{finalProblemSolving}</span></span>
+              <span className="absolute top-6 -left-7 text-[9px] text-slate-400 text-center">Conf.<br/><span className="text-white font-bold">{finalConfidence}</span></span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div>
+              <p className="text-white text-xs font-semibold">Top {Math.max(1, 100 - Math.round(readinessScore * 0.95))}% of candidates</p>
+              <p className="text-[11px] text-slate-600 mt-0.5">Keep practicing</p>
+            </div>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.12)' }}>
+              <TrendingUp size={15} className="text-emerald-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="rounded-2xl p-5 glass-card-db">
+          <h3 className="text-white font-semibold text-sm mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-2.5">
+            {QUICK_ACTIONS.map(a => {
+              const Icon = a.icon;
+              return (
+                <Link key={a.to} to={a.to}
+                  className="rounded-xl p-3.5 flex flex-col items-start gap-2.5 card-hover"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: a.bg }}>
+                    <Icon size={15} style={{ color: a.color }} />
+                  </div>
+                  <span className="text-white text-xs font-semibold">{a.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="rounded-2xl p-5 glass-card-db flex-1">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-semibold text-sm">Recent Activity</h3>
+            <Link to="/feedback" className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1">
+              All <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {history.length === 0 ? (
+              <div className="text-center py-8">
+                <Mic size={24} className="text-slate-700 mx-auto mb-2" />
+                <p className="text-xs text-slate-600">No activity yet</p>
+                <p className="text-[10px] text-slate-700 mt-1">Start a mock interview!</p>
+              </div>
+            ) : history.slice(0, 4).map((act, i) => (
+              <div key={act.id || i} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: act.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                    border: `1px solid ${act.status === 'completed' ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                  }}>
+                  {act.type === 'Coding'
+                    ? <Code2 size={14} className={act.status === 'completed' ? 'text-emerald-400' : 'text-amber-400'} />
+                    : <Mic size={14} className={act.status === 'completed' ? 'text-emerald-400' : 'text-amber-400'} />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium truncate">
+                    {act.status === 'completed' ? '✓ ' : '● '}{act.type} Interview
+                  </p>
+                  <p className="text-[10px] text-slate-600">{act.role} · {getRelativeTime(act.startedAt || act.createdAt)}</p>
+                </div>
+                <div className="text-[10px] font-bold px-2 py-1 rounded-lg flex-shrink-0"
+                  style={{
+                    background: act.status === 'completed' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+                    color: act.status === 'completed' ? '#34D399' : '#FCD34D',
+                  }}>
+                  {act.scoreCard ? `${act.scoreCard.overallScore}%` : 'Live'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Aura Chatbot Widget */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
+        {/* Chat Window */}
+        <AnimatePresence>
+          {chatOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              className="w-80 sm:w-96 h-[400px] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl flex flex-col mb-4 overflow-hidden"
+              style={{
+                background: 'rgba(10, 15, 30, 0.98)',
+                backdropFilter: 'blur(20px)',
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-850 pb-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-blue-violet flex items-center justify-center shadow-glow-blue">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-xs leading-none">Aura AI Coach</h4>
+                    <span className="text-[9px] text-slate-500 font-semibold mt-0.5 block">Online</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setChatOpen(false)}
+                  className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Message List */}
+              <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1 custom-scrollbar">
+                {chatMessages.map((m, i) => (
+                  <div 
+                    key={i} 
+                    className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div 
+                      className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
+                        m.role === 'user' 
+                          ? 'bg-indigo-600 text-white rounded-br-none' 
+                          : 'bg-white/[0.04] border border-slate-900/60 text-slate-200 rounded-bl-none'
+                      }`}
+                    >
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed bg-white/[0.04] border border-slate-900/60 text-slate-400 rounded-bl-none flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                      <span>Aura is thinking...</span>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-          {/* END: Right Sidebar */}
+
+              {/* Chat Input form */}
+              <form onSubmit={handleSendChatMessage} className="flex gap-2 border-t border-slate-850 pt-3">
+                <input
+                  type="text"
+                  placeholder="Ask Aura anything about your prep..."
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-slate-900 border border-slate-850 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+                />
+                <button 
+                  type="submit"
+                  disabled={!chatInput.trim() || chatLoading}
+                  className="w-9 h-9 rounded-xl bg-gradient-blue-violet flex items-center justify-center text-white disabled:opacity-40 hover:opacity-90 transition-all shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Floating Bubble Button */}
+        <button
+          onClick={() => setChatOpen(o => !o)}
+          className="w-12 h-12 rounded-full bg-gradient-blue-violet flex items-center justify-center text-white shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-indigo-500/30"
+        >
+          {chatOpen ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5 animate-pulse" />}
+        </button>
+      </div>
     </div>
   );
 }
@@ -860,3 +840,4 @@ const getRelativeTime = (isoString) => {
     return 'Recently';
   }
 };
+

@@ -11,6 +11,7 @@ const resumeRoutes = require('./routes/resumeRoutes');
 const gamificationRoutes = require('./routes/gamificationRoutes');
 const codingRoutes = require('./routes/codingRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -41,6 +42,7 @@ app.use('/api/resumes', resumeRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/coding', codingRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
 
 console.log('🤖 OpenRouter AI service registered on /api/ai');
 

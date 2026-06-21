@@ -3,26 +3,27 @@
    All classes prefixed with "lp-" to avoid conflicts
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── Design Tokens ── */
 :root {
-  --lp-bg:            #0d0b18;
-  --lp-fg:            #f4f2ff;
-  --lp-card:          #14111f;
-  --lp-card2:         #1a1630;
-  --lp-muted:         rgba(200,190,255,0.45);
-  --lp-border:        rgba(160,140,255,0.15);
-  --lp-primary:       #7c6fcd;
-  --lp-primary2:      #a855f7;
-  --lp-grad:          linear-gradient(110deg, #7c6fcd, #a855f7);
-  --lp-aurora:        radial-gradient(circle at 30% 30%, rgba(100,80,200,0.5), transparent 60%),
-                      radial-gradient(circle at 70% 60%, rgba(130,70,210,0.45), transparent 60%);
-  --lp-glass-bg:      rgba(30,24,50,0.55);
-  --lp-glass-border:  rgba(180,160,255,0.18);
-  --lp-glow:          0 0 0 1px rgba(124,111,205,0.2), 0 20px 60px -15px rgba(100,80,200,0.5);
+  --lp-bg:            #080C14;
+  --lp-fg:            #F1F5F9;
+  --lp-card:          #0D1220;
+  --lp-card2:         #111827;
+  --lp-muted:         rgba(148,163,184,0.7);
+  --lp-border:        rgba(255,255,255,0.06);
+  --lp-primary:       #6366F1;
+  --lp-primary2:      #8B5CF6;
+  --lp-grad:          linear-gradient(135deg, #3B82F6, #8B5CF6);
+  --lp-grad2:         linear-gradient(135deg, #6366F1, #06B6D4);
+  --lp-aurora:        radial-gradient(circle at 30% 30%, rgba(59,130,246,0.35), transparent 60%),
+                      radial-gradient(circle at 70% 60%, rgba(99,102,241,0.3), transparent 60%);
+  --lp-glass-bg:      rgba(13,18,32,0.65);
+  --lp-glass-border:  rgba(255,255,255,0.07);
+  --lp-glow:          0 0 0 1px rgba(99,102,241,0.2), 0 20px 60px -15px rgba(59,130,246,0.3);
   --lp-radius:        0.9rem;
-  --lp-font-display:  'Sora', system-ui, sans-serif;
+  --lp-font-display:  'Inter', system-ui, sans-serif;
   --lp-font-sans:     'Inter', system-ui, sans-serif;
   --lp-font-mono:     'JetBrains Mono', monospace;
 }
@@ -52,7 +53,7 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(100,80,200,0.25), transparent 70%);
+  background: radial-gradient(circle, rgba(59,130,246,0.18), transparent 70%);
   filter: blur(60px);
 }
 .lp-ambient-right {
@@ -62,13 +63,13 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(140,70,220,0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(99,102,241,0.18), transparent 70%);
   filter: blur(60px);
 }
 .lp-ambient-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(#0d0b18, transparent 30%, transparent 70%, #0d0b18);
+  background: linear-gradient(#080C14, transparent 30%, transparent 70%, #080C14);
 }
 
 /* ── Glass Utility ── */
@@ -401,13 +402,46 @@
   letter-spacing: -0.02em;
 }
 
-/* ── Features ── */
+/* ── Features — Bento Grid ── */
 .lp-features-grid {
   display: grid;
   gap: 1rem;
+  grid-template-columns: 1fr;
 }
-@media (min-width: 640px) { .lp-features-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1024px) { .lp-features-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 640px) {
+  .lp-features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lp-features-grid > *:nth-child(1) { grid-column: span 2; }
+}
+@media (min-width: 1024px) {
+  .lp-features-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: auto;
+  }
+  .lp-features-grid > *:nth-child(1) { grid-column: span 2; }
+  .lp-features-grid > *:nth-child(6) { grid-column: span 2; }
+}
+
+/* Featured (wide) card inner layout */
+.lp-feature-card-featured {
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 640px) {
+  .lp-feature-card-featured {
+    flex-direction: row;
+    align-items: center;
+    gap: 2rem;
+  }
+  .lp-feature-card-featured .lp-feature-content { flex: 1; }
+  .lp-feature-card-featured .lp-feature-visual {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
 
 .lp-feature-card {
   position: relative;
@@ -1159,4 +1193,20 @@
 @keyframes lpBlink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* ── Number stat glow animation ── */
+@keyframes lpStatGlow {
+  0%, 100% { text-shadow: 0 0 12px rgba(99,102,241,0.4); }
+  50% { text-shadow: 0 0 24px rgba(99,102,241,0.7); }
+}
+.lp-stat-value { animation: lpStatGlow 3s ease-in-out infinite; }
+
+/* ── Navbar active indicator ── */
+.lp-nav-link-active { color: var(--lp-fg) !important; }
+
+/* ── Mobile responsive final CTA ── */
+@media (max-width: 640px) {
+  .lp-final-headline { font-size: 2rem; }
+  .lp-hero { padding: 7rem 1rem 4rem; }
 }

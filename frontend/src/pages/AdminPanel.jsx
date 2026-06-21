@@ -9,6 +9,11 @@ export default function AdminPanel() {
   const { token } = useAuth();
 
   const [questions, setQuestions] = useState([]);
+  const [stats, setStats] = useState({
+    activeCandidates: "1,245",
+    totalInterviews: "14,892",
+    avgScore: "78%"
+  });
 
   // New Question Form
   const [type, setType] = useState('HR');
@@ -20,21 +25,37 @@ export default function AdminPanel() {
   const [notif, setNotif] = useState('');
 
   const systemStats = [
-    { label: "Active Candidates", value: "1,245", sub: "+12% this week" },
-    { label: "Mock Sprints Conducted", value: "14,892", sub: "94.6% Success" },
-    { label: "Avg ATS Scan Score", value: "78%", sub: "+4% improvement" }
+    { label: "Active Candidates", value: stats.activeCandidates, sub: "+12% this week" },
+    { label: "Mock Sprints Conducted", value: stats.totalInterviews, sub: "94.6% Success" },
+    { label: "Avg ATS Scan Score", value: stats.avgScore, sub: "+4% improvement" }
   ];
 
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const fetchData = async () => {
       try {
-        await fetch(`${API_BASE}/gamification/gd-topic`, {
+        // Fetch stats
+        const statsRes = await fetch(`${API_BASE}/admin/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // We can just grab questions from local mock DB managers
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setStats({
+            activeCandidates: statsData.activeToday.toString(),
+            totalInterviews: statsData.totalInterviews.toString(),
+            avgScore: `${statsData.avgScore}%`
+          });
+        }
+
+        // Fetch questions
+        const questionsRes = await fetch(`${API_BASE}/admin/questions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (questionsRes.ok) {
+          const qData = await questionsRes.json();
+          setQuestions(qData.questions);
+        }
       } catch (e) {
         console.warn("Server offline, using default questions bank", e.message);
-      } finally {
         setQuestions([
           { id: "q_1", type: "HR", difficulty: "Easy", role: "All", company: "Common", question: "Tell me about yourself and walk me through your resume." },
           { id: "q_2", type: "Technical", difficulty: "Medium", role: "Software Engineer", company: "Google", question: "Explain the four main pillars of OOP with examples." },
@@ -43,32 +64,55 @@ export default function AdminPanel() {
       }
     };
 
-    fetchQuestions();
+    if (token) fetchData();
   }, [token]);
 
-  const handleAddQuestion = (e) => {
+  const handleAddQuestion = async (e) => {
     e.preventDefault();
     if (!questionText.trim()) return;
 
-    const newQ = {
-      id: `q_admin_${Date.now()}`,
-      type,
-      difficulty,
-      role,
-      company,
-      question: questionText
-    };
-
-    setQuestions(prev => [newQ, ...prev]);
-    setQuestionText('');
-    setNotif("🎉 Question added to active mock database!");
-    setTimeout(() => setNotif(""), 3000);
+    try {
+      const res = await fetch(`${API_BASE}/admin/questions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ type, difficulty, role, company, question: questionText })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(prev => [data.question, ...prev]);
+        setQuestionText('');
+        setNotif("🎉 Question added to active mock database!");
+        setTimeout(() => setNotif(""), 3000);
+      } else {
+        const errData = await res.json();
+        alert(errData.message || "Failed to add question");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error adding question");
+    }
   };
 
-  const handleDeleteQuestion = (id) => {
-    setQuestions(prev => prev.filter(q => q.id !== id));
-    setNotif("🗑️ Question removed from active database.");
-    setTimeout(() => setNotif(""), 3000);
+  const handleDeleteQuestion = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/questions/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setQuestions(prev => prev.filter(q => q.id !== id));
+        setNotif("🗑️ Question removed from active database.");
+        setTimeout(() => setNotif(""), 3000);
+      } else {
+        alert("Failed to delete question");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting question");
+    }
   };
 
   return (
