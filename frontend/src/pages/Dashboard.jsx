@@ -22,10 +22,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAiBanner, setShowAiBanner] = useState(true);
 
-  // Aura Chatbot states
+  // TRESK Career Copilot states
   const [chatOpen, setChatOpen] = useState(false);
+  const [treskMode, setTreskMode] = useState('career');
   const [chatMessages, setChatMessages] = useState([
-    { role: 'model', text: 'Hello! I am Aura, your AI interview preparation assistant. How can I help you optimize your tech prep today?' }
+    { role: 'model', text: '**TRESK here** — your AI Career Copilot! 🚀\n\nI can help you with career strategy, DSA problems, resume optimization, and company-specific placement prep. Select a mode above or just ask me anything!' }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -40,7 +41,7 @@ export default function Dashboard() {
     setChatLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/auth/chat-assistant`, {
+      const res = await fetch(`${API_BASE}/tresk/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,6 +49,7 @@ export default function Dashboard() {
         },
         body: JSON.stringify({
           message: userMsg.text,
+          mode: treskMode,
           chatHistory: chatMessages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text }))
         })
       });
@@ -59,8 +61,20 @@ export default function Dashboard() {
         throw new Error('Failed to get response');
       }
     } catch (err) {
-      console.error(err);
-      setChatMessages(prev => [...prev, { role: 'model', text: 'Sorry, I am having trouble connecting to the server. Please try again later.' }]);
+      // Fallback to legacy Aura endpoint
+      try {
+        const res2 = await fetch(`${API_BASE}/auth/chat-assistant`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ message: userMsg.text, chatHistory: chatMessages.map(m => ({ role: m.role, text: m.text })) })
+        });
+        if (res2.ok) {
+          const d = await res2.json();
+          setChatMessages(prev => [...prev, { role: 'model', text: d.reply }]);
+          return;
+        }
+      } catch {}
+      setChatMessages(prev => [...prev, { role: 'model', text: 'TRESK is temporarily unavailable. Please try again shortly.' }]);
     } finally {
       setChatLoading(false);
     }
@@ -729,96 +743,163 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Floating Aura Chatbot Widget */}
+      {/* ── TRESK AI Career Copilot Widget ─────────────────── */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
-        {/* Chat Window */}
         <AnimatePresence>
           {chatOpen && (
             <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              initial={{ opacity: 0, y: 60, scale: 0.92 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 50, scale: 0.95 }}
-              className="w-80 sm:w-96 h-[400px] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl flex flex-col mb-4 overflow-hidden"
+              exit={{ opacity: 0, y: 60, scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+              className="mb-4 flex flex-col"
               style={{
-                background: 'rgba(10, 15, 30, 0.98)',
-                backdropFilter: 'blur(20px)',
+                width: '22rem',
+                height: '480px',
+                borderRadius: '20px',
+                background: 'rgba(7, 10, 22, 0.97)',
+                backdropFilter: 'blur(24px)',
+                border: '1px solid rgba(99,102,241,0.25)',
+                boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)',
+                overflow: 'hidden',
               }}
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-850 pb-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-blue-violet flex items-center justify-center shadow-glow-blue">
-                    <Bot className="w-4 h-4 text-white" />
+              <div className="flex items-center justify-between px-4 py-3" style={{
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.08))',
+              }}>
+                <div className="flex items-center gap-2.5">
+                  {/* TRESK logo badge */}
+                  <div className="relative">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', boxShadow: '0 4px 12px rgba(99,102,241,0.5)' }}>
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2"
+                      style={{ borderColor: 'rgba(7,10,22,0.97)' }} />
                   </div>
                   <div>
-                    <h4 className="font-bold text-white text-xs leading-none">Aura AI Coach</h4>
-                    <span className="text-[9px] text-slate-500 font-semibold mt-0.5 block">Online</span>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-white text-sm leading-none">TRESK</h4>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white"
+                        style={{ background: 'linear-gradient(90deg,#6366F1,#8B5CF6)' }}>AI</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-medium mt-0.5 block">Career Copilot · Online</span>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setChatOpen(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-all"
-                >
-                  <X className="w-4 h-4" />
+                <button onClick={() => setChatOpen(false)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                  style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <X className="w-3.5 h-3.5 text-slate-400" />
                 </button>
               </div>
 
+              {/* Mode Tabs */}
+              <div className="flex gap-1 px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                {[
+                  { id: 'career',    label: '🎯 Career'   },
+                  { id: 'dsa',       label: '💻 DSA'      },
+                  { id: 'resume',    label: '📄 Resume'   },
+                  { id: 'placement', label: '🏢 Placement' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setTreskMode(tab.id);
+                      setChatMessages([{ role: 'model', text: `**${tab.label.split(' ')[1]} Mode activated!** Ask me anything about ${tab.id === 'career' ? 'career strategy and interview prep' : tab.id === 'dsa' ? 'data structures, algorithms, and coding problems' : tab.id === 'resume' ? 'resume optimization and ATS scoring' : 'company-specific placement preparation'}.` }]);
+                    }}
+                    className="flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all"
+                    style={{
+                      background: treskMode === tab.id ? 'linear-gradient(135deg,rgba(99,102,241,0.3),rgba(139,92,246,0.2))' : 'transparent',
+                      color: treskMode === tab.id ? '#A5B4FC' : '#64748B',
+                      border: treskMode === tab.id ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                    }}
+                  >{tab.label}</button>
+                ))}
+              </div>
+
               {/* Message List */}
-              <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 custom-scrollbar">
                 {chatMessages.map((m, i) => (
-                  <div 
-                    key={i} 
-                    className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div 
-                      className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
-                        m.role === 'user' 
-                          ? 'bg-indigo-600 text-white rounded-br-none' 
-                          : 'bg-white/[0.04] border border-slate-900/60 text-slate-200 rounded-bl-none'
-                      }`}
-                    >
-                      {m.text}
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {m.role === 'model' && (
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center mr-2 mt-0.5 flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)' }}>
+                        <Bot className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    <div className={`max-w-[78%] rounded-2xl px-3 py-2.5 text-xs leading-relaxed ${
+                      m.role === 'user'
+                        ? 'text-white rounded-br-none'
+                        : 'text-slate-200 rounded-bl-none'
+                    }`} style={{
+                      background: m.role === 'user'
+                        ? 'linear-gradient(135deg,#4F46E5,#7C3AED)'
+                        : 'rgba(255,255,255,0.05)',
+                      border: m.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.07)',
+                      whiteSpace: 'pre-line',
+                    }}>
+                      {m.text.replace(/\*\*(.*?)\*\*/g, '$1')}
                     </div>
                   </div>
                 ))}
                 {chatLoading && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed bg-white/[0.04] border border-slate-900/60 text-slate-400 rounded-bl-none flex items-center gap-2">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                      <span>Aura is thinking...</span>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center mr-2 flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)' }}>
+                      <Bot className="w-2.5 h-2.5 text-white" />
+                    </div>
+                    <div className="px-3 py-2.5 rounded-2xl rounded-bl-none text-xs text-slate-400 flex items-center gap-2"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                      TRESK is thinking...
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Chat Input form */}
-              <form onSubmit={handleSendChatMessage} className="flex gap-2 border-t border-slate-850 pt-3">
-                <input
-                  type="text"
-                  placeholder="Ask Aura anything about your prep..."
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-slate-900 border border-slate-850 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
-                />
-                <button 
-                  type="submit"
-                  disabled={!chatInput.trim() || chatLoading}
-                  className="w-9 h-9 rounded-xl bg-gradient-blue-violet flex items-center justify-center text-white disabled:opacity-40 hover:opacity-90 transition-all shrink-0"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </form>
+              {/* Input */}
+              <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <form onSubmit={handleSendChatMessage} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={treskMode === 'dsa' ? 'Describe a DSA problem...' : treskMode === 'resume' ? 'Paste resume text or ask...' : treskMode === 'placement' ? 'Which company are you targeting?' : 'Ask TRESK anything...'}
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  />
+                  <button type="submit" disabled={!chatInput.trim() || chatLoading}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white disabled:opacity-40 hover:opacity-90 transition-all flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)' }}>
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Floating Bubble Button */}
-        <button
+        {/* Floating Bubble */}
+        <motion.button
           onClick={() => setChatOpen(o => !o)}
-          className="w-12 h-12 rounded-full bg-gradient-blue-violet flex items-center justify-center text-white shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-indigo-500/30"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.92 }}
+          className="relative w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl"
+          style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', boxShadow: '0 8px 32px rgba(99,102,241,0.5)' }}
         >
-          {chatOpen ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5 animate-pulse" />}
-        </button>
+          {chatOpen ? <X className="w-5 h-5" /> : <Bot className="w-6 h-6" />}
+          {!chatOpen && (
+            <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center"
+              style={{ fontSize: '8px', fontWeight: 700, color: '#064E3B', border: '2px solid #030712' }}>
+              T
+            </span>
+          )}
+        </motion.button>
       </div>
     </div>
   );

@@ -40,6 +40,7 @@ export const FEATURE_PLAN = {
   advancedAnalytics:      'pro',
   resumeAnalyzer:         'pro',
   jobAnalyzer:            'pro',
+  groupDiscussion:        'pro',
   learningRoadmap:        'pro',
   aptitudeTest:           'pro',
   leaderboard:            'pro',

@@ -302,8 +302,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Instantly update user state (e.g. after billing plan change)
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+    if (updatedUser?.plan) {
+      setPlan(updatedUser.plan);
+      localStorage.setItem('user_plan', updatedUser.plan);
+    }
+    localStorage.setItem('user_cache', JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, loginWithGoogle, firebaseReady, logout, updateXp, updateProfile, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
+    <AuthContext.Provider value={{ user, token, loading, register, login, loginWithGoogle, firebaseReady, logout, updateXp, updateProfile, updateUser, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
       {children}
     </AuthContext.Provider>
   );

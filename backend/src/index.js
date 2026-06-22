@@ -13,6 +13,11 @@ const codingRoutes = require('./routes/codingRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
+// ── Modular SaaS Modules ───────────────────────────────────────────────────
+const treskRoutes   = require('./modules/ai/tresk.routes');
+const billingRoutes = require('./modules/billing/billing.routes');
+const replayRoutes  = require('./modules/interview/replay.routes');
+
 const app = express();
 const server = http.createServer(app);
 
@@ -44,7 +49,15 @@ app.use('/api/coding', codingRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 
+// ── Modular SaaS Routes ────────────────────────────────────────────────────
+app.use('/api/tresk',             treskRoutes);
+app.use('/api/billing',           billingRoutes);
+app.use('/api/interviews/replay', replayRoutes);
+
 console.log('🤖 OpenRouter AI service registered on /api/ai');
+console.log('🧠 TRESK Career Copilot registered on /api/tresk');
+console.log('💳 Billing (Razorpay) registered on /api/billing');
+console.log('📼 Interview Replay registered on /api/interviews/replay');
 
 // Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
 const io = new Server(server, {

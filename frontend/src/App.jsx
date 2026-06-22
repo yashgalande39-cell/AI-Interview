@@ -20,19 +20,22 @@ import InterviewRoom from './pages/InterviewRoom';
 import CodingEditor from './pages/CodingEditor';
 import ResumeAnalyzer from './pages/ResumeAnalyzer';
 import JobAnalyzer from './pages/JobAnalyzer';
+import GroupDiscussion from './pages/GroupDiscussion';
 import AptitudeEngine from './pages/AptitudeEngine';
 import CareerRoadmap from './pages/CareerRoadmap';
 import Leaderboard from './pages/Leaderboard';
 import AdminPanel from './pages/AdminPanel';
 import FeedbackAnalysis from './pages/FeedbackAnalysis';
 import Settings from './pages/Settings';
+import InterviewReplay from './pages/InterviewReplay';
+import Pricing from './pages/Pricing';
 
 import {
   LayoutDashboard, Mic, Code2, FileText, Briefcase,
   Trophy, BarChart3, Map, FlaskConical, Settings2,
   Bell, Search, Flame, Moon, Sun, LogOut,
   ChevronLeft, ChevronRight, Sparkles, Command,
-  Crown, Shield, Zap
+  Crown, Shield, Zap, Users2, PlayCircle, CreditCard, Bot
 } from 'lucide-react';
 
 // ── Route Guards ──────────────────────────────────────────────
@@ -112,18 +115,21 @@ const AppLayout = ({ children }) => {
 
   // Get current page title
   const PAGE_TITLES = {
-    '/dashboard':     'Dashboard',
-    '/lobby':         'AI Interviews',
-    '/interview-room':'Interview Room',
-    '/coding':        'Coding Arena',
-    '/resume':        'Resume Analyzer',
-    '/gd':            'Job Analyzer',
-    '/feedback':      'Analytics',
-    '/roadmap':       'Learning Roadmap',
-    '/aptitude':      'Aptitude Test',
-    '/leaderboard':   'Leaderboard',
-    '/settings':      'Settings',
-    '/admin':         'Admin Panel',
+    '/dashboard':         'Dashboard',
+    '/lobby':             'AI Interviews',
+    '/interview-room':    'Interview Room',
+    '/coding':            'Coding Arena',
+    '/resume':            'Resume Analyzer',
+    '/job-analyzer':      'Job Analyzer',
+    '/gd':                'Group Discussion',
+    '/feedback':          'Analytics',
+    '/roadmap':           'Learning Roadmap',
+    '/aptitude':          'Aptitude Test',
+    '/leaderboard':       'Leaderboard',
+    '/settings':          'Settings',
+    '/admin':             'Admin Panel',
+    '/replay':            'Interview Replay',
+    '/pricing':           'Upgrade Plan',
   };
   const pageTitle = PAGE_TITLES[location.pathname] || 'Workspace';
 
@@ -155,8 +161,8 @@ const AppLayout = ({ children }) => {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="text-white font-bold text-base leading-none tracking-tight">InterviewAI</h1>
-              <p className="text-[10px] text-slate-600 mt-0.5 font-medium">AI Career Platform</p>
+              <h1 className="text-white font-bold text-base leading-none tracking-tight">TRESK<span style={{ color: '#6366F1' }}> AI</span></h1>
+              <p className="text-[10px] text-slate-600 mt-0.5 font-medium">Career Copilot Platform</p>
             </div>
           )}
         </div>
@@ -170,20 +176,23 @@ const AppLayout = ({ children }) => {
 
           {/* PRACTICE */}
           {!collapsed && <div className="sidebar-section-label mt-2">Practice</div>}
-          <NavItem to="/coding"  icon={Code2}      label="Coding Arena"    isActive={isActive('/coding')}  isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/resume"  icon={FileText}   label="Resume Analyzer" isActive={isActive('/resume')}  isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/gd"      icon={Briefcase}  label="Job Analyzer"    isActive={isActive('/gd')}      isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/aptitude" icon={FlaskConical} label="Aptitude Test" isActive={isActive('/aptitude')} isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/coding"       icon={Code2}        label="Coding Arena"     isActive={isActive('/coding')}       isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/resume"       icon={FileText}     label="Resume Analyzer"  isActive={isActive('/resume')}       isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/job-analyzer" icon={Briefcase}     label="Job Analyzer"     isActive={isActive('/job-analyzer')} isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/gd"           icon={Users2}       label="Group Discussion" isActive={isActive('/gd')}           isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/aptitude"     icon={FlaskConical} label="Aptitude Test"    isActive={isActive('/aptitude')}     isLocked={plan==='free'} collapsed={collapsed} />
 
           {/* INTELLIGENCE */}
           {!collapsed && <div className="sidebar-section-label mt-2">Intelligence</div>}
-          <NavItem to="/feedback"    icon={BarChart3}  label="Analytics"      isActive={isActive('/feedback')}    isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/roadmap"     icon={Map}        label="Learning Path"  isActive={isActive('/roadmap')}     isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/leaderboard" icon={Trophy}     label="Leaderboard"    isActive={isActive('/leaderboard')} isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/feedback"    icon={BarChart3}    label="Analytics"         isActive={isActive('/feedback')}    isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/replay"      icon={PlayCircle}   label="Interview Replay"  isActive={isActive('/replay')}      isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/roadmap"     icon={Map}          label="Learning Path"     isActive={isActive('/roadmap')}     isLocked={plan==='free'} collapsed={collapsed} />
+          <NavItem to="/leaderboard" icon={Trophy}       label="Leaderboard"       isActive={isActive('/leaderboard')} isLocked={plan==='free'} collapsed={collapsed} />
 
-          {/* SETTINGS */}
+          {/* ACCOUNT */}
           {!collapsed && <div className="sidebar-section-label mt-2">Account</div>}
-          <NavItem to="/settings" icon={Settings2} label="Settings" isActive={isActive('/settings')} collapsed={collapsed} />
+          <NavItem to="/pricing"  icon={CreditCard} label="Upgrade Plan" isActive={isActive('/pricing')}  collapsed={collapsed} />
+          <NavItem to="/settings" icon={Settings2}  label="Settings"     isActive={isActive('/settings')} collapsed={collapsed} />
         </nav>
 
         {/* Upgrade card / Plan status */}
@@ -203,13 +212,13 @@ const AppLayout = ({ children }) => {
                 <Crown size={16} className="text-violet-400 mb-2" />
                 <h4 className="text-white font-semibold text-sm mb-1">Upgrade to Pro</h4>
                 <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">Unlock unlimited interviews, analytics & more.</p>
-                <a
-                  href="/#pricing"
+                <Link
+                  to="/pricing"
                   className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-white text-xs font-semibold transition-all"
                   style={{ background: 'var(--grad-primary)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
                 >
                   Upgrade Now <ChevronRight size={12} />
-                </a>
+                </Link>
               </div>
             ) : (
               <div className="rounded-xl p-3 flex items-center gap-2.5"
@@ -377,13 +386,16 @@ export default function App() {
           <Route path="/interview-room"element={<ProtectedRoute><AppLayout><InterviewRoom /></AppLayout></ProtectedRoute>} />
           <Route path="/coding"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CodingEditor /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/resume"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><ResumeAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/gd"            element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><JobAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
+          <Route path="/job-analyzer"  element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><JobAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
+          <Route path="/gd"            element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><GroupDiscussion /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/aptitude"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><AptitudeEngine /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/roadmap"       element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CareerRoadmap /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/leaderboard"   element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><Leaderboard /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/admin"         element={<ProtectedRoute><AppLayout><AdminPanel /></AppLayout></ProtectedRoute>} />
           <Route path="/feedback"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><FeedbackAnalysis /></PlanGate></AppLayout></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+          <Route path="/replay"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><InterviewReplay /></PlanGate></AppLayout></ProtectedRoute>} />
+          <Route path="/pricing"       element={<ProtectedRoute><AppLayout><Pricing /></AppLayout></ProtectedRoute>} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
