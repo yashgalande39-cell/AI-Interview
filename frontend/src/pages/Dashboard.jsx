@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [readinessScore, setReadinessScore] = useState(87);
+  const [readinessReport, setReadinessReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAiBanner, setShowAiBanner] = useState(true);
 
@@ -103,8 +104,17 @@ export default function Dashboard() {
         } else {
           setResumes([]);
         }
+
+        const readinessRes = await fetch(`${API_BASE}/analytics/readiness`, { headers });
+        if (readinessRes.ok) {
+          const readinessData = await readinessRes.json();
+          setReadinessReport(readinessData);
+          if (readinessData.score) {
+            setReadinessScore(readinessData.score);
+          }
+        }
       } catch (err) {
-        console.warn("Failed fetching dashboard history/resumes", err.message);
+        console.warn("Failed fetching dashboard history/resumes/readiness", err.message);
         setHistory([]);
         setResumes([]);
       } finally {
@@ -127,11 +137,14 @@ export default function Dashboard() {
         base += Math.min(15, Math.floor(avgScore - 60));
       }
       const timer = setTimeout(() => {
-        setReadinessScore(Math.min(98, Math.max(45, base)));
+        setReadinessScore(prev => {
+          if (readinessReport && readinessReport.score) return readinessReport.score;
+          return Math.min(98, Math.max(45, base));
+        });
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [user, history]);
+  }, [user, history, readinessReport]);
 
   const completed = history.filter(h => h.status === 'completed' || h.scoreCard);
   const completedCount = completed.length;

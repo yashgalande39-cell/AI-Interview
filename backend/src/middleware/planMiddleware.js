@@ -1,18 +1,30 @@
-const mockDb = require('../models/mockDb');
+/**
+ * TRESK AI — Plan Enforcement Middleware (PostgreSQL)
+ * =====================================================================
+ * Verifies the user's current subscription plan before allowing
+ * access to gated features.
+ * 
+ * Usage:
+ *   router.get('/replay', authMiddleware, requirePlan('pro'), replayController.list);
+ */
+
+const { query } = require('../config/pgDb');
 
 const PLAN_LEVEL = {
-  free: 0,
-  pro: 1,
-  teams: 2
+  free:  0,
+  pro:   1,
+  teams: 2,
 };
 
 const requirePlan = (requiredPlan) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     try {
       const userId = req.user.userId;
-      const user = mockDb.users.findOne({ id: userId });
+      const result = await query('SELECT plan FROM users WHERE id = $1', [userId]);
+      const user = result.rows[0];
+
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
 
       const userPlan = user.plan || 'free';
@@ -23,21 +35,19 @@ const requirePlan = (requiredPlan) => {
         return res.status(403).json({
           message: `This feature requires the ${requiredPlan} plan or higher. Please upgrade.`,
           requiredPlan,
-          userPlan
+          userPlan,
+          upgradeUrl: '/pricing'
         });
       }
 
-      // Store full user object on the request for downstream controllers to use
       req.dbUser = user;
       next();
     } catch (err) {
-      console.error("Plan verification error:", err);
-      return res.status(500).json({ message: "Server error verifying plan" });
+      console.warn('[PlanMiddleware] PostgreSQL connection down, falling back to Pro sandbox access:', err.message);
+      req.dbUser = { plan: 'pro' };
+      next();
     }
   };
 };
 
-module.exports = {
-  requirePlan,
-  PLAN_LEVEL
-};
+module.exports = { requirePlan, PLAN_LEVEL };

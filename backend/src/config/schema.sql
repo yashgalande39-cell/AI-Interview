@@ -1,13 +1,18 @@
 -- =============================================================================
--- TRESK AI Platform — PostgreSQL Schema
+-- TRESK AI Platform — PostgreSQL Schema (Full Production)
 -- =============================================================================
--- This schema is the production migration target.
--- Current stack uses mockDb.js (file-based) — migrate here when ready.
+-- Idempotent: all statements use IF NOT EXISTS / OR REPLACE.
 -- Run: psql -U postgres -d tresk_ai -f schema.sql
+-- Or auto-runs on server startup via pgDb.js
 -- =============================================================================
 
--- Enable UUID support
+-- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";    -- for text similarity search
+-- NOTE: Enable pgvector in your DB with:
+--   CREATE EXTENSION IF NOT EXISTS vector;
+-- Uncomment below once pgvector is installed in your PostgreSQL instance:
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 -- =============================================================================
 -- USERS
@@ -44,7 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- =============================================================================
 -- INTERVIEW SESSIONS
@@ -62,14 +67,25 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
   -- Scorecard (stored as JSONB for flexibility)
   score_card      JSONB,
 
+  -- Individual score components (denormalized for analytics performance)
+  score_overall       INTEGER DEFAULT 0,
+  score_technical     INTEGER DEFAULT 0,
+  score_communication INTEGER DEFAULT 0,
+  score_confidence    INTEGER DEFAULT 0,
+  score_problem_solving INTEGER DEFAULT 0,
+
   -- AI-generated feedback
   feedback        TEXT,
+
+  -- Full transcript for RAG memory
+  transcript      JSONB,
 
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_sessions_user ON interview_sessions(user_id);
-CREATE INDEX idx_sessions_status ON interview_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON interview_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON interview_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_company ON interview_sessions(company);
 
 -- =============================================================================
 -- REPLAY EVENTS (time-series per session)
@@ -79,12 +95,12 @@ CREATE TABLE IF NOT EXISTS replay_events (
   session_id  UUID        NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
   user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   t           INTEGER     NOT NULL,        -- milliseconds since session start
-  type        TEXT        NOT NULL,        -- 'question' | 'answer' | 'score' | 'expression' | 'pause'
+  type        TEXT        NOT NULL,        -- 'question' | 'answer' | 'score' | 'expression' | 'pause' | 'filler'
   payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_replay_session ON replay_events(session_id, t);
+CREATE INDEX IF NOT EXISTS idx_replay_session ON replay_events(session_id, t);
 
 -- =============================================================================
 -- RESUMES
@@ -106,7 +122,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_resumes_user ON resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes(user_id);
 
 -- =============================================================================
 -- CODING SUBMISSIONS
@@ -127,8 +143,9 @@ CREATE TABLE IF NOT EXISTS coding_submissions (
   submitted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_coding_user ON coding_submissions(user_id);
-CREATE INDEX idx_coding_problem ON coding_submissions(problem_id);
+CREATE INDEX IF NOT EXISTS idx_coding_user ON coding_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_coding_problem ON coding_submissions(problem_id);
+CREATE INDEX IF NOT EXISTS idx_coding_status ON coding_submissions(status);
 
 -- =============================================================================
 -- DAILY CHALLENGES
@@ -168,7 +185,7 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at         TIMESTAMPTZ
 );
 
-CREATE INDEX idx_payments_user ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 
 -- =============================================================================
 -- TRESK AI CHAT SESSIONS
@@ -190,7 +207,7 @@ CREATE TABLE IF NOT EXISTS tresk_messages (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_tresk_session ON tresk_messages(session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_tresk_session ON tresk_messages(session_id, created_at);
 
 -- =============================================================================
 -- GROUP DISCUSSIONS
@@ -206,6 +223,68 @@ CREATE TABLE IF NOT EXISTS gd_rooms (
 );
 
 -- =============================================================================
+-- AI READINESS SCORES (cached for dashboard display)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS readiness_scores (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+  score_overall   NUMERIC(5,2) NOT NULL DEFAULT 0,
+  score_coding    NUMERIC(5,2) NOT NULL DEFAULT 0,
+  score_interview NUMERIC(5,2) NOT NULL DEFAULT 0,
+  score_resume    NUMERIC(5,2) NOT NULL DEFAULT 0,
+  score_communication NUMERIC(5,2) NOT NULL DEFAULT 0,
+  sessions_count  INTEGER NOT NULL DEFAULT 0,
+  problems_solved INTEGER NOT NULL DEFAULT 0,
+  last_computed   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_readiness_user ON readiness_scores(user_id);
+
+-- =============================================================================
+-- USER MEMORIES (Vector embeddings or Trigram text search for RAG)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS user_memories (
+  id          BIGSERIAL   PRIMARY KEY,
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_type TEXT        NOT NULL,   -- 'interview' | 'resume' | 'coding' | 'chat'
+  source_id   TEXT,                   -- session_id, resume_id, etc.
+  chunk_text  TEXT        NOT NULL,
+  metadata    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_text_trgm ON user_memories USING gin (chunk_text gin_trgm_ops);
+
+-- Note: if you have pgvector installed, you can enable embeddings with:
+--   ALTER TABLE user_memories ADD COLUMN IF NOT EXISTS embedding VECTOR(1536);
+--   CREATE INDEX IF NOT EXISTS idx_memories_embedding ON user_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+
+-- =============================================================================
+-- QUESTIONS BANK
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS questions (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  type        TEXT        NOT NULL CHECK (type IN ('HR', 'Technical', 'Behavioral', 'Coding', 'System Design')),
+  role        TEXT        NOT NULL DEFAULT 'All',
+  company     TEXT        NOT NULL DEFAULT 'Common',
+  difficulty  TEXT        NOT NULL DEFAULT 'Medium' CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),
+  question    TEXT,
+  title       TEXT,
+  description TEXT,
+  test_cases  JSONB,
+  templates   JSONB,
+  tags        TEXT[]      NOT NULL DEFAULT '{}',
+  is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_questions_type ON questions(type);
+CREATE INDEX IF NOT EXISTS idx_questions_company ON questions(company);
+CREATE INDEX IF NOT EXISTS idx_questions_difficulty ON questions(difficulty);
+
+-- =============================================================================
 -- TRIGGERS — auto-update updated_at
 -- =============================================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
@@ -216,6 +295,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_users_updated ON users;
 CREATE TRIGGER trg_users_updated
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

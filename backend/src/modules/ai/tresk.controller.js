@@ -37,7 +37,7 @@ exports.chat = async (req, res) => {
     if (!message) return res.status(400).json({ message: 'Message is required' });
 
     // Build memory context from RAG service
-    const memoryContext = ragService.buildContext(mode, req.user?.userId);
+    const memoryContext = await ragService.buildContext(mode, req.user?.userId, message);
 
     const systemPrompt = `You are **TRESK**, an elite AI Career Copilot built exclusively for the TRESK AI Interview Platform — India's most advanced mock interview system.
 ${memoryContext}
@@ -51,6 +51,11 @@ You are currently in **${mode.toUpperCase()}** mode. Core rules:
 Always end with ONE follow-up question or suggestion to keep the session going.`;
 
     const reply = await callAI(systemPrompt, message, chatHistory);
+
+    // Save turns to RAG memory (async/background, don't await to avoid block)
+    ragService.storeMemory(req.user?.userId, 'chat', '', `User: "${message}"`, { mode });
+    ragService.storeMemory(req.user?.userId, 'chat', '', `TRESK: "${reply}"`, { mode });
+
     return res.status(200).json({ reply, mode });
 
   } catch (err) {

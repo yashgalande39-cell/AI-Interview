@@ -3,20 +3,20 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
-const connectDB = require('./config/db');
+const { connectPG } = require('./config/pgDb');
 
-const authRoutes = require('./routes/authRoutes');
-const interviewRoutes = require('./routes/interviewRoutes');
-const resumeRoutes = require('./routes/resumeRoutes');
-const gamificationRoutes = require('./routes/gamificationRoutes');
-const codingRoutes = require('./routes/codingRoutes');
-const aiRoutes = require('./routes/aiRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-
-// ── Modular SaaS Modules ───────────────────────────────────────────────────
-const treskRoutes   = require('./modules/ai/tresk.routes');
-const billingRoutes = require('./modules/billing/billing.routes');
-const replayRoutes  = require('./modules/interview/replay.routes');
+// ── Modular SaaS Module Routes ───────────────────────────────────────────────
+const authRoutes         = require('./modules/auth/auth.routes');
+const interviewRoutes    = require('./modules/interview/interview.routes');
+const resumeRoutes       = require('./modules/resume/resume.routes');
+const gamificationRoutes = require('./modules/gamification/gamification.routes');
+const codingRoutes       = require('./modules/coding/coding.routes');
+const aiRoutes           = require('./modules/ai/ai.routes');
+const adminRoutes         = require('./modules/admin/admin.routes');
+const analyticsRoutes    = require('./modules/analytics/analytics.routes');
+const treskRoutes        = require('./modules/ai/tresk.routes');
+const billingRoutes      = require('./modules/billing/billing.routes');
+const replayRoutes       = require('./modules/interview/replay.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -41,15 +41,14 @@ app.get('/api/status', (req, res) => {
 });
 
 // Register routes
-app.use('/api/auth', authRoutes);
-app.use('/api/interviews', interviewRoutes);
-app.use('/api/resumes', resumeRoutes);
-app.use('/api/gamification', gamificationRoutes);
-app.use('/api/coding', codingRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/admin', adminRoutes);
-
-// ── Modular SaaS Routes ────────────────────────────────────────────────────
+app.use('/api/auth',              authRoutes);
+app.use('/api/interviews',        interviewRoutes);
+app.use('/api/resumes',           resumeRoutes);
+app.use('/api/gamification',      gamificationRoutes);
+app.use('/api/coding',            codingRoutes);
+app.use('/api/ai',                aiRoutes);
+app.use('/api/admin',             adminRoutes);
+app.use('/api/analytics',         analyticsRoutes);
 app.use('/api/tresk',             treskRoutes);
 app.use('/api/billing',           billingRoutes);
 app.use('/api/interviews/replay', replayRoutes);
@@ -58,6 +57,7 @@ console.log('🤖 OpenRouter AI service registered on /api/ai');
 console.log('🧠 TRESK Career Copilot registered on /api/tresk');
 console.log('💳 Billing (Razorpay) registered on /api/billing');
 console.log('📼 Interview Replay registered on /api/interviews/replay');
+console.log('📈 Analytics Dashboard registered on /api/analytics');
 
 // Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
 const io = new Server(server, {
@@ -108,8 +108,17 @@ io.on('connection', (socket) => {
 
 // Boot Database and Listen
 const PORT = process.env.PORT || 5000;
-connectDB().then(() => {
-  server.listen(PORT, () => {
-    console.log(`🚀 AI Mock Interview Backend running on http://localhost:${PORT}`);
+connectPG()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 TRESK AI Backend (PostgreSQL-backed) running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Failed to connect to PostgreSQL:", err.message);
+    console.log("🔄 Starting server without database connection (endpoints requiring PostgreSQL will fail).");
+    server.listen(PORT, () => {
+      console.log(`🚀 TRESK AI Backend (Offline Mode) running on http://localhost:${PORT}`);
+    });
   });
-});
+
