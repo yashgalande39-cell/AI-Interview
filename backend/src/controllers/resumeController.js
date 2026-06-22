@@ -1,5 +1,5 @@
 const mockDb = require('../models/mockDb');
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const { generateATSSuggestions, parseResumeText } = require('../services/ai/resumeAnalyzer');
 
 const computeATSAnalysis = (data) => {
@@ -246,7 +246,8 @@ exports.uploadResume = async (req, res) => {
     let rawText = "";
     if (file.mimetype === 'application/pdf') {
       try {
-        const parsedPdf = await pdfParse(file.buffer);
+        const parser = new PDFParse();
+        const parsedPdf = await parser.pdf(file.buffer);
         rawText = parsedPdf.text;
       } catch (pdfErr) {
         console.error("PDF Parsing Error, falling back to text read:", pdfErr);

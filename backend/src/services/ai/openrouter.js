@@ -1,16 +1,11 @@
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// In-memory Cache
+// In-memory response cache
 const requestCache = new Map();
-
-// Helper to clean up cache entries if they exceed a limit
 function cleanCache() {
   if (requestCache.size > 100) {
     const keys = Array.from(requestCache.keys());
-    // remove oldest 20 entries
-    for (let i = 0; i < 20; i++) {
-      requestCache.delete(keys[i]);
-    }
+    for (let i = 0; i < 20; i++) requestCache.delete(keys[i]);
   }
 }
 
@@ -18,14 +13,8 @@ function cleanCache() {
  * Parse JSON from AI response safely, stripping markdown fences
  */
 function parseJsonResponse(text) {
-  if (!text) {
-    throw new Error('Empty text content');
-  }
-  const cleaned = text
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim();
-
+  if (!text) throw new Error('Empty text content');
+  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   try {
     return JSON.parse(cleaned);
   } catch (_) {
@@ -37,118 +26,128 @@ function parseJsonResponse(text) {
   }
 }
 
+// Verified working free-tier models on OpenRouter (June 2025)
 const MODELS = {
-  primary: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
-  fast: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
-  code: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
-  free: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+  primary: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+  fast:    'meta-llama/llama-3.3-70b-instruct:free',
+  code:    'meta-llama/llama-3.3-70b-instruct:free',
+  free:    'meta-llama/llama-3.3-70b-instruct:free',
 };
 
-/**
- * Call OpenRouter with retry logic, timeout, caching, and fallback handling
- */
-async function callOpenRouter(messages, optionsOrModel = {}, options = {}, retries = 3) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY is not configured in the environment variables');
-  }
+// Failover chain — tried in order when a model is unavailable
+const MODEL_FAILOVER = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'google/gemma-4-31b-it:free',
+  'nousresearch/hermes-3-llama-3.1-405b:free',
+  'openai/gpt-oss-20b:free',
+];
 
-  let model = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+/**
+ * Call OpenRouter with automatic model failover, retry logic, and caching.
+ */
+async function callOpenRouter(messages, optionsOrModel = {}, options = {}) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
+
+  let preferredModel = MODELS.primary;
   let actualOptions = options;
 
   if (typeof optionsOrModel === 'string') {
-    model = optionsOrModel;
+    preferredModel = optionsOrModel;
   } else {
     actualOptions = optionsOrModel;
   }
 
-  // Check cache first
-  const cacheKey = JSON.stringify({ messages, model, options: actualOptions });
+  const timeoutMs = actualOptions.timeout ?? 30000;
+
+  // Dedup failover list: put preferred model first
+  const modelsToTry = [preferredModel, ...MODEL_FAILOVER.filter(m => m !== preferredModel)];
+
+  // Check cache
+  const cacheKey = JSON.stringify({ messages, model: preferredModel, options: actualOptions });
   if (requestCache.has(cacheKey)) {
-    console.log(`[OpenRouter Cache] Hit for model ${model}`);
+    console.log(`[OpenRouter Cache] Hit`);
     return requestCache.get(cacheKey);
   }
 
-  const body = {
-    model,
-    messages,
-    temperature: actualOptions.temperature ?? 0.7,
-    max_tokens: actualOptions.max_tokens ?? 1500,
-  };
+  let lastError = null;
 
-  const timeoutMs = actualOptions.timeout ?? 15000; // 15 seconds default timeout
+  for (const model of modelsToTry) {
+    const body = {
+      model,
+      messages,
+      temperature: actualOptions.temperature ?? 0.7,
+      max_tokens: actualOptions.max_tokens ?? 1500,
+    };
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      console.log(`[OpenRouter API] Calling ${model} (Attempt ${attempt}/${retries})`);
+      console.log(`[OpenRouter] Trying ${model}`);
       const response = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://interview-ai.platform',
-          'X-Title': 'AI Mock Interview Platform',
+          'HTTP-Referer': 'https://tresk-ai.platform',
+          'X-Title': 'TRESK AI Interview Platform',
         },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
 
-      clearTimeout(id);
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         const text = data.choices?.[0]?.message?.content;
-        if (!text) {
-          throw new Error('Empty response content received from OpenRouter API');
-        }
+        if (!text) throw new Error('Empty response content from OpenRouter');
 
-        const trimmedText = text.trim();
-        // Cache successful response
-        requestCache.set(cacheKey, trimmedText);
+        const trimmed = text.trim();
+        requestCache.set(cacheKey, trimmed);
         cleanCache();
-        return trimmedText;
+        console.log(`[OpenRouter] ✅ Success with ${model}`);
+        return trimmed;
       }
 
       const errText = await response.text();
 
-      // Handle Rate Limit (429) specifically
-      if (response.status === 429 && attempt < retries) {
-        const retryAfterSec = parseInt(errText.match(/retry_after_seconds["\s:]+([\d.]+)/)?.[1] || '5', 10);
-        const waitTime = (retryAfterSec || 5) * 1000;
-        console.warn(`[OpenRouter API] Rate limit hit (429). Retrying in ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      // Rate limited — wait and retry same model
+      if (response.status === 429) {
+        const wait = 5000;
+        console.warn(`[OpenRouter] Rate limited on ${model}, waiting ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
         continue;
       }
 
-      throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
-
-    } catch (error) {
-      clearTimeout(id);
-      console.error(`[OpenRouter API] Error during attempt ${attempt}:`, error.message);
-
-      if (error.name === 'AbortError') {
-        console.warn(`[OpenRouter API] Request timed out after ${timeoutMs}ms.`);
+      // Model unavailable (404) — try next in failover list
+      if (response.status === 404 || response.status === 400) {
+        console.warn(`[OpenRouter] Model ${model} unavailable (${response.status}), trying next...`);
+        lastError = new Error(`Model ${model} unavailable: ${errText}`);
+        continue;
       }
 
-      if (attempt === retries) {
-        throw error; // Rethrow on final failure
-      }
+      throw new Error(`OpenRouter error ${response.status}: ${errText}`);
 
-      // Wait a bit before retrying (exponential backoff)
-      const backoffTime = attempt * 1500;
-      await new Promise(resolve => setTimeout(resolve, backoffTime));
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        console.warn(`[OpenRouter] ${model} timed out after ${timeoutMs}ms, trying next...`);
+        lastError = err;
+        continue;
+      }
+      // Only continue to next model on network/availability errors
+      if (err.message.includes('unavailable') || err.message.includes('404')) {
+        lastError = err;
+        continue;
+      }
+      throw err;
     }
   }
 
-  throw new Error('OpenRouter: Max retries exceeded without a successful response.');
+  throw lastError || new Error('All OpenRouter models exhausted without a successful response');
 }
 
-module.exports = {
-  callOpenRouter,
-  parseJsonResponse,
-  requestCache,
-  MODELS,
-};
+module.exports = { callOpenRouter, parseJsonResponse, requestCache, MODELS };

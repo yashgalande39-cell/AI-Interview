@@ -5,26 +5,27 @@
  *   2. Resume Analysis
  *   3. DSA Hints
  *   4. Company-specific Placement Insights
+ *
+ * Uses OpenRouter (Qwen3 235B) as primary with built-in retry/fallback.
  */
 
 const ragService = require('./rag.service');
+const { callOpenRouter } = require('../../services/ai/openrouter');
 
 // ---------------------------------------------------------------------------
-// Shared Gemini helper
+// Shared OpenRouter helper — converts Gemini-style contents to OpenRouter messages
 // ---------------------------------------------------------------------------
-async function callGemini(contents, apiKey) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents }),
-    }
-  );
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini');
-  return text;
+async function callAI(systemPrompt, userMessage, chatHistory = []) {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...chatHistory.map(turn => ({
+      role: turn.role === 'user' ? 'user' : 'assistant',
+      content: turn.text,
+    })),
+    { role: 'user', content: userMessage },
+  ];
+
+  return await callOpenRouter(messages, { temperature: 0.75, max_tokens: 1500 });
 }
 
 // ---------------------------------------------------------------------------
@@ -33,62 +34,37 @@ async function callGemini(contents, apiKey) {
 exports.chat = async (req, res) => {
   try {
     const { message, chatHistory = [], mode = 'career' } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
     if (!message) return res.status(400).json({ message: 'Message is required' });
 
     // Build memory context from RAG service
     const memoryContext = ragService.buildContext(mode, req.user?.userId);
 
-    // System persona prompt for TRESK
-    const systemPrompt = `You are **TRESK**, an elite AI Career Copilot built exclusively for the TRESK AI Interview Platform.
+    const systemPrompt = `You are **TRESK**, an elite AI Career Copilot built exclusively for the TRESK AI Interview Platform — India's most advanced mock interview system.
 ${memoryContext}
-You operate in **${mode}** mode. Rules:
-- Be sharp, precise, and actionable. No filler text.
+You are currently in **${mode.toUpperCase()}** mode. Core rules:
+- Be sharp, precise, and actionable. No filler text or disclaimers.
 - Format answers in clean Markdown with headers, bullets, and code blocks where relevant.
-- For career questions: give opinionated, data-driven advice.
-- For DSA: explain the optimal approach, time/space complexity, and show clean code.
-- For resume: identify specific ATS issues and provide corrected bullet points.
-- For placement: provide company-specific patterns, expected questions, and salary benchmarks.
-End every response with a brief follow-up suggestion to keep the conversation going.`;
+- For **career** mode: give opinionated, data-driven career advice tailored to Indian tech companies.
+- For **dsa** mode: explain the optimal approach first, then time/space complexity, then clean annotated code.
+- For **resume** mode: identify specific ATS issues and provide rewritten bullet points with metrics.
+- For **placement** mode: provide company-specific interview patterns, salary benchmarks, and 30-day prep plans.
+Always end with ONE follow-up question or suggestion to keep the session going.`;
 
-    const contents = [];
+    const reply = await callAI(systemPrompt, message, chatHistory);
+    return res.status(200).json({ reply, mode });
 
-    // Inject system prompt as first user turn
-    contents.push({ role: 'user', parts: [{ text: systemPrompt }] });
-    contents.push({ role: 'model', parts: [{ text: 'Understood. I am TRESK, your dedicated Career Copilot. How can I help you today?' }] });
-
-    // Add chat history
-    chatHistory.forEach(turn => {
-      contents.push({
-        role: turn.role === 'user' ? 'user' : 'model',
-        parts: [{ text: turn.text }],
-      });
-    });
-
-    contents.push({ role: 'user', parts: [{ text: message }] });
-
-    if (apiKey) {
-      try {
-        const reply = await callGemini(contents, apiKey);
-        return res.status(200).json({ reply, mode });
-      } catch (e) {
-        console.warn('TRESK Gemini call failed, using offline response:', e.message);
-      }
-    }
-
-    // Offline fallback responses keyed by mode
-    const fallbacks = {
-      career:    `**TRESK here!** I can help with career roadmaps, interview strategy, and placement prep. What specific role are you targeting? 🎯`,
-      resume:    `**Resume Mode activated.** Paste your resume bullet points and target job description — I'll rewrite them for maximum ATS impact. 📄`,
-      dsa:       `**DSA Mode activated.** Share your problem statement and I'll break down the optimal algorithm, complexity analysis, and clean code solution. 💻`,
-      placement: `**Placement Insights Mode.** Which company are you targeting? I'll provide question patterns, salary benchmarks, and insider prep tips. 🏢`,
-    };
-
-    return res.status(200).json({ reply: fallbacks[mode] || fallbacks.career, mode });
   } catch (err) {
-    console.error('TRESK Chat Error:', err);
-    return res.status(500).json({ message: 'TRESK is temporarily unavailable. Please try again.' });
+    console.error('TRESK Chat Error:', err.message);
+
+    // Smart offline fallback
+    const { mode = 'career', message = '' } = req.body;
+    const fallbacks = {
+      career:    `**TRESK is ready!** 🎯\n\nI specialize in helping you crack placements at Google, Microsoft, Swiggy, and top product companies. What role are you targeting right now?`,
+      resume:    `**Resume Analysis Mode** 📄\n\nPaste your resume bullet points and the job description you're applying for — I'll rewrite them for maximum ATS compatibility and recruiter impact.`,
+      dsa:       `**DSA Coach Mode** 💻\n\nShare the problem statement (or a LeetCode link), and I'll break down:\n- Optimal algorithm\n- Time & Space complexity\n- Clean, commented code\n- Edge cases to handle`,
+      placement: `**Placement Intelligence Mode** 🏢\n\nWhich company are you targeting? Type a company name (e.g., *Google*, *Flipkart*, *Zepto*) and I'll generate:\n- Interview process breakdown\n- Top 10 most-asked questions\n- Salary benchmarks\n- 30-day prep plan`,
+    };
+    return res.status(200).json({ reply: fallbacks[mode] || fallbacks.career, mode, offline: true });
   }
 };
 
@@ -98,45 +74,41 @@ End every response with a brief follow-up suggestion to keep the conversation go
 exports.analyzeResume = async (req, res) => {
   try {
     const { resumeText, targetRole, targetCompany } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
     if (!resumeText) return res.status(400).json({ message: 'Resume text is required' });
 
-    const prompt = `You are TRESK, an expert ATS and technical resume analyst.
-Analyze the following resume for the role of "${targetRole || 'Software Engineer'}"${targetCompany ? ` at ${targetCompany}` : ''}.
+    const systemPrompt = `You are TRESK, a world-class ATS resume analyst and technical recruiter with 10 years of experience at top tech companies. You provide brutally honest, specific, and highly actionable feedback.`;
+
+    const userPrompt = `Analyze the following resume for the role of **"${targetRole || 'Software Engineer'}"**${targetCompany ? ` at **${targetCompany}**` : ' at a top tech company'}.
 
 Resume:
 """
-${resumeText.slice(0, 3000)}
+${resumeText.slice(0, 3500)}
 """
 
-Provide a structured analysis:
-1. **ATS Score** (0-100) with reasoning
-2. **Critical Issues** (bullet list of what will get it rejected)
-3. **Rewritten Bullets** (take the 3 weakest bullets and rewrite them with STAR format + metrics)
-4. **Missing Keywords** for ${targetRole || 'Software Engineer'} at top tech companies
-5. **Final Verdict** in one sentence
+Provide a structured analysis in Markdown:
 
-Use markdown formatting.`;
+## 📊 ATS Compatibility Score: X/100
+*Brief reasoning for this score*
 
-    if (apiKey) {
-      try {
-        const reply = await callGemini(
-          [{ role: 'user', parts: [{ text: prompt }] }],
-          apiKey
-        );
-        return res.status(200).json({ analysis: reply });
-      } catch (e) {
-        console.warn('Resume analysis Gemini call failed:', e.message);
-      }
-    }
+## ❌ Critical Issues (Will Get Rejected)
+- Issue 1
+- Issue 2
 
-    return res.status(200).json({
-      analysis: `## TRESK Resume Analysis\n\n**ATS Score: 72/100**\n\nConnect your Gemini API key to get real-time ATS analysis powered by TRESK AI.`
-    });
+## ✍️ Rewritten Bullets (Before → After)
+Take the 3 weakest achievement bullets and rewrite them with STAR format + quantified metrics.
+
+## 🔑 Missing Keywords for ${targetRole || 'Software Engineer'}
+List 6-8 high-value ATS keywords missing from this resume.
+
+## ✅ Final Verdict
+One sentence verdict on hiring likelihood.`;
+
+    const analysis = await callAI(systemPrompt, userPrompt);
+    return res.status(200).json({ analysis });
+
   } catch (err) {
-    console.error('Resume Analysis Error:', err);
-    return res.status(500).json({ message: 'Resume analysis failed' });
+    console.error('Resume Analysis Error:', err.message);
+    return res.status(500).json({ message: 'Resume analysis temporarily unavailable. Please try again.' });
   }
 };
 
@@ -146,39 +118,29 @@ Use markdown formatting.`;
 exports.dsaHint = async (req, res) => {
   try {
     const { problem, userCode, hintLevel = 1 } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
     if (!problem) return res.status(400).json({ message: 'Problem statement is required' });
 
-    const hint = hintLevel === 1
-      ? 'Give a high-level algorithmic approach only. No code.'
+    const hintInstruction = hintLevel === 1
+      ? 'Give ONLY a high-level algorithmic approach and which data structure to use. No code, no pseudocode.'
       : hintLevel === 2
-      ? 'Give the data structure choice and pseudocode. No full solution.'
-      : 'Give a clean, commented solution with time and space complexity.';
+      ? 'Give the data structure choice, pseudocode outline, and time complexity. No full solution code.'
+      : 'Give a complete, clean, and well-commented solution with time and space complexity analysis.';
 
-    const prompt = `You are TRESK's DSA Mentor. ${hint}
+    const systemPrompt = `You are TRESK's elite DSA Mentor. You teach algorithms in a progressive, Socratic style that builds deep understanding. Be encouraging but precise. Always use Markdown with code blocks.`;
 
-Problem: ${problem}
-${userCode ? `\nUser's current code:\n\`\`\`\n${userCode.slice(0, 1000)}\n\`\`\`` : ''}
+    const userPrompt = `${hintInstruction}
 
-Be encouraging. Use markdown.`;
+**Problem:** ${problem}
+${userCode ? `\n**User's current attempt:**\n\`\`\`\n${userCode.slice(0, 1200)}\n\`\`\`` : ''}
 
-    if (apiKey) {
-      try {
-        const reply = await callGemini([{ role: 'user', parts: [{ text: prompt }] }], apiKey);
-        return res.status(200).json({ hint: reply, hintLevel });
-      } catch (e) {
-        console.warn('DSA hint Gemini call failed:', e.message);
-      }
-    }
+${hintLevel < 3 ? 'Remember: do NOT give the full solution. Guide, don\'t spoil.' : 'Provide the full optimal solution with detailed explanation.'}`;
 
-    return res.status(200).json({
-      hint: `**TRESK DSA Hint (Level ${hintLevel})**\n\nAdd your Gemini API key to unlock AI-powered DSA hints!`,
-      hintLevel,
-    });
+    const hint = await callAI(systemPrompt, userPrompt);
+    return res.status(200).json({ hint, hintLevel });
+
   } catch (err) {
-    console.error('DSA Hint Error:', err);
-    return res.status(500).json({ message: 'DSA hint service unavailable' });
+    console.error('DSA Hint Error:', err.message);
+    return res.status(500).json({ message: 'DSA hint service temporarily unavailable.' });
   }
 };
 
@@ -188,44 +150,45 @@ Be encouraging. Use markdown.`;
 exports.placementInsights = async (req, res) => {
   try {
     const { company, role = 'SDE-1', userProfile } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
     if (!company) return res.status(400).json({ message: 'Company name is required' });
 
-    const prompt = `You are TRESK's Placement Intelligence engine.
-Generate a comprehensive placement guide for **${company}** — **${role}** role.
+    const systemPrompt = `You are TRESK's Placement Intelligence Engine — an expert on Indian tech hiring, interview processes, compensation benchmarks, and company-specific prep strategies. You have detailed knowledge of 500+ companies' interview pipelines.`;
 
-${userProfile ? `Candidate profile: ${JSON.stringify(userProfile)}` : ''}
+    const userPrompt = `Generate a comprehensive placement guide for **${company}** — **${role}** role.
+${userProfile ? `\nCandidate profile: ${JSON.stringify(userProfile)}` : ''}
 
-Structure your response as:
-## 🏢 ${company} — ${role} Placement Guide
+Format your response in Markdown:
 
-### Interview Process (rounds + format)
-### Top 10 Most Asked Questions (with expected answer framework)
-### DSA Topics to Focus On
-### System Design Expectations
-### Salary & Compensation (India)
-### Insider Tips
-### 30-Day Prep Plan
+## 🏢 ${company} — ${role} Complete Placement Guide
 
-Use emojis sparingly. Be specific and data-driven.`;
+### 📋 Interview Process
+(Number of rounds, format of each round, typical timeline)
 
-    if (apiKey) {
-      try {
-        const reply = await callGemini([{ role: 'user', parts: [{ text: prompt }] }], apiKey);
-        return res.status(200).json({ insights: reply, company, role });
-      } catch (e) {
-        console.warn('Placement insights Gemini call failed:', e.message);
-      }
-    }
+### 🔥 Top 10 Most Asked Questions
+(With the expected answer framework for each)
 
-    return res.status(200).json({
-      insights: `## 🏢 ${company} — ${role} Placement Guide\n\nConnect your Gemini API key to unlock TRESK's AI-powered placement intelligence for ${company}.`,
-      company,
-      role,
-    });
+### 💻 DSA Topics to Master
+(Specific algorithms and patterns they love)
+
+### 🏗️ System Design Expectations
+(For SDE-2 and above; skip for freshers)
+
+### 💰 Salary & Compensation (India 2024-25)
+(CTC range, equity, perks)
+
+### 🎯 Insider Tips
+(Culture fit, red flags, what they really look for)
+
+### 📅 30-Day Prep Plan
+(Week-by-week breakdown)
+
+Be specific, data-driven, and India-focused.`;
+
+    const insights = await callAI(systemPrompt, userPrompt);
+    return res.status(200).json({ insights, company, role });
+
   } catch (err) {
-    console.error('Placement Insights Error:', err);
-    return res.status(500).json({ message: 'Placement insights unavailable' });
+    console.error('Placement Insights Error:', err.message);
+    return res.status(500).json({ message: 'Placement insights temporarily unavailable.' });
   }
 };
