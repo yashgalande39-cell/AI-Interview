@@ -169,7 +169,8 @@ exports.generateSession = async (req, res) => {
     }
 
     // Plan Enforcement
-    let userPlan = 'pro'; // Default offline plan
+    let userPlan = 'free';
+    let dbOffline = false;
     try {
       const uResult = await query("SELECT plan FROM users WHERE id = $1", [userId]);
       userPlan = uResult.rows[0]?.plan || 'free';
@@ -201,7 +202,17 @@ exports.generateSession = async (req, res) => {
         }
       }
     } catch (e) {
-      console.warn("Database offline during plan enforcement, allowing Pro sandbox access:", e.message);
+      dbOffline = true;
+      console.warn("Database offline during plan enforcement:", e.message);
+    }
+
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    if (dbOffline) {
+      if (!IS_DEMO_AUTH) {
+        return res.status(503).json({ message: "Service temporarily unavailable" });
+      }
+      requireDemoMode('interview.planEnforcement');
+      userPlan = 'pro';
     }
 
     // Retrieve resume if attached
@@ -301,20 +312,27 @@ exports.generateSession = async (req, res) => {
         scoreCard: null
       };
     } catch (dbErr) {
-      console.warn("Database offline during generateSession, returning simulated offline session:", dbErr.message);
-      session = {
-        id: "sess_mock_" + Date.now(),
-        userId: userId,
-        type: type.toUpperCase(),
-        difficulty,
-        role,
-        company: company || "Common",
-        language: language || "JavaScript",
-        questions,
-        currentQuestionIndex: 0,
-        transcript: [],
-        scoreCard: null
-      };
+      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('interview.generateSession.dbFallback');
+        const crypto = require('crypto');
+        session = {
+          id: crypto.randomUUID(),
+          userId: userId,
+          type: type.toUpperCase(),
+          difficulty,
+          role,
+          company: company || "Common",
+          language: language || "JavaScript",
+          questions,
+          currentQuestionIndex: 0,
+          transcript: [],
+          scoreCard: null
+        };
+      } else {
+        console.error('[generateSession] Database error:', dbErr);
+        return res.status(503).json({ message: "Service temporarily unavailable" });
+      }
     }
 
     return res.status(200).json({
@@ -322,28 +340,34 @@ exports.generateSession = async (req, res) => {
       session
     });
   } catch (err) {
-    console.warn("Session Generation Error, returning mock session fallback:", err.message);
-    const mockSession = {
-      id: "sess_mock_" + Date.now(),
-      userId: req.user?.userId || "mock_user",
-      type: (req.body.type || "HR").toUpperCase(),
-      difficulty: req.body.difficulty || "Medium",
-      role: req.body.role || "Software Engineer",
-      company: req.body.company || "Common",
-      language: req.body.language || "JavaScript",
-      questions: [
-        { id: "sq_1", text: "Explain your journey toward becoming a senior-level Software Engineer." },
-        { id: "sq_2", text: "How do you decide between building a relational SQL schema versus a NoSQL document store?" },
-        { id: "sq_3", text: "Walk me through the single most challenging milestone on your resume that you are proud of." }
-      ],
-      currentQuestionIndex: 0,
-      transcript: [],
-      scoreCard: null
-    };
-    return res.status(200).json({
-      message: "Session generated successfully (offline mode)",
-      session: mockSession
-    });
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    if (IS_DEMO_AUTH) {
+      requireDemoMode('interview.generateSession.overallFallback');
+      const crypto = require('crypto');
+      const mockSession = {
+        id: crypto.randomUUID(),
+        userId: req.user?.userId || "mock_user",
+        type: (req.body.type || "HR").toUpperCase(),
+        difficulty: req.body.difficulty || "Medium",
+        role: req.body.role || "Software Engineer",
+        company: req.body.company || "Common",
+        language: req.body.language || "JavaScript",
+        questions: [
+          { id: "sq_1", text: "Explain your journey toward becoming a senior-level Software Engineer." },
+          { id: "sq_2", text: "How do you decide between building a relational SQL schema versus a NoSQL document store?" },
+          { id: "sq_3", text: "Walk me through the single most challenging milestone on your resume that you are proud of." }
+        ],
+        currentQuestionIndex: 0,
+        transcript: [],
+        scoreCard: null
+      };
+      return res.status(200).json({
+        message: "Session generated successfully (offline mode)",
+        session: mockSession
+      });
+    }
+    console.error('[generateSession] Overall error:', err);
+    return res.status(503).json({ message: "Service temporarily unavailable" });
   }
 };
 
@@ -471,6 +495,7 @@ exports.submitAnswer = async (req, res) => {
         score: finalAnswerScore,
         technicalAccuracy: finalTechnicalAccuracy,
         fluencyScore: finalFluencyScore,
+        completenessScore: aiEvaluation ? aiEvaluation.completenessScore : technicalAccuracy,
         wpm,
         fillerCount,
         stressScore,
@@ -669,6 +694,7 @@ exports.finishSession = async (req, res) => {
     let avgStress = 0;
     let totalFillers = 0;
     let avgEyeContact = 0;
+    let avgCompleteness = 0;
 
     transcriptList.forEach(t => {
       avgTechnical += t.analysis.technicalAccuracy || 0;
@@ -677,6 +703,7 @@ exports.finishSession = async (req, res) => {
       avgStress += t.analysis.stressScore || 0;
       totalFillers += t.analysis.fillerCount || 0;
       avgEyeContact += t.analysis.eyeContactScore || 90;
+      avgCompleteness += (t.analysis.completenessScore !== undefined) ? (t.analysis.completenessScore || 0) : (t.analysis.technicalAccuracy || 0);
     });
 
     avgTechnical = Math.round(avgTechnical / totalAnswers);
@@ -684,6 +711,7 @@ exports.finishSession = async (req, res) => {
     avgWpm = Math.round(avgWpm / totalAnswers);
     avgStress = Math.round(avgStress / totalAnswers);
     avgEyeContact = Math.round(avgEyeContact / totalAnswers);
+    avgCompleteness = Math.round(avgCompleteness / totalAnswers);
 
     const overallScore = Math.round((avgTechnical * 0.5) + (avgFluency * 0.3) + (avgEyeContact * 0.2));
 
@@ -719,6 +747,7 @@ exports.finishSession = async (req, res) => {
       averageWpm: avgWpm,
       stressScore: avgStress,
       totalFillers,
+      completenessScore: avgCompleteness,
       weakTopics,
       recommendations,
       flashcards,
@@ -764,7 +793,7 @@ exports.finishSession = async (req, res) => {
         avgTechnical,
         avgFluency,
         avgEyeContact,
-        avgTechnical, // Map technical average to problem solving index
+        avgCompleteness, // Map avgCompleteness to problem solving index
         scoreCard.aiVerdict || "Completed mock interview session.",
         sessionId
       ]);

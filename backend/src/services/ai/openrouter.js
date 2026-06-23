@@ -1,13 +1,14 @@
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+const { LRUCache } = require('lru-cache');
+
 // In-memory response cache
-const requestCache = new Map();
-function cleanCache() {
-  if (requestCache.size > 100) {
-    const keys = Array.from(requestCache.keys());
-    for (let i = 0; i < 20; i++) requestCache.delete(keys[i]);
-  }
-}
+const responseCache = new LRUCache({
+  max: 200,                  // max 200 entries
+  ttl: 1000 * 60 * 30,      // 30-minute TTL
+  maxSize: 10 * 1024 * 1024, // 10 MB total
+  sizeCalculation: (v) => v.length,
+});
 
 /**
  * Parse JSON from AI response safely, stripping markdown fences
@@ -66,9 +67,9 @@ async function callOpenRouter(messages, optionsOrModel = {}, options = {}) {
 
   // Check cache
   const cacheKey = JSON.stringify({ messages, model: preferredModel, options: actualOptions });
-  if (requestCache.has(cacheKey)) {
+  if (responseCache.has(cacheKey)) {
     console.log(`[OpenRouter Cache] Hit`);
-    return requestCache.get(cacheKey);
+    return responseCache.get(cacheKey);
   }
 
   let lastError = null;
@@ -106,8 +107,7 @@ async function callOpenRouter(messages, optionsOrModel = {}, options = {}) {
         if (!text) throw new Error('Empty response content from OpenRouter');
 
         const trimmed = text.trim();
-        requestCache.set(cacheKey, trimmed);
-        cleanCache();
+        responseCache.set(cacheKey, trimmed);
         console.log(`[OpenRouter] ✅ Success with ${model}`);
         return trimmed;
       }
@@ -150,4 +150,4 @@ async function callOpenRouter(messages, optionsOrModel = {}, options = {}) {
   throw lastError || new Error('All OpenRouter models exhausted without a successful response');
 }
 
-module.exports = { callOpenRouter, parseJsonResponse, requestCache, MODELS };
+module.exports = { callOpenRouter, parseJsonResponse, requestCache: responseCache, MODELS };

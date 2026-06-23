@@ -2,52 +2,69 @@ import { createContext, useState, useEffect, useContext } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider, hasConfig as firebaseReady } from '../firebase';
 import { API_BASE } from '../config';
+import { useQuery } from '@tanstack/react-query';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [fontSize, setFontSize] = useState(parseInt(localStorage.getItem('font-size')) || 100);
   const [plan, setPlan] = useState(localStorage.getItem('user_plan') || 'free');
 
-  // Initialize and verify session on load
-  useEffect(() => {
-    const initAuth = async () => {
-      const storedToken = localStorage.getItem('token');
-      if (storedToken) {
-        try {
-          const res = await fetch(`${API_BASE}/auth/profile`, {
-            headers: { 'Authorization': `Bearer ${storedToken}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUser(data.user);
-            setToken(storedToken);
-            if (data.user && data.user.plan) {
-              setPlan(data.user.plan);
-              localStorage.setItem('user_plan', data.user.plan);
-            }
-          } else {
-            // Token expired or invalid
-            logout();
-          }
-        } catch (e) {
-          console.error("Initial auth check failed, using offline fallback:", e.message);
-          // Offline Fallback Session mock if server is booting
-          const cachedUser = localStorage.getItem('user_cache');
-          if (cachedUser) {
-            setUser(JSON.parse(cachedUser));
-          }
+  // Fetch real profile data using React Query
+  const { data: profileData, error: profileError } = useQuery({
+    queryKey: ['userProfile', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          logout();
+          throw new Error('Unauthorized');
         }
+        throw new Error('Profile fetch failed');
       }
-      setLoading(false);
-    };
+      return res.json();
+    },
+    enabled: !!token,
+    retry: 1,
+  });
 
-    initAuth();
-  }, [token]);
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (!storedToken) {
+      setInitializing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (profileData?.user) {
+      setUser(profileData.user);
+      localStorage.setItem('user_cache', JSON.stringify(profileData.user));
+      if (profileData.user.plan) {
+        setPlan(profileData.user.plan);
+        localStorage.setItem('user_plan', profileData.user.plan);
+      }
+      setInitializing(false);
+    }
+  }, [profileData]);
+
+  useEffect(() => {
+    if (profileError) {
+      console.warn("Initial auth check failed, using offline fallback:", profileError.message);
+      const cachedUser = localStorage.getItem('user_cache');
+      if (cachedUser) {
+        setUser(JSON.parse(cachedUser));
+      }
+      setInitializing(false);
+    }
+  }, [profileError]);
+
+  const loading = initializing;
 
   // Sync theme to root HTML element for Tailwind dark classes
   useEffect(() => {

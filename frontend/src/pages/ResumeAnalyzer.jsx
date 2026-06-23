@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlan } from '../hooks/usePlan';
 import { API_BASE } from '../config';
@@ -262,7 +263,7 @@ export default function ResumeAnalyzer() {
           <span className="upgrade-banner-icon text-lg">✨</span>
           <div className="text-sm">
             <strong className="text-white">Pro Feature:</strong> Resume ATS Builder &amp; Job Matcher require a Pro plan.{' '}
-            <a href="/#pricing" className="text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors">Upgrade to Pro</a>
+            <Link to="/pricing" className="text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors">Upgrade to Pro</Link>
             {' '}to unlock full resume analysis, ATS scoring, and job matching.
           </div>
         </div>

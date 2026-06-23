@@ -15,10 +15,15 @@ const adminOnly = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
     
+    const { IS_DEMO_AUTH } = require('../../config/env');
     const isUserAdmin = user.role === 'admin' || user.email.includes('admin') || user.email === 'admin@example.com';
     
     if (!isUserAdmin) {
-      console.log(`[Admin Access] User ${user.email} accessed Admin routes (sandbox ease of access mode).`);
+      if (IS_DEMO_AUTH) {
+        console.warn(`[Admin Access] Non-admin user ${user.email} accessed Admin routes (sandbox ease of access mode).`);
+      } else {
+        return res.status(403).json({ message: "Forbidden: Admin access only" });
+      }
     }
     
     next();

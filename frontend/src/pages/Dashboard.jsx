@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../config';
+import { useQuery } from '@tanstack/react-query';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -16,11 +17,6 @@ import { SkeletonDashboard } from '../components/ui/SkeletonCard';
 
 export default function Dashboard() {
   const { user, token } = useAuth();
-  const [history, setHistory] = useState([]);
-  const [resumes, setResumes] = useState([]);
-  const [readinessScore, setReadinessScore] = useState(87);
-  const [readinessReport, setReadinessReport] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [showAiBanner, setShowAiBanner] = useState(true);
 
   // TRESK Career Copilot states
@@ -87,46 +83,51 @@ export default function Dashboard() {
   const userStreak = user?.streak || 0;
   const userXp = user?.xp || 100;
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const headers = { 'Authorization': `Bearer ${token}` };
-        const histRes = await fetch(`${API_BASE}/interviews/history`, { headers });
-        if (histRes.ok) {
-          const histData = await histRes.json();
-          setHistory(histData.history || []);
-        }
+  // Fetch real dashboard data using React Query
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ['dashboardHistory', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/interviews/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch history');
+      return res.json();
+    },
+    enabled: !!token,
+  });
 
-        const resumeRes = await fetch(`${API_BASE}/resumes`, { headers });
-        if (resumeRes.ok) {
-          const resumeData = await resumeRes.json();
-          setResumes(resumeData.resumes || []);
-        } else {
-          setResumes([]);
-        }
+  const { data: resumesData, isLoading: resumesLoading } = useQuery({
+    queryKey: ['dashboardResumes', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/resumes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch resumes');
+      return res.json();
+    },
+    enabled: !!token,
+  });
 
-        const readinessRes = await fetch(`${API_BASE}/analytics/readiness`, { headers });
-        if (readinessRes.ok) {
-          const readinessData = await readinessRes.json();
-          setReadinessReport(readinessData);
-          if (readinessData.score) {
-            setReadinessScore(readinessData.score);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed fetching dashboard history/resumes/readiness", err.message);
-        setHistory([]);
-        setResumes([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: readinessData, isLoading: readinessLoading } = useQuery({
+    queryKey: ['dashboardReadiness', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/analytics/readiness`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch readiness');
+      return res.json();
+    },
+    enabled: !!token,
+  });
 
-    fetchDashboardData();
-  }, [token]);
+  const history = useMemo(() => historyData?.history || [], [historyData]);
+  const resumes = useMemo(() => resumesData?.resumes || [], [resumesData]);
+  const readinessReport = readinessData || null;
 
-  // Compute placement readiness score based on XP and test attempts
-  useEffect(() => {
+  const readinessScore = useMemo(() => {
+    if (readinessReport && readinessReport.score) {
+      return readinessReport.score;
+    }
     if (user) {
       let base = 50;
       base += Math.min(25, Math.floor((user.xp || 0) / 100));
@@ -136,15 +137,12 @@ export default function Dashboard() {
         const avgScore = completed.reduce((sum, h) => sum + (h.scoreCard?.overallScore || 65), 0) / completed.length;
         base += Math.min(15, Math.floor(avgScore - 60));
       }
-      const timer = setTimeout(() => {
-        setReadinessScore(prev => {
-          if (readinessReport && readinessReport.score) return readinessReport.score;
-          return Math.min(98, Math.max(45, base));
-        });
-      }, 0);
-      return () => clearTimeout(timer);
+      return Math.min(98, Math.max(45, base));
     }
+    return 87;
   }, [user, history, readinessReport]);
+
+  const loading = historyLoading || resumesLoading || readinessLoading;
 
   const completed = history.filter(h => h.status === 'completed' || h.scoreCard);
   const completedCount = completed.length;

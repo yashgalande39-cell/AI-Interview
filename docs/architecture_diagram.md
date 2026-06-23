@@ -42,8 +42,8 @@ graph TB
     end
 
     subgraph Data [Data Layer / Dual DB]
-        O[MongoDB / Atlas Cluster]
-        P[Local mock_db.json]
+        O[PostgreSQL Database]
+        P[Demo Auth Stubs]
     end
 
     subgraph AI [AI Evaluation Services]
@@ -55,7 +55,7 @@ graph TB
     C & D & E & F -->|REST Requests| G
     F & D -->|WebSocket Sync| K
     J -->|Query/Save User Data| O
-    J -->|Local DB Fallback| P
+    J -->|Demo Mode Fallback| P
     J -->|Live AI Analysis| Q
     J -->|Rule-Based Feedback| R
 ```

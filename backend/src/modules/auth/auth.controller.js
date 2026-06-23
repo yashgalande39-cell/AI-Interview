@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../../config/pgDb');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_ai_interview_token';
+const { JWT_SECRET, IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
 const FIREBASE_PROJECT_ID = 'ai-interview-auth-530ed';
 
 // ── Helper: strip sensitive fields ───────────────────────────────────────────
@@ -60,28 +60,33 @@ exports.register = async (req, res) => {
       user: sanitize(newUser)
     });
   } catch (err) {
-    console.warn('[Register] Database offline, attempting mock registration fallback:', err.message);
-    const { name, email, collegeName, branch, graduationYear } = req.body;
-    const mockUser = {
-      id: "eac8707a-8408-4668-8459-821fa3116031",
-      name: name || "Test User",
-      email: email || "user@example.com",
-      college_name: collegeName || "",
-      branch: branch || "",
-      graduation_year: graduationYear || "",
-      xp: 100,
-      streak: 1,
-      badges: ["Novice Prep"],
-      plan: "pro",
-      auth_provider: "local",
-      last_active: new Date().toISOString()
-    };
-    const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET, { expiresIn: '7d' });
-    return res.status(201).json({
-      message: 'Registration successful (offline mode)',
-      token,
-      user: mockUser
-    });
+    if (IS_DEMO_AUTH) {
+      requireDemoMode('auth.register');
+      const { name, email, collegeName, branch, graduationYear } = req.body;
+      const crypto = require('crypto');
+      const mockUser = {
+        id: crypto.randomUUID(),
+        name: name || "Test User",
+        email: email || "user@example.com",
+        college_name: collegeName || "",
+        branch: branch || "",
+        graduation_year: graduationYear || "",
+        xp: 100,
+        streak: 1,
+        badges: ["Novice Prep"],
+        plan: "pro",
+        auth_provider: "local",
+        last_active: new Date().toISOString()
+      };
+      const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET, { expiresIn: '7d' });
+      return res.status(201).json({
+        message: 'Registration successful (offline mode)',
+        token,
+        user: mockUser
+      });
+    }
+    console.error('[Register] Database error:', err);
+    return res.status(503).json({ message: 'Service temporarily unavailable' });
   }
 };
 
@@ -106,12 +111,8 @@ exports.login = async (req, res) => {
     }
 
     // Streak calculation
-    const now = new Date();
-    const lastActive = new Date(user.last_active);
-    const diffDays = Math.ceil(Math.abs(now - lastActive) / (1000 * 60 * 60 * 24));
-    let streak = user.streak || 1;
-    if (diffDays === 1)      streak += 1;
-    else if (diffDays > 1)  streak = 1;
+    const { computeStreak } = require('../../utils/streak');
+    let streak = computeStreak(user.last_active, user.streak);
 
     const updated = await query(
       'UPDATE users SET last_active = NOW(), streak = $1 WHERE id = $2 RETURNING *',
@@ -126,25 +127,30 @@ exports.login = async (req, res) => {
       user: sanitize(updated.rows[0])
     });
   } catch (err) {
-    console.warn('[Login] Database offline, attempting mock login fallback:', err.message);
-    const { email } = req.body;
-    const mockUser = {
-      id: "eac8707a-8408-4668-8459-821fa3116031",
-      name: email ? (email.split('@')[0] || "Test User") : "Test User",
-      email: email || "user@example.com",
-      xp: 1200,
-      streak: 3,
-      badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
-      plan: "pro",
-      auth_provider: "local",
-      last_active: new Date().toISOString()
-    };
-    const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET, { expiresIn: '7d' });
-    return res.status(200).json({
-      message: 'Login successful (offline mode)',
-      token,
-      user: mockUser
-    });
+    if (IS_DEMO_AUTH) {
+      requireDemoMode('auth.login');
+      const { email } = req.body;
+      const crypto = require('crypto');
+      const mockUser = {
+        id: crypto.randomUUID(),
+        name: email ? (email.split('@')[0] || "Test User") : "Test User",
+        email: email || "user@example.com",
+        xp: 1200,
+        streak: 3,
+        badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
+        plan: "pro",
+        auth_provider: "local",
+        last_active: new Date().toISOString()
+      };
+      const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET, { expiresIn: '7d' });
+      return res.status(200).json({
+        message: 'Login successful (offline mode)',
+        token,
+        user: mockUser
+      });
+    }
+    console.error('[Login] Database error:', err);
+    return res.status(503).json({ message: 'Service temporarily unavailable' });
   }
 };
 
@@ -156,23 +162,28 @@ exports.getProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     return res.status(200).json({ user: sanitize(user) });
   } catch (err) {
-    console.warn('[GetProfile] Database offline, returning mock user profile:', err.message);
-    const mockUser = {
-      id: req.user.userId || "eac8707a-8408-4668-8459-821fa3116031",
-      name: "Atlas Test User",
-      email: "admin@example.com",
-      avatar: "",
-      college_name: "Mock Engineering College",
-      branch: "Computer Science",
-      graduation_year: "2026",
-      xp: 1250,
-      streak: 5,
-      badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
-      plan: "pro",
-      auth_provider: "local",
-      last_active: new Date().toISOString()
-    };
-    return res.status(200).json({ user: mockUser });
+    if (IS_DEMO_AUTH) {
+      requireDemoMode('auth.getProfile');
+      const crypto = require('crypto');
+      const mockUser = {
+        id: req.user.userId || crypto.randomUUID(),
+        name: "Atlas Test User",
+        email: "admin@example.com",
+        avatar: "",
+        college_name: "Mock Engineering College",
+        branch: "Computer Science",
+        graduation_year: "2026",
+        xp: 1250,
+        streak: 5,
+        badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
+        plan: "pro",
+        auth_provider: "local",
+        last_active: new Date().toISOString()
+      };
+      return res.status(200).json({ user: mockUser });
+    }
+    console.error('[GetProfile] Database error:', err);
+    return res.status(503).json({ message: 'Service temporarily unavailable' });
   }
 };
 
@@ -329,11 +340,8 @@ exports.googleAuth = async (req, res) => {
       } else {
         // Returning user — update streak & profile
         const prev = existing.rows[0];
-        const now = new Date();
-        const diffDays = Math.ceil(Math.abs(now - new Date(prev.last_active)) / (1000 * 60 * 60 * 24));
-        let streak = prev.streak || 1;
-        if (diffDays === 1) streak += 1;
-        else if (diffDays > 1) streak = 1;
+        const { computeStreak } = require('../../utils/streak');
+        let streak = computeStreak(prev.last_active, prev.streak);
 
         const result = await query(
           'UPDATE users SET last_active = NOW(), streak = $1, google_id = $2, avatar = COALESCE($3, avatar) WHERE id = $4 RETURNING *',
@@ -343,20 +351,26 @@ exports.googleAuth = async (req, res) => {
         console.log(`✅ Returning Google user: ${email}`);
       }
     } catch (dbErr) {
-      console.warn('[GoogleAuth] PostgreSQL offline, using mock user profile fallback:', dbErr.message);
-      user = {
-        id: "eac8707a-8408-4668-8459-821fa3116031",
-        name: name || email.split('@')[0],
-        email: email,
-        google_id: googleId,
-        avatar: picture || '',
-        xp: 1200,
-        streak: 3,
-        badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
-        plan: "pro", // Default to pro to bypass gated sections
-        auth_provider: "google",
-        last_active: new Date().toISOString()
-      };
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('auth.googleAuth');
+        const crypto = require('crypto');
+        user = {
+          id: crypto.randomUUID(),
+          name: name || email.split('@')[0],
+          email: email,
+          google_id: googleId,
+          avatar: picture || '',
+          xp: 1200,
+          streak: 3,
+          badges: ["Novice Prep", "Interview Scholar", "Placement Ready"],
+          plan: "pro", // Default to pro to bypass gated sections
+          auth_provider: "google",
+          last_active: new Date().toISOString()
+        };
+      } else {
+        console.error('[GoogleAuth] Database error:', dbErr);
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
     }
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });

@@ -9,8 +9,7 @@
 
 const crypto = require('crypto');
 
-const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID     || 'rzp_test_XXXXXXXXXXXXXXXX';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'your_razorpay_secret';
+const { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET } = require('../../config/env');
 
 /** Plan definitions — single source of truth */
 const PLANS = {

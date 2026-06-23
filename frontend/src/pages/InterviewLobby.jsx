@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlan } from '../hooks/usePlan';
 import { io } from 'socket.io-client';
@@ -407,7 +407,7 @@ export default function InterviewLobby() {
           <span className="upgrade-banner-icon text-lg">⚡</span>
           <div className="text-sm">
             <strong className="text-white">Free Plan:</strong> You have 3 mock interviews per month.{' '}
-            <a href="/#pricing" className="text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors">Upgrade to Pro</a>
+            <Link to="/pricing" className="text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors">Upgrade to Pro</Link>
             {' '}for unlimited interviews, coding evaluation, and advanced analytics.
           </div>
         </div>

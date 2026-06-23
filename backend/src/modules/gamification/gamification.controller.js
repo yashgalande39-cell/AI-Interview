@@ -100,6 +100,7 @@ exports.completeChallenge = async (req, res) => {
     let xpReward = 150;
     let updatedXP = 1350; // mock default xp plus reward
 
+    let dbOffline = false;
     try {
       const uResult = await query("SELECT xp FROM users WHERE id = $1", [userId]);
       if (uResult.rows.length > 0) {
@@ -123,9 +124,20 @@ exports.completeChallenge = async (req, res) => {
         updatedXP = currentXP + xpReward;
 
         await query("UPDATE users SET xp = $1 WHERE id = $2", [updatedXP, userId]);
+      } else {
+        return res.status(404).json({ message: "User not found" });
       }
     } catch (err) {
-      console.warn("Database offline during completeChallenge, returning success mockup:", err.message);
+      dbOffline = true;
+      console.warn("Database offline during completeChallenge:", err.message);
+    }
+
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    if (dbOffline) {
+      if (!IS_DEMO_AUTH) {
+        return res.status(503).json({ message: "Service temporarily unavailable" });
+      }
+      requireDemoMode('gamification.completeChallenge');
     }
 
     return res.status(200).json({
@@ -148,41 +160,59 @@ exports.getAptitudeQuestions = async (req, res) => {
     const section = req.query.section || 'All';
     const limit = parseInt(req.query.limit, 10) || 10;
 
-    let pool = fileAptitudePool;
+    let pool = [];
+    let dbSuccess = false;
 
     // Check DB first for aptitude questions if seeded under type 'Aptitude'
     try {
-      const qResult = await query(
-        "SELECT question, type, role, company, difficulty, title, description, templates, test_cases, tags FROM questions WHERE type = 'Aptitude' AND is_active = true"
-      );
+      const qResult = await query(`
+        SELECT id, question, templates, description, difficulty, role 
+        FROM questions 
+        WHERE type = 'Aptitude' 
+          AND is_active = true
+          AND ($1 = 'All' OR difficulty = $1)
+          AND ($2 = 'All' OR role = $2)
+      `, [difficulty, section]);
+      
       if (qResult.rows.length > 0) {
-        pool = qResult.rows.map((row, idx) => ({
-          id: row.id || `apt_${idx}`,
-          question: row.question,
-          options: row.templates || [],
-          answer: row.description,
-          difficulty: row.difficulty,
-          section: row.role || 'General',
-          set: 1
-        }));
+        pool = qResult.rows.map((row, idx) => {
+          let opts = [];
+          try {
+            opts = typeof row.templates === 'string' ? JSON.parse(row.templates) : (row.templates || []);
+          } catch (pe) {
+            opts = row.templates || [];
+          }
+          return {
+            id: row.id || `apt_${idx}`,
+            question: row.question,
+            options: opts,
+            answer: row.description,
+            difficulty: row.difficulty,
+            section: row.role || 'General',
+            set: 1
+          };
+        });
+        dbSuccess = true;
       }
     } catch (e) {
       console.warn('DB query for aptitude failed:', e.message);
     }
 
-    if (!isNaN(setNum)) {
-      pool = pool.filter(q => q.set === setNum);
-      pool = [...pool].sort(() => 0.5 - Math.random());
-    } else {
+    if (!dbSuccess) {
+      pool = fileAptitudePool;
       if (difficulty && difficulty !== 'All') {
         pool = pool.filter(q => q.difficulty.toLowerCase() === difficulty.toLowerCase());
       }
       if (section && section !== 'All') {
         pool = pool.filter(q => q.section.toLowerCase() === section.toLowerCase());
       }
-      pool = [...pool].sort(() => 0.5 - Math.random());
     }
 
+    if (!isNaN(setNum)) {
+      pool = pool.filter(q => q.set === setNum);
+    }
+
+    pool = [...pool].sort(() => 0.5 - Math.random());
     const subset = pool.slice(0, limit);
 
     return res.status(200).json({

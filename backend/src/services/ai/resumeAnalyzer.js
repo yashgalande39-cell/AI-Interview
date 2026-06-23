@@ -1,4 +1,5 @@
 const { callOpenRouter, parseJsonResponse } = require('./openrouter');
+const { sanitizePromptInput } = require('../../utils/sanitizePromptInput');
 
 /**
  * Parse raw resume text into structured resume objects.
@@ -6,10 +7,11 @@ const { callOpenRouter, parseJsonResponse } = require('./openrouter');
  * @returns {Promise<object>} Structured resume data object
  */
 async function parseResumeText(rawText) {
+  const safeResume = sanitizePromptInput(rawText, 3000);
   const systemPrompt = `You are a high-performance resume parsing AI engine. You accurately extract and organize contact info, skills, experience, projects, and education from unstructured text.`;
   const userPrompt = `Parse the following raw resume text and extract structured fields.
 Resume Text:
-${rawText}
+${safeResume}
 
 Return ONLY a valid JSON object matching the exact structure below (no markdown fences, no extra text):
 {
@@ -64,8 +66,9 @@ Return ONLY a valid JSON object matching the exact structure below (no markdown 
  * @returns {Promise<string[]>} Array of exactly 4 specific, actionable suggestions
  */
 async function generateATSSuggestions(resumeData, targetRole, atsScore, missingKeywords) {
+  const safeRole = sanitizePromptInput(targetRole, 100);
   const systemPrompt = `You are an expert resume coach, technical recruiter, and ATS optimization specialist.`;
-  const userPrompt = `A candidate is applying for a "${targetRole}" role. Their current ATS compatibility score is ${atsScore}/100.
+  const userPrompt = `A candidate is applying for a "${safeRole}" role. Their current ATS compatibility score is ${atsScore}/100.
 Current Resume Skills: ${resumeData.skills?.join(', ') || 'None specified'}
 Missing Key Skills/Keywords: ${missingKeywords?.join(', ') || 'None'}
 Work Experience Count: ${resumeData.experience?.length || 0} positions
@@ -95,10 +98,12 @@ Return ONLY a valid JSON array of 4 strings (do not write markdown or prefix det
  * @returns {Promise<object>} ATS analysis dashboard scores and details
  */
 async function analyzeResume(resumeText, targetRole) {
+  const safeRole = sanitizePromptInput(targetRole, 100);
+  const safeResume = sanitizePromptInput(resumeText, 3000);
   const systemPrompt = `You are a premium ATS scanner and hiring manager assistant. Evaluate resumes rigorously.`;
-  const userPrompt = `Analyze the resume text below against the target role of "${targetRole}".
+  const userPrompt = `Analyze the resume text below against the target role of "${safeRole}".
 Resume Text:
-${resumeText}
+${safeResume}
 
 Evaluate performance, formatting, keywords density, and accomplishments quantification.
 Return ONLY a valid JSON object matching the exact structure below (no markdown fences, no extra text):
@@ -135,10 +140,11 @@ Return ONLY a valid JSON object matching the exact structure below (no markdown 
  * @returns {Promise<object>} Parsed JD metrics
  */
 async function analyzeJobDescription(jobDescription) {
+  const safeJD = sanitizePromptInput(jobDescription, 3000);
   const systemPrompt = `You are a professional HR intelligence analyst. Extract accurate requirements and structures from job postings.`;
   const userPrompt = `Analyze the job description text below and extract target metrics.
 Job Description:
-${jobDescription}
+${safeJD}
 
 Return ONLY a valid JSON object matching the exact structure below (no markdown fences, no extra text):
 {

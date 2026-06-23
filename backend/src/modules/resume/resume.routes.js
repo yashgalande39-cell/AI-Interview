@@ -5,7 +5,10 @@ const resumeController = require('./resume.controller');
 const authMiddleware = require('../../middleware/authMiddleware');
 const { requirePlan } = require('../../middleware/planMiddleware');
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB cap
+});
 
 // Protect all resume endpoints with authentication and Pro plan gate
 router.use(authMiddleware);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { usePlan } from './hooks/usePlan';
@@ -10,25 +10,25 @@ import NotificationPanel from './components/NotificationPanel';
 // Global Components
 import { PlanGate } from './components/PlanGate';
 
-// Pages
+// Pages (Landing page static, others lazy loaded)
 import LandingPage from './components/LandingPage';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import InterviewLobby from './pages/InterviewLobby';
-import InterviewRoom from './pages/InterviewRoom';
-import CodingEditor from './pages/CodingEditor';
-import ResumeAnalyzer from './pages/ResumeAnalyzer';
-import JobAnalyzer from './pages/JobAnalyzer';
-import GroupDiscussion from './pages/GroupDiscussion';
-import AptitudeEngine from './pages/AptitudeEngine';
-import CareerRoadmap from './pages/CareerRoadmap';
-import Leaderboard from './pages/Leaderboard';
-import AdminPanel from './pages/AdminPanel';
-import FeedbackAnalysis from './pages/FeedbackAnalysis';
-import Settings from './pages/Settings';
-import InterviewReplay from './pages/InterviewReplay';
-import Pricing from './pages/Pricing';
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const InterviewLobby = lazy(() => import('./pages/InterviewLobby'));
+const InterviewRoom = lazy(() => import('./pages/InterviewRoom'));
+const CodingEditor = lazy(() => import('./pages/CodingEditor'));
+const ResumeAnalyzer = lazy(() => import('./pages/ResumeAnalyzer'));
+const JobAnalyzer = lazy(() => import('./pages/JobAnalyzer'));
+const GroupDiscussion = lazy(() => import('./pages/GroupDiscussion'));
+const AptitudeEngine = lazy(() => import('./pages/AptitudeEngine'));
+const CareerRoadmap = lazy(() => import('./pages/CareerRoadmap'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const FeedbackAnalysis = lazy(() => import('./pages/FeedbackAnalysis'));
+const Settings = lazy(() => import('./pages/Settings'));
+const InterviewReplay = lazy(() => import('./pages/InterviewReplay'));
+const Pricing = lazy(() => import('./pages/Pricing'));
 
 import {
   LayoutDashboard, Mic, Code2, FileText, Briefcase,
@@ -374,32 +374,38 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/"         element={<LandingPage />} />
-          <Route path="/login"    element={<AppLayout><Login /></AppLayout>} />
-          <Route path="/register" element={<AppLayout><Register /></AppLayout>} />
+        <Suspense fallback={
+          <div className="flex h-screen items-center justify-center bg-[#080C14] text-slate-400">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+          </div>
+        }>
+          <Routes>
+            {/* Public */}
+            <Route path="/"         element={<LandingPage />} />
+            <Route path="/login"    element={<AppLayout><Login /></AppLayout>} />
+            <Route path="/register" element={<AppLayout><Register /></AppLayout>} />
 
-          {/* Protected */}
-          <Route path="/dashboard"     element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/lobby"         element={<ProtectedRoute><AppLayout><InterviewLobby /></AppLayout></ProtectedRoute>} />
-          <Route path="/interview-room"element={<ProtectedRoute><AppLayout><InterviewRoom /></AppLayout></ProtectedRoute>} />
-          <Route path="/coding"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CodingEditor /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/resume"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><ResumeAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/job-analyzer"  element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><JobAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/gd"            element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><GroupDiscussion /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/aptitude"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><AptitudeEngine /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/roadmap"       element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CareerRoadmap /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/leaderboard"   element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><Leaderboard /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/admin"         element={<ProtectedRoute><AppLayout><AdminPanel /></AppLayout></ProtectedRoute>} />
-          <Route path="/feedback"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><FeedbackAnalysis /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/settings"      element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
-          <Route path="/replay"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><InterviewReplay /></PlanGate></AppLayout></ProtectedRoute>} />
-          <Route path="/pricing"       element={<ProtectedRoute><AppLayout><Pricing /></AppLayout></ProtectedRoute>} />
+            {/* Protected */}
+            <Route path="/dashboard"     element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+            <Route path="/lobby"         element={<ProtectedRoute><AppLayout><InterviewLobby /></AppLayout></ProtectedRoute>} />
+            <Route path="/interview-room"element={<ProtectedRoute><AppLayout><InterviewRoom /></AppLayout></ProtectedRoute>} />
+            <Route path="/coding"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CodingEditor /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/resume"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><ResumeAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/job-analyzer"  element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><JobAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/gd"            element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><GroupDiscussion /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/aptitude"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><AptitudeEngine /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/roadmap"       element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CareerRoadmap /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/leaderboard"   element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><Leaderboard /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/admin"         element={<ProtectedRoute><AppLayout><AdminPanel /></AppLayout></ProtectedRoute>} />
+            <Route path="/feedback"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><FeedbackAnalysis /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/settings"      element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+            <Route path="/replay"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><InterviewReplay /></PlanGate></AppLayout></ProtectedRoute>} />
+            <Route path="/pricing"       element={<ProtectedRoute><AppLayout><Pricing /></AppLayout></ProtectedRoute>} />
 
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </Router>
   );

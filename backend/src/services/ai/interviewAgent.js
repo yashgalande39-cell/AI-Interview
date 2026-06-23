@@ -1,4 +1,5 @@
 const { callOpenRouter, parseJsonResponse } = require('./openrouter');
+const { sanitizePromptInput } = require('../../utils/sanitizePromptInput');
 
 /**
  * Generate 5 tailored interview questions based on role, experience, industry, and resume.
@@ -11,17 +12,24 @@ const { callOpenRouter, parseJsonResponse } = require('./openrouter');
  * @returns {Promise<string[]>} Array of 5 question strings
  */
 async function generateInterviewQuestions(type, difficulty, role, company, language, resumeText = '') {
-  const companyCtx = company && company !== 'Common' ? `at ${company}` : 'at a premium technology company';
-  const resumeCtx = resumeText
-    ? `\n\nCandidate Resume Context (reference specific details, projects, or metrics where appropriate):\n${resumeText}`
+  const safeRole = sanitizePromptInput(role, 100);
+  const safeCompany = sanitizePromptInput(company, 100);
+  const safeResume = sanitizePromptInput(resumeText, 3000);
+  const safeType = sanitizePromptInput(type, 100);
+  const safeLanguage = sanitizePromptInput(language, 100);
+  const safeDifficulty = sanitizePromptInput(difficulty, 100);
+
+  const companyCtx = safeCompany && safeCompany !== 'Common' ? `at ${safeCompany}` : 'at a premium technology company';
+  const resumeCtx = safeResume
+    ? `\n\nCandidate Resume Context (reference specific details, projects, or metrics where appropriate):\n${safeResume}`
     : '';
 
   const systemPrompt = `You are a world-class senior interviewer at a top-tier tech company. You conduct realistic, highly tailored, and challenging interviews. 
 You always ask precise, professional questions and avoid generic, textbook questions. Ensure your questions are conversational, recruiter-style, and context-aware.`;
 
-  const userPrompt = `Generate exactly 5 ${difficulty}-level mock interview questions for a ${role} position ${companyCtx}.
-Interview Domain: ${type}
-Programming Language/Domain: ${language || 'General'}${resumeCtx}
+  const userPrompt = `Generate exactly 5 ${safeDifficulty}-level mock interview questions for a ${safeRole} position ${companyCtx}.
+Interview Domain: ${safeType}
+Programming Language/Domain: ${safeLanguage || 'General'}${resumeCtx}
 
 Instructions:
 - Tailor the questions specifically to the candidate's background if resume context is provided.
@@ -57,13 +65,17 @@ Instructions:
  * @returns {Promise<string>} Dynamic follow-up question
  */
 async function generateFollowUp(originalQuestion, answer, answerScore, role) {
+  const safeRole = sanitizePromptInput(role, 100);
+  const safeQuestion = sanitizePromptInput(originalQuestion, 500);
+  const safeAnswer = sanitizePromptInput(answer, 2000);
+
   const depth = answerScore >= 80 ? 'deeper, more challenging and technical' : 'clarifying and supportive to help them elaborate';
   
   const systemPrompt = `You are an adaptive, elite recruiter conducting a conversational live interview. Keep follow-ups natural, professional, and directly linked to what the candidate just said.`;
   
-  const userPrompt = `A candidate for a ${role} position has just answered an interview question.
-Original Question: ${originalQuestion}
-Candidate's Answer: ${answer}
+  const userPrompt = `A candidate for a ${safeRole} position has just answered an interview question.
+Original Question: ${safeQuestion}
+Candidate's Answer: ${safeAnswer}
 Answer Quality Score: ${answerScore}/100
 
 Generate ONE direct, conversational, recruiter-style follow-up question that goes ${depth}.

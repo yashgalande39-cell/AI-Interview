@@ -1,4 +1,5 @@
 import { usePlan } from '../hooks/usePlan';
+import { Link } from 'react-router-dom';
 
 const PLAN_LABELS = {
   free: 'Free Plan',
@@ -39,13 +40,13 @@ export function PlanGate({ requires = 'pro', fallback, children }) {
         <p className="plan-gate-desc">
           This feature requires the <strong>{requires}</strong> plan or higher.
         </p>
-        <a
-          href="/#pricing"
+        <Link
+          to="/pricing"
           className="plan-gate-cta"
           style={{ background: `linear-gradient(135deg, ${PLAN_COLORS[requires]}, ${PLAN_COLORS[requires]}aa)` }}
         >
           View Pricing →
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -65,7 +66,7 @@ export function UpgradeBanner({ feature, requiredPlan = 'pro' }) {
       <span className="upgrade-banner-icon">⚡</span>
       <div>
         <strong>{feature}</strong> is a {requiredPlan} feature.{' '}
-        <a href="/#pricing" className="upgrade-banner-link">Upgrade now</a>
+        <Link to="/pricing" className="upgrade-banner-link">Upgrade now</Link>
       </div>
     </div>
   );

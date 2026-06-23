@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const { VM } = require('vm2');
 const { query } = require('../../config/pgDb');
 const { reviewCode } = require('../../services/ai/scoringEngine');
 
@@ -65,12 +65,36 @@ exports.getChallenges = async (req, res) => {
     const topic = req.query.topic || 'All';
     const company = req.query.company || 'All';
 
+    const startIndex = (page - 1) * limit;
+
     // First try querying the PostgreSQL questions table
     let dbChallenges = [];
+    let total = 0;
+    let dbSuccess = false;
     try {
-      const qResult = await query(
-        "SELECT id, type, role, company, difficulty, title, description, tags FROM questions WHERE type = 'Coding' AND is_active = true"
-      );
+      const countResult = await query(`
+        SELECT COUNT(*) 
+        FROM questions 
+        WHERE type = 'Coding' 
+          AND is_active = true
+          AND ($1 = 'All' OR difficulty = $1)
+          AND ($2 = 'All' OR company = $2)
+          AND ($3 = '' OR title ILIKE $3 OR description ILIKE $3)
+      `, [difficulty, company, searchVal ? `%${searchVal}%` : '']);
+      total = parseInt(countResult.rows[0].count, 10) || 0;
+
+      const qResult = await query(`
+        SELECT id, type, role, company, difficulty, title, description, tags 
+        FROM questions 
+        WHERE type = 'Coding' 
+          AND is_active = true
+          AND ($1 = 'All' OR difficulty = $1)
+          AND ($2 = 'All' OR company = $2)
+          AND ($3 = '' OR title ILIKE $3 OR description ILIKE $3)
+        ORDER BY created_at DESC
+        LIMIT $4 OFFSET $5
+      `, [difficulty, company, searchVal ? `%${searchVal}%` : '', limit, startIndex]);
+
       dbChallenges = qResult.rows.map(row => ({
         id: row.id,
         title: row.title,
@@ -80,45 +104,50 @@ exports.getChallenges = async (req, res) => {
         description: row.description,
         constraints: []
       }));
+      dbSuccess = true;
     } catch (dbErr) {
       console.warn('[CodingController] Failed to query PostgreSQL questions table, falling back to JSON file:', dbErr.message);
     }
 
-    // Merge or fallback
-    let allChallenges = dbChallenges.length > 0 ? dbChallenges : fileChallenges.map(ch => ({
-      id: ch.id,
-      title: ch.title,
-      difficulty: ch.difficulty,
-      topic: ch.topic,
-      company: ch.company,
-      description: ch.description,
-      constraints: ch.constraints || []
-    }));
+    let paginated = [];
+    if (dbSuccess) {
+      paginated = dbChallenges;
+    } else {
+      // Fallback to JSON file filtering in memory
+      let allChallenges = fileChallenges.map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        difficulty: ch.difficulty,
+        topic: ch.topic,
+        company: ch.company,
+        description: ch.description,
+        constraints: ch.constraints || []
+      }));
 
-    // Filter
-    if (searchVal) {
-      const s = searchVal.toLowerCase();
-      allChallenges = allChallenges.filter(ch => 
-        (ch.title && ch.title.toLowerCase().includes(s)) || 
-        (ch.description && ch.description.toLowerCase().includes(s))
-      );
+      // Filter
+      if (searchVal) {
+        const s = searchVal.toLowerCase();
+        allChallenges = allChallenges.filter(ch => 
+          (ch.title && ch.title.toLowerCase().includes(s)) || 
+          (ch.description && ch.description.toLowerCase().includes(s))
+        );
+      }
+
+      if (difficulty && difficulty !== 'All') {
+        allChallenges = allChallenges.filter(ch => ch.difficulty.toLowerCase() === difficulty.toLowerCase());
+      }
+
+      if (topic && topic !== 'All') {
+        allChallenges = allChallenges.filter(ch => ch.topic.toLowerCase() === topic.toLowerCase());
+      }
+
+      if (company && company !== 'All') {
+        allChallenges = allChallenges.filter(ch => ch.company.toLowerCase() === company.toLowerCase());
+      }
+
+      total = allChallenges.length;
+      paginated = allChallenges.slice(startIndex, startIndex + limit);
     }
-
-    if (difficulty && difficulty !== 'All') {
-      allChallenges = allChallenges.filter(ch => ch.difficulty.toLowerCase() === difficulty.toLowerCase());
-    }
-
-    if (topic && topic !== 'All') {
-      allChallenges = allChallenges.filter(ch => ch.topic.toLowerCase() === topic.toLowerCase());
-    }
-
-    if (company && company !== 'All') {
-      allChallenges = allChallenges.filter(ch => ch.company.toLowerCase() === company.toLowerCase());
-    }
-
-    const total = allChallenges.length;
-    const startIndex = (page - 1) * limit;
-    const paginated = allChallenges.slice(startIndex, startIndex + limit);
 
     return res.status(200).json({
       challenges: paginated,
@@ -173,7 +202,7 @@ exports.getChallengeById = async (req, res) => {
 };
 
 /**
- * Helper to run Javascript code inside a vm sandbox.
+ * Helper to run Javascript code inside a vm2 sandbox.
  */
 const executeJsCode = (code, challenge, funcName) => {
   const results = [];
@@ -189,30 +218,48 @@ const executeJsCode = (code, challenge, funcName) => {
       expected = tc.expected;
     }
 
-    const sandbox = {
-      consoleLogs: [],
-      console: {
-        log: (...args) => {
-          sandbox.consoleLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    // Defense-in-depth: block structural escape keywords
+    if (/__proto__|constructor|process|require|global/i.test(code)) {
+      allPassed = false;
+      results.push({
+        caseNum: i + 1,
+        input: tc.input,
+        expected: tc.expected,
+        actual: null,
+        status: "ERROR",
+        error: "Security Violation: Access to restricted sandbox keywords (constructor, process, require, global, etc.) is blocked.",
+        logs: [],
+        durationMs: 0
+      });
+      continue;
+    }
+
+    const consoleLogs = [];
+    const vmInstance = new VM({
+      timeout: 3000,
+      sandbox: {
+        console: {
+          log: (...args) => {
+            consoleLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+          }
         }
       }
-    };
-
-    vm.createContext(sandbox);
+    });
 
     const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
 
     const runScriptText = `
       ${code}
-      const inputs = ${inputStr};
-      const result = ${funcName}(...inputs);
-      JSON.stringify(result);
+      (() => {
+        const inputs = ${inputStr};
+        const result = ${funcName}(...inputs);
+        return JSON.stringify(result);
+      })()
     `;
 
     try {
-      const script = new vm.Script(runScriptText);
       const startTime = process.hrtime();
-      const returnedValStr = script.runInContext(sandbox, { timeout: 1000 });
+      const returnedValStr = vmInstance.run(runScriptText);
       const hrDuration = process.hrtime(startTime);
       const durationMs = parseFloat((hrDuration[0] * 1000 + hrDuration[1] / 1000000).toFixed(2));
       
@@ -228,7 +275,7 @@ const executeJsCode = (code, challenge, funcName) => {
         expected: tc.expected,
         actual: returnedValStr,
         status: pass ? "PASS" : "FAIL",
-        logs: sandbox.consoleLogs,
+        logs: consoleLogs,
         durationMs
       });
     } catch (err) {
@@ -240,7 +287,7 @@ const executeJsCode = (code, challenge, funcName) => {
         actual: null,
         status: "ERROR",
         error: err.message,
-        logs: sandbox.consoleLogs,
+        logs: consoleLogs,
         durationMs: 0
       });
     }

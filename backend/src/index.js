@@ -1,7 +1,9 @@
-require('dotenv').config();
+const { CORS_ORIGIN } = require('./config/env');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const { connectPG } = require('./config/pgDb');
 
@@ -21,15 +23,32 @@ const replayRoutes       = require('./modules/interview/replay.routes');
 const app = express();
 const server = http.createServer(app);
 
-// Enable CORS
+// Enable CORS (Must be registered first to ensure rate-limited or error responses include CORS headers)
 app.use(cors({
-  origin: '*', // open for development
+  origin: CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Body Parsers
-app.use(express.json());
+// Secure Headers with Helmet
+app.use(helmet());
+
+// Global Limiter
+const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
+app.use(globalLimiter);
+
+// Stricter Auth Limiters
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Too many attempts, please try again later.' });
+app.use('/api/auth/login',    authLimiter);
+app.use('/api/auth/register', authLimiter);
+
+// AI Limiter
+const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
+app.use('/api/ai',    aiLimiter);
+app.use('/api/tresk', aiLimiter);
+
+// Body Parsers with limits
+app.use(express.json({ limit: '1mb' }));
 
 // Diagnostic status check endpoint
 app.get('/api/status', (req, res) => {
@@ -42,6 +61,7 @@ app.get('/api/status', (req, res) => {
 
 // Register routes
 app.use('/api/auth',              authRoutes);
+app.use('/api/interviews/replay', replayRoutes); // more specific first
 app.use('/api/interviews',        interviewRoutes);
 app.use('/api/resumes',           resumeRoutes);
 app.use('/api/gamification',      gamificationRoutes);
@@ -51,7 +71,13 @@ app.use('/api/admin',             adminRoutes);
 app.use('/api/analytics',         analyticsRoutes);
 app.use('/api/tresk',             treskRoutes);
 app.use('/api/billing',           billingRoutes);
-app.use('/api/interviews/replay', replayRoutes);
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  console.error(`[${status}] ${err.message}`);
+  res.status(status).json({ message: err.message || 'Internal server error' });
+});
 
 console.log('🤖 OpenRouter AI service registered on /api/ai');
 console.log('🧠 TRESK Career Copilot registered on /api/tresk');
@@ -62,7 +88,7 @@ console.log('📈 Analytics Dashboard registered on /api/analytics');
 // Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: CORS_ORIGIN,
     methods: ['GET', 'POST']
   }
 });

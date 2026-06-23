@@ -1,4 +1,5 @@
 const { callOpenRouter, parseJsonResponse } = require('./openrouter');
+const { sanitizePromptInput } = require('../../utils/sanitizePromptInput');
 
 /**
  * AI-powered deep evaluation of a candidate's answer.
@@ -9,13 +10,18 @@ const { callOpenRouter, parseJsonResponse } = require('./openrouter');
  * @returns {Promise<object>} Evaluation object containing rubrics, scores, and feedback
  */
 async function evaluateAnswer(question, answer, type, role) {
+  const safeRole = sanitizePromptInput(role, 100);
+  const safeType = sanitizePromptInput(type, 100);
+  const safeQuestion = sanitizePromptInput(question, 500);
+  const safeAnswer = sanitizePromptInput(answer, 2000);
+
   const systemPrompt = `You are an elite, demanding tech interviewer evaluating interview answers. 
 Be highly analytical, fair, and extremely specific. Grade strictly but provide constructive feedback.`;
 
-  const userPrompt = `Evaluate this mock interview answer for a ${role} position.
-Question Type: ${type}
-Question: ${question}
-Candidate's Answer: ${answer}
+  const userPrompt = `Evaluate this mock interview answer for a ${safeRole} position.
+Question Type: ${safeType}
+Question: ${safeQuestion}
+Candidate's Answer: ${safeAnswer}
 
 Evaluate and return ONLY a valid JSON object matching the exact structure below (no markdown fences, no extra text):
 {
@@ -52,15 +58,19 @@ Evaluate and return ONLY a valid JSON object matching the exact structure below 
  * @returns {Promise<object>} Code review feedback
  */
 async function reviewCode(code, language, challengeTitle, challengeDesc, allPassed) {
+  const safeLanguage = sanitizePromptInput(language, 50);
+  const safeTitle = sanitizePromptInput(challengeTitle, 100);
+  const safeDesc = sanitizePromptInput(challengeDesc, 1000);
+
   const systemPrompt = `You are a principal software engineer conducting a detailed technical code review. 
 Evaluate algorithmic complexity, code quality, readability, edge-case coverage, and best practices.`;
 
-  const userPrompt = `Review this solution written in ${language} for the coding challenge "${challengeTitle}".
+  const userPrompt = `Review this solution written in ${safeLanguage} for the coding challenge "${safeTitle}".
 Problem Description:
-${challengeDesc}
+${safeDesc}
 
 Submitted Code:
-\`\`\`${language}
+\`\`\`${safeLanguage}
 ${code}
 \`\`\`
 

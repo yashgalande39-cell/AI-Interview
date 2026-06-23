@@ -1,5 +1,6 @@
 const { callOpenRouter, parseJsonResponse } = require('./openrouter');
 const { generateRecommendations } = require('./recommendationEngine');
+const { sanitizePromptInput } = require('../../utils/sanitizePromptInput');
 
 /**
  * Generate deep personalized performance feedback.
@@ -9,10 +10,13 @@ const { generateRecommendations } = require('./recommendationEngine');
  * @returns {Promise<object>} Combined feedback and study recommendations
  */
 async function generatePerformanceFeedback(scoreCard, role, type) {
+  const safeRole = sanitizePromptInput(role, 100);
+  const safeType = sanitizePromptInput(type, 100);
+
   const systemPrompt = `You are an elite talent acquisition partner and executive career coach. 
 Analyze the scorecard metrics and write clear, realistic, and highly actionable feedback in a professional recruiter tone.`;
 
-  const userPrompt = `Generate a performance scorecard review for a candidate who just completed a ${type} mock interview for the role of ${role}.
+  const userPrompt = `Generate a performance scorecard review for a candidate who just completed a ${safeType} mock interview for the role of ${safeRole}.
 Scores:
 - Overall Average: ${scoreCard.overallScore}/100
 - Technical Accuracy: ${scoreCard.technicalScore}/100

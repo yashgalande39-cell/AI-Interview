@@ -20,12 +20,12 @@ This document describes the design decisions, languages, runtime environments, l
                   |                (Node.js)                |
                   +-----+-----------------------------+-----+
                         |                             |
-     (MONGODB_URI set)  |                             | (Fallback Mode)
+     (DATABASE_URL set) |                             | (Fallback Mode)
                         v                             v
-           +------------+------------+   +------------+------------+
-           |       MongoDB Atlas     |   |   Local File Database   |
-           |  (Mongoose Schema Model)|   | (backend/data/mock_db)  |
-           +-------------------------+   +-------------------------+
+            +------------+------------+   +------------+------------+
+            |         PostgreSQL      |   |        Demo Mode        |
+            |   (pg Pool Connection)  |   |    (In-memory Stubs)    |
+            +-------------------------+   +-------------------------+
 ```
 
 ---
@@ -75,10 +75,10 @@ The backend is built as a RESTful and event-driven **Node.js** app using **Expre
 The system operates in a **Dual-Mode** to guarantee high availability and easy local development without requiring external credentials:
 
 #### 4.1 Dual Database Architecture
-1. **Live MongoDB (Production)**: Connects via `Mongoose` schema models to save users, streak counts, historical reviews, and custom quiz responses.
-2. **Local Mock Database (Development/Fallback)**:
-   - Uses `backend/data/mock_db.json`.
-   - Utilizes `fs` file operations inside `backend/src/models/mockDb.js` to read, write, query, and perform transactions in memory.
+1. **Live PostgreSQL (Production/Dev)**: Connects via the `pg` pool connection helper to save users, streak counts, historical reviews, replay events, and coding submissions.
+2. **Local Demo Fallbacks (Development/Fallback)**:
+   - Gated behind the `ALLOW_DEMO_AUTH=true` env flag.
+   - Generates mock objects and stubs to let development continue offline when the database is unavailable.
 
 #### 4.2 Dual AI Processing Engine
 1. **OpenRouter AI / Gemini Cloud**:

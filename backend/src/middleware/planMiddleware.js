@@ -43,9 +43,14 @@ const requirePlan = (requiredPlan) => {
       req.dbUser = user;
       next();
     } catch (err) {
-      console.warn('[PlanMiddleware] PostgreSQL connection down, falling back to Pro sandbox access:', err.message);
-      req.dbUser = { plan: 'pro' };
-      next();
+      const { IS_DEMO_AUTH, requireDemoMode } = require('../config/env');
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('planMiddleware.requirePlan');
+        req.dbUser = { plan: 'pro' };
+        return next();
+      }
+      console.error('[PlanMiddleware] Database error:', err);
+      return res.status(503).json({ message: 'Service temporarily unavailable' });
     }
   };
 };

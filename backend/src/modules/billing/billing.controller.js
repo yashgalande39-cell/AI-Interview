@@ -38,7 +38,8 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Demo mode: orders with demo_ prefix bypass signature check
-    const isDemoOrder = orderId.startsWith('order_demo_');
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    const isDemoOrder = IS_DEMO_AUTH && orderId.startsWith('order_demo_');
     const isValid = isDemoOrder || billingService.verifySignature(orderId, paymentId, signature);
 
     if (!isValid) {
@@ -78,18 +79,24 @@ exports.verifyPayment = async (req, res) => {
 
       user = updatedResult.rows[0];
     } catch (dbErr) {
-      console.warn('Database offline, using verifyPayment offline mockup:', dbErr.message);
-      user = {
-        id: userId,
-        name: "Test User",
-        email: "user@example.com",
-        plan: plan,
-        plan_activated_at: new Date().toISOString(),
-        plan_expires_at: expiresAt.toISOString(),
-        xp: 100,
-        streak: 1,
-        badges: ["Novice Prep"]
-      };
+      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('billing.verifyPayment');
+        user = {
+          id: userId,
+          name: "Test User",
+          email: "user@example.com",
+          plan: plan,
+          plan_activated_at: new Date().toISOString(),
+          plan_expires_at: expiresAt.toISOString(),
+          xp: 100,
+          streak: 1,
+          badges: ["Novice Prep"]
+        };
+      } else {
+        console.error('[verifyPayment] Database error:', dbErr);
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
     }
 
     return res.status(200).json({
@@ -106,6 +113,7 @@ exports.verifyPayment = async (req, res) => {
 exports.getSubscription = async (req, res) => {
   try {
     let user;
+    let dbOffline = false;
     try {
       const result = await query(
         'SELECT plan, plan_activated_at, plan_expires_at, subscription_id FROM users WHERE id = $1',
@@ -113,11 +121,20 @@ exports.getSubscription = async (req, res) => {
       );
       user = result.rows[0];
     } catch (dbErr) {
+      dbOffline = true;
       console.warn('Database offline, using getSubscription offline mockup:', dbErr.message);
     }
 
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    if (dbOffline) {
+      if (!IS_DEMO_AUTH) {
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
+      requireDemoMode('billing.getSubscription');
+    }
+
     const plans = billingService.PLANS;
-    const userPlan = user?.plan || 'pro'; // default to pro offline to let them access everything
+    const userPlan = user?.plan || (IS_DEMO_AUTH ? 'pro' : 'free');
     const currentPlan = plans[userPlan] || plans.free;
 
     return res.status(200).json({
@@ -136,13 +153,22 @@ exports.getSubscription = async (req, res) => {
 // POST /api/billing/cancel
 exports.cancelSubscription = async (req, res) => {
   try {
+    let dbOffline = false;
     try {
       await query(
         "UPDATE users SET plan = 'free', subscription_id = NULL, plan_expires_at = NULL WHERE id = $1",
         [req.user.userId]
       );
     } catch (dbErr) {
+      dbOffline = true;
       console.warn('Database offline, skipping cancel query in cancelSubscription:', dbErr.message);
+    }
+    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+    if (dbOffline) {
+      if (!IS_DEMO_AUTH) {
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
+      requireDemoMode('billing.cancelSubscription');
     }
     return res.status(200).json({ message: 'Subscription cancelled. Moved to Free plan. (offline mode)' });
   } catch (err) {

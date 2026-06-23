@@ -95,7 +95,7 @@ const query = (text, params) => {
  */
 const withTransaction = async (callback) => {
   if (!pool) throw new Error('PostgreSQL pool is not initialised.');
-  const client = await pool.acquire();
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await callback(client);

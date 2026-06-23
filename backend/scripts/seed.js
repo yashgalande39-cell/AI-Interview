@@ -121,22 +121,103 @@ const questions = [
 async function seed() {
   console.log('🌱 Starting database seed...');
 
-  for (const q of questions) {
-    await pool.query(`
-      INSERT INTO questions (type, role, company, difficulty, question, title, description, test_cases, templates, tags)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT DO NOTHING
-    `, [
-      q.type, q.role, q.company, q.difficulty,
-      q.question || null, q.title || null, q.description || null,
-      q.test_cases || null, q.templates || null,
-      q.tags
-    ]);
-  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    let seededCount = 0;
 
-  console.log(`✅ Seeded ${questions.length} questions into the questions bank.`);
-  await pool.end();
-  console.log('🐘 Seed complete. Database connection closed.');
+    // 1. Seed static questions
+    for (const q of questions) {
+      await client.query(`
+        INSERT INTO questions (type, role, company, difficulty, question, title, description, test_cases, templates, tags)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT DO NOTHING
+      `, [
+        q.type, q.role, q.company, q.difficulty,
+        q.question || null, q.title || null, q.description || null,
+        q.test_cases || null, q.templates || null,
+        q.tags || []
+      ]);
+      seededCount++;
+    }
+    console.log(`✅ Seeded ${questions.length} static questions.`);
+
+    const fs = require('fs');
+    const path = require('path');
+
+    // 2. Seed DSA questions
+    const dsaPath = path.join(__dirname, '../data/dsa_questions.json');
+    if (fs.existsSync(dsaPath)) {
+      console.log('⏳ Loading DSA questions from json...');
+      const dsaChallenges = JSON.parse(fs.readFileSync(dsaPath, 'utf-8'));
+      console.log(`⏳ Seeding ${dsaChallenges.length} DSA questions into PostgreSQL...`);
+      for (const q of dsaChallenges) {
+        await client.query(`
+          INSERT INTO questions (id, type, role, company, difficulty, title, description, test_cases, templates, tags)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          q.id,
+          q.type || 'Coding',
+          q.role || 'Software Engineer',
+          q.company || 'Common',
+          q.difficulty || 'Medium',
+          q.title || null,
+          q.description || null,
+          q.testCases ? JSON.stringify(q.testCases) : null,
+          q.templates ? JSON.stringify(q.templates) : null,
+          q.topic ? [q.topic] : []
+        ]);
+        seededCount++;
+      }
+      console.log(`✅ Seeded DSA questions successfully.`);
+    } else {
+      console.warn('⚠️ dsa_questions.json not found, skipping DSA seed.');
+    }
+
+    // 3. Seed Aptitude questions
+    const aptPath = path.join(__dirname, '../data/aptitude_questions.json');
+    if (fs.existsSync(aptPath)) {
+      console.log('⏳ Loading Aptitude questions from json...');
+      const aptQuestions = JSON.parse(fs.readFileSync(aptPath, 'utf-8'));
+      console.log(`⏳ Seeding ${aptQuestions.length} Aptitude questions into PostgreSQL...`);
+      for (const q of aptQuestions) {
+        const testCasesData = JSON.stringify({ correctIndex: q.correctIndex, set: q.set });
+        await client.query(`
+          INSERT INTO questions (id, type, role, company, difficulty, question, title, description, test_cases, templates, tags)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          q.id,
+          'Aptitude',
+          q.section || 'General',
+          'Common',
+          q.difficulty || 'Medium',
+          q.question || null,
+          q.section || null,
+          q.explanation || null,
+          testCasesData,
+          q.options ? JSON.stringify(q.options) : null,
+          q.section ? [q.section] : []
+        ]);
+        seededCount++;
+      }
+      console.log(`✅ Seeded Aptitude questions successfully.`);
+    } else {
+      console.warn('⚠️ aptitude_questions.json not found, skipping Aptitude seed.');
+    }
+
+    await client.query('COMMIT');
+    console.log(`\n🎉 Seed complete! Total questions in DB: ${seededCount}`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+    await pool.end();
+    console.log('🐘 Database connection closed.');
+  }
 }
 
 seed().catch(err => {

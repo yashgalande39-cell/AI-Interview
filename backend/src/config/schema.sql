@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
   user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   company         TEXT,
   role            TEXT,
-  type            TEXT        NOT NULL DEFAULT 'hr' CHECK (type IN ('hr', 'technical', 'behavioral', 'system_design')),
+  type            TEXT        NOT NULL DEFAULT 'hr' CHECK (type IN ('hr', 'technical', 'behavioral', 'system_design', 'aptitude', 'coding')),
   status          TEXT        NOT NULL DEFAULT 'ongoing' CHECK (status IN ('ongoing', 'completed', 'abandoned')),
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at    TIMESTAMPTZ,
@@ -265,8 +265,8 @@ CREATE INDEX IF NOT EXISTS idx_memories_text_trgm ON user_memories USING gin (ch
 -- QUESTIONS BANK
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS questions (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  type        TEXT        NOT NULL CHECK (type IN ('HR', 'Technical', 'Behavioral', 'Coding', 'System Design')),
+  id          TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  type        TEXT        NOT NULL CHECK (type IN ('HR', 'Technical', 'Behavioral', 'Coding', 'System Design', 'Aptitude')),
   role        TEXT        NOT NULL DEFAULT 'All',
   company     TEXT        NOT NULL DEFAULT 'Common',
   difficulty  TEXT        NOT NULL DEFAULT 'Medium' CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),

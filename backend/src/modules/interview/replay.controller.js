@@ -4,7 +4,6 @@
  */
 
 const { query } = require('../../config/pgDb');
-const mockDb = require('../../models/mockDb');
 
 // Offline in-memory fallback store for session replay events
 const inMemoryReplayStorage = new Map();
@@ -100,18 +99,9 @@ exports.getReplay = async (req, res) => {
 
     // 2. Fallback to memory / mockDb
     if (!session) {
-      const history = mockDb.interviews?.findMany({ userId }) || [];
-      const mockSession = history.find(h => h.id === sessionId || h.sessionId === sessionId);
-      if (mockSession) {
-        session = {
-          id: mockSession.id,
-          company: mockSession.company,
-          role: mockSession.role,
-          type: mockSession.type,
-          startedAt: mockSession.startedAt,
-          scoreCard: mockSession.scoreCard,
-        };
-      } else {
+      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('replay.getReplay');
         // Create a default session shell so page doesn't break
         session = {
           id: sessionId,
@@ -121,8 +111,10 @@ exports.getReplay = async (req, res) => {
           startedAt: new Date().toISOString(),
           scoreCard: { overallScore: 85 }
         };
+        events = inMemoryReplayStorage.get(sessionId) || [];
+      } else {
+        return res.status(404).json({ message: 'Session not found' });
       }
-      events = inMemoryReplayStorage.get(sessionId) || [];
     }
 
     return res.status(200).json({
@@ -163,21 +155,25 @@ exports.listReplays = async (req, res) => {
         communicationScore: r.score_communication || 0
       }));
     } catch (dbErr) {
-      console.warn('[ReplayController] Database offline, listing mock replays:', dbErr.message);
-      const history = mockDb.interviews?.findMany?.({ userId }) || [];
-      replays = history
-        .filter(h => h.status === 'completed' && h.scoreCard)
-        .map(h => ({
-          sessionId: h.id,
-          company: h.company,
-          role: h.role,
-          type: h.type,
-          completedAt: h.scoreCard?.completedAt || h.startedAt,
-          overallScore: h.scoreCard?.overallScore || 0,
-          technicalScore: h.scoreCard?.technicalScore || 0,
-          communicationScore: h.scoreCard?.communicationScore || 0,
-        }))
-        .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
+      if (IS_DEMO_AUTH) {
+        requireDemoMode('replay.listReplays');
+        replays = [
+          {
+            sessionId: "sess_mock_1",
+            company: "Google",
+            role: "Software Engineer",
+            type: "TECHNICAL",
+            completedAt: new Date().toISOString(),
+            overallScore: 85,
+            technicalScore: 80,
+            communicationScore: 90
+          }
+        ];
+      } else {
+        console.error('[listReplays] Database error:', dbErr);
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
     }
 
     return res.status(200).json({ replays, total: replays.length });

@@ -29,36 +29,45 @@ const WEIGHTS = {
  * @returns {{ coding, interview, resume, communication, sessions_count, problems_solved }}
  */
 const computeComponents = async (userId) => {
-  // ── Coding Score ─────────────────────────────────────────────────────────
-  // Acceptance rate across all submissions
-  const codingResult = await query(`
-    SELECT
-      COUNT(*) FILTER (WHERE status = 'accepted') AS accepted,
-      COUNT(*) AS total,
-      AVG(CASE WHEN status = 'accepted' THEN
-        ROUND(100.0 * test_cases_passed / NULLIF(test_cases_total, 0))
-      END) AS avg_pass_rate
-    FROM coding_submissions
-    WHERE user_id = $1
-  `, [userId]);
+  const [codingResult, interviewResult, commResult, resumeResult] = await Promise.all([
+    query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'accepted') AS accepted,
+        COUNT(*) AS total,
+        AVG(CASE WHEN status = 'accepted' THEN
+          ROUND(100.0 * test_cases_passed / NULLIF(test_cases_total, 0))
+        END) AS avg_pass_rate
+      FROM coding_submissions
+      WHERE user_id = $1
+    `, [userId]),
+    query(`
+      SELECT
+        COUNT(*) AS session_count,
+        AVG(score_overall) AS avg_overall,
+        AVG(score_technical) AS avg_technical,
+        AVG(score_problem_solving) AS avg_problem_solving
+      FROM interview_sessions
+      WHERE user_id = $1 AND status = 'completed'
+    `, [userId]),
+    query(`
+      SELECT AVG(score_communication) AS avg_comm, AVG(score_confidence) AS avg_conf
+      FROM interview_sessions
+      WHERE user_id = $1 AND status = 'completed'
+    `, [userId]),
+    query(`
+      SELECT ats_score
+      FROM resumes
+      WHERE user_id = $1 AND ats_score IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [userId])
+  ]);
 
   const cr = codingResult.rows[0];
   const codingRatio   = cr.total > 0 ? parseFloat(cr.accepted) / parseFloat(cr.total) : 0;
   const avgPassRate   = parseFloat(cr.avg_pass_rate) || 0;
   const codingScore   = Math.round((codingRatio * 60) + (avgPassRate * 0.40));
   const problemsSolved = parseInt(cr.accepted) || 0;
-
-  // ── Interview Score ───────────────────────────────────────────────────────
-  // Average overall + technical score across completed sessions
-  const interviewResult = await query(`
-    SELECT
-      COUNT(*) AS session_count,
-      AVG(score_overall) AS avg_overall,
-      AVG(score_technical) AS avg_technical,
-      AVG(score_problem_solving) AS avg_problem_solving
-    FROM interview_sessions
-    WHERE user_id = $1 AND status = 'completed'
-  `, [userId]);
 
   const ir = interviewResult.rows[0];
   const sessionCount   = parseInt(ir.session_count) || 0;
@@ -69,27 +78,10 @@ const computeComponents = async (userId) => {
     ? Math.round((avgOverall * 0.5) + (avgTechnical * 0.3) + (avgProblemSolving * 0.2))
     : 0;
 
-  // ── Communication Score ───────────────────────────────────────────────────
-  const commResult = await query(`
-    SELECT AVG(score_communication) AS avg_comm, AVG(score_confidence) AS avg_conf
-    FROM interview_sessions
-    WHERE user_id = $1 AND status = 'completed'
-  `, [userId]);
-
   const comm = commResult.rows[0];
   const communicationScore = sessionCount > 0
     ? Math.round(((parseFloat(comm.avg_comm) || 0) * 0.6) + ((parseFloat(comm.avg_conf) || 0) * 0.4))
     : 0;
-
-  // ── Resume Score ──────────────────────────────────────────────────────────
-  // Latest ATS score
-  const resumeResult = await query(`
-    SELECT ats_score
-    FROM resumes
-    WHERE user_id = $1 AND ats_score IS NOT NULL
-    ORDER BY created_at DESC
-    LIMIT 1
-  `, [userId]);
 
   const resumeScore = resumeResult.rows[0]?.ats_score || 0;
 

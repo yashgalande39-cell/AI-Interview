@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
+import { useQuery } from '@tanstack/react-query';
 
 export default function Leaderboard() {
   const { user, token } = useAuth();
@@ -16,40 +17,36 @@ export default function Leaderboard() {
   const [selectedSeason, setSelectedSeason] = useState('Season 1 Sprints');
   // Copied share state indicator
   const [copiedBadgeName, setCopiedBadgeName] = useState(false);
-  // Live leaderboard data from backend
-  const [liveLeaderboard, setLiveLeaderboard] = useState([]);
-  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
 
-  // Fetch real leaderboard data on mount
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoadingLeaderboard(true);
-      try {
-        const res = await fetch(`${API_BASE}/gamification/leaderboard`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.leaderboard && data.leaderboard.length > 0) {
-            setLiveLeaderboard(data.leaderboard.map((u, i) => ({
-              rank: i + 1,
-              name: u.name,
-              xp: u.xp || 0,
-              streak: u.streak || 1,
-              badges: u.badges || [],
-              isMe: u.name === (user?.name || ''),
-              initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
-            })));
-          }
-        }
-      } catch (err) {
-        console.warn('Leaderboard fetch failed, using local data:', err.message);
-      } finally {
-        setLoadingLeaderboard(false);
+  // Fetch real leaderboard data using React Query
+  const { data: leaderboardData } = useQuery({
+    queryKey: ['leaderboard', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gamification/leaderboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Leaderboard fetch failed');
       }
-    };
-    if (token) fetchLeaderboard();
-  }, [token, user?.name]);
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  const liveLeaderboard = useMemo(() => {
+    if (!leaderboardData || !leaderboardData.leaderboard || leaderboardData.leaderboard.length === 0) {
+      return [];
+    }
+    return leaderboardData.leaderboard.map((u, i) => ({
+      rank: i + 1,
+      name: u.name,
+      xp: u.xp || 0,
+      streak: u.streak || 1,
+      badges: u.badges || [],
+      isMe: u.name === (user?.name || ''),
+      initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
+    }));
+  }, [leaderboardData, user?.name]);
 
 
   // User particulars — prefer live data

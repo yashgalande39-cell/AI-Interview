@@ -59,8 +59,8 @@ This document provides a comprehensive requirement analysis for the **Ultimate A
 ### 3. Non-Functional Requirements
 
 #### 3.1 Availability & Reliability (Dual Mode)
-- **Local Fallback**: If MongoDB or Google Gemini API configurations are absent, the system must seamlessly route operations to a local file-based database (`backend/data/mock_db.json`) and run offline rule-based simulators.
-- **Cloud Scale**: If Mongo/Gemini endpoints are configured, utilize cloud storage and live Large Language Models for response evaluations.
+- **Local Fallback**: If PostgreSQL or OpenRouter/Gemini API configurations are absent or offline, the system must seamlessly route operations to local in-memory stubs (gated by `ALLOW_DEMO_AUTH=true`) and run offline rule-based simulators.
+- **Cloud Scale**: If PostgreSQL/OpenRouter endpoints are configured, utilize SQL-based persistence and live Large Language Models for response evaluations.
 
 #### 3.2 Performance
 - **Low Latency**: Socket.IO events (drawing coordinate syncs, coding changes, debate messages) must process within < 100ms.
