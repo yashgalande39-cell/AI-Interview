@@ -69,7 +69,9 @@ export default function GroupDiscussion() {
 
   // Socket.IO configurations for Real-time bridge
   useEffect(() => {
-    socketRef.current = io(BACKEND_URL);
+    socketRef.current = io(BACKEND_URL, {
+      auth: { token }
+    });
 
     socketRef.current.on('connect', () => {
       console.log('🔌 Connected to Socket.IO signaling channel.');

@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { VM } = require('vm2');
-const { query } = require('../../config/pgDb');
+const { query, withTransaction } = require('../../config/pgDb');
 const { reviewCode } = require('../../services/ai/scoringEngine');
 
 const QUESTIONS_PATH = path.join(__dirname, '../../../data/dsa_questions.json');
@@ -444,24 +444,27 @@ exports.submitCode = async (req, res) => {
     let userProfile = null;
     if (success) {
       try {
-        const uResult = await query("SELECT xp, badges FROM users WHERE id = $1", [userId]);
-        if (uResult.rows.length > 0) {
-          const currentXP = uResult.rows[0].xp || 0;
-          const newXP = currentXP + xpAwarded;
+        userProfile = await withTransaction(async (client) => {
+          const uResult = await client.query("SELECT xp, badges FROM users WHERE id = $1 FOR UPDATE", [userId]);
+          if (uResult.rows.length > 0) {
+            const currentXP = uResult.rows[0].xp || 0;
+            const newXP = currentXP + xpAwarded;
 
-          // Compute updated badges
-          const badges = Array.isArray(uResult.rows[0].badges) ? [...uResult.rows[0].badges] : [];
-          if (!badges.includes('Coding Master')) badges.push('Coding Master');
-          if (newXP >= 500 && !badges.includes('Interview Scholar')) badges.push('Interview Scholar');
-          if (newXP >= 1500 && !badges.includes('Coding Master')) badges.push('Coding Master');
-          if (newXP >= 3000 && !badges.includes('Placement Ready')) badges.push('Placement Ready');
+            // Compute updated badges
+            const badges = Array.isArray(uResult.rows[0].badges) ? [...uResult.rows[0].badges] : [];
+            if (!badges.includes('Coding Master')) badges.push('Coding Master');
+            if (newXP >= 500 && !badges.includes('Interview Scholar')) badges.push('Interview Scholar');
+            if (newXP >= 1500 && !badges.includes('Coding Master')) badges.push('Coding Master');
+            if (newXP >= 3000 && !badges.includes('Placement Ready')) badges.push('Placement Ready');
 
-          const updatedUser = await query(
-            "UPDATE users SET xp = $1, badges = $2 WHERE id = $3 RETURNING *",
-            [newXP, badges, userId]
-          );
-          userProfile = updatedUser.rows[0];
-        }
+            const updatedUser = await client.query(
+              "UPDATE users SET xp = $1, badges = $2 WHERE id = $3 RETURNING *",
+              [newXP, badges, userId]
+            );
+            return updatedUser.rows[0];
+          }
+          return null;
+        });
       } catch (dbErr) {
         console.warn('[CodingController] Database offline, skipping XP and badges award in DB:', dbErr.message);
         userProfile = {

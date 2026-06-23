@@ -80,10 +80,12 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
   -- Full transcript for RAG memory
   transcript      JSONB,
 
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON interview_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_time ON interview_sessions(user_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON interview_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_sessions_company ON interview_sessions(company);
 
@@ -119,7 +121,8 @@ CREATE TABLE IF NOT EXISTS resumes (
   ats_analysis    JSONB,
   keywords        TEXT[],
 
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes(user_id);
@@ -298,4 +301,14 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_users_updated ON users;
 CREATE TRIGGER trg_users_updated
   BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_sessions_updated ON interview_sessions;
+CREATE TRIGGER trg_sessions_updated
+  BEFORE UPDATE ON interview_sessions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_resumes_updated ON resumes;
+CREATE TRIGGER trg_resumes_updated
+  BEFORE UPDATE ON resumes
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

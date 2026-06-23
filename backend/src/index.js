@@ -1,11 +1,12 @@
-const { CORS_ORIGIN } = require('./config/env');
+const { CORS_ORIGIN, JWT_SECRET, IS_DEMO_AUTH } = require('./config/env');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
-const { connectPG } = require('./config/pgDb');
+const { connectPG, query } = require('./config/pgDb'); // Import query helper for database health status checks later
+const jwt = require('jsonwebtoken');
 
 // ── Modular SaaS Module Routes ───────────────────────────────────────────────
 const authRoutes         = require('./modules/auth/auth.routes');
@@ -51,9 +52,18 @@ app.use('/api/tresk', aiLimiter);
 app.use(express.json({ limit: '1mb' }));
 
 // Diagnostic status check endpoint
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    await query('SELECT 1');
+    dbStatus = 'connected';
+  } catch (err) {
+    dbStatus = `disconnected (${err.message})`;
+  }
+
   res.status(200).json({
     status: 'online',
+    database: dbStatus,
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -90,6 +100,30 @@ const io = new Server(server, {
   cors: {
     origin: CORS_ORIGIN,
     methods: ['GET', 'POST']
+  }
+});
+
+// Socket.IO Auth Middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    if (IS_DEMO_AUTH) {
+      socket.user = { userId: 'guest', email: 'guest@tresk.ai', role: 'user' };
+      return next();
+    }
+    return next(new Error('Authentication error: Token required'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    if (IS_DEMO_AUTH) {
+      socket.user = { userId: 'guest', email: 'guest@tresk.ai', role: 'user' };
+      return next();
+    }
+    next(new Error('Authentication error: Invalid token'));
   }
 });
 

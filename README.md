@@ -45,29 +45,34 @@ An extremely premium, feature-complete full-stack AI-powered mock interview trai
 
 ### Prerequisites
 - Node.js installed (v18+ recommended)
-- Optional: MongoDB local connection string or Atlas cluster URL
-- Optional: Google Gemini API key
+- PostgreSQL database installed (or use Docker Compose below)
+- Optional: OpenRouter / Gemini API Keys
 
 ### 1. Setup Backend
 1. Navigate to `/backend` folder:
    ```bash
    cd backend
    ```
-2. Set up environmental keys. Create `.env` file:
+2. Set up environmental keys. Create a `.env` file:
    ```env
    PORT=5000
    JWT_SECRET=super_secret_ai_interview_token
-   MONGODB_URI=
-   GEMINI_API_KEY=
+   DATABASE_URL=postgresql://postgres:password123@localhost:5432/tresk_ai
+   ALLOW_DEMO_AUTH=true
+   CORS_ORIGIN=http://localhost:5173
    ```
-   *(Leaving MONGODB_URI and GEMINI_API_KEY blank triggers local mock database fallbacks!)*
+   *(Setting `ALLOW_DEMO_AUTH=true` enables robust local file-based database and AI rule simulator fallbacks when external services are offline!)*
 3. Install dependencies:
    ```bash
    npm install
    ```
-4. Start backend server:
+4. Seed the database with Aptitude and DSA Coding questions (make sure PostgreSQL is running):
    ```bash
-   npm start
+   npm run seed
+   ```
+5. Start backend server in development mode with nodemon hot reloading:
+   ```bash
+   npm run dev
    ```
    *Express server will bind to http://localhost:5000*
 
@@ -80,11 +85,21 @@ An extremely premium, feature-complete full-stack AI-powered mock interview trai
    ```bash
    npm install --legacy-peer-deps
    ```
-3. Boot development compiler:
+3. Boot development server:
    ```bash
    npm run dev
    ```
-   *Vite server will boot up and provide active port link (typically http://localhost:5173)*
+   *Vite server will boot up and run on http://localhost:5173*
+
+---
+
+## 🐳 Docker Deployment
+
+The application features full orchestration support. Spin up PostgreSQL 15 and the backend server concurrently using:
+```bash
+docker compose up --build
+```
+This automatically runs database migrations on boot. You can then run the frontend locally or connect your browser to the backend service.
 
 ---
 

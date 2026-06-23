@@ -16,7 +16,7 @@ const adminOnly = async (req, res, next) => {
     }
     
     const { IS_DEMO_AUTH } = require('../../config/env');
-    const isUserAdmin = user.role === 'admin' || user.email.includes('admin') || user.email === 'admin@example.com';
+    const isUserAdmin = user.role === 'admin' || (IS_DEMO_AUTH && (user.email.includes('admin') || user.email === 'admin@example.com'));
     
     if (!isUserAdmin) {
       if (IS_DEMO_AUTH) {

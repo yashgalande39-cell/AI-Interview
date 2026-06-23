@@ -62,7 +62,9 @@ export default function InterviewLobby() {
 
   useEffect(() => {
     // Connect socket for matching & synchronized peer sessions
-    socketRef.current = io(BACKEND_URL);
+    socketRef.current = io(BACKEND_URL, {
+      auth: { token }
+    });
 
     socketRef.current.on('connect', () => {
       console.log('🔌 Peer Matchmaking Socket connected.');

@@ -204,11 +204,7 @@ exports.buildResume = async (req, res) => {
       newResume = result.rows[0];
 
       // Award XP (50 XP for constructing resume!)
-      const userResult = await query("SELECT xp FROM users WHERE id = $1", [userId]);
-      if (userResult.rows.length > 0) {
-        const currentXP = userResult.rows[0].xp || 0;
-        await query("UPDATE users SET xp = $1 WHERE id = $2", [currentXP + 50, userId]);
-      }
+      await query("UPDATE users SET xp = xp + 50 WHERE id = $1", [userId]);
     } catch (dbErr) {
       console.warn("Database offline during buildResume, using memory fallback:", dbErr.message);
       newResume = {
@@ -435,11 +431,7 @@ exports.uploadResume = async (req, res) => {
       savedRecord = result.rows[0];
 
       // Award XP (50 XP for uploading resume!)
-      const userResult = await query("SELECT xp FROM users WHERE id = $1", [userId]);
-      if (userResult.rows.length > 0) {
-        const currentXP = userResult.rows[0].xp || 0;
-        await query("UPDATE users SET xp = $1 WHERE id = $2", [currentXP + 50, userId]);
-      }
+      await query("UPDATE users SET xp = xp + 50 WHERE id = $1", [userId]);
     } catch (dbErr) {
       console.warn("Database offline during uploadResume, using memory fallback:", dbErr.message);
       savedRecord = {

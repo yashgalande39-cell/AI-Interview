@@ -5,7 +5,7 @@
  * final evaluations. Replaces mockDb with PostgreSQL.
  */
 
-const { query } = require('../../config/pgDb');
+const { query, withTransaction } = require('../../config/pgDb');
 const { generateInterviewQuestions, generateFollowUp } = require('../../services/ai/interviewAgent');
 const { evaluateAnswer } = require('../../services/ai/scoringEngine');
 const { generatePerformanceFeedback } = require('../../services/ai/feedbackEngine');
@@ -804,26 +804,28 @@ exports.finishSession = async (req, res) => {
     // Award Gamification XP points (150 XP for completion!)
     if (dbSession.user_id) {
       try {
-        const uResult = await query("SELECT xp, badges FROM users WHERE id = $1", [dbSession.user_id]);
-        if (uResult.rows.length > 0) {
-          const user = uResult.rows[0];
-          let xpAward = 150;
-          if (overallScore > 85) xpAward += 50;
+        await withTransaction(async (client) => {
+          const uResult = await client.query("SELECT xp, badges FROM users WHERE id = $1 FOR UPDATE", [dbSession.user_id]);
+          if (uResult.rows.length > 0) {
+            const user = uResult.rows[0];
+            let xpAward = 150;
+            if (overallScore > 85) xpAward += 50;
 
-          const badges = Array.isArray(user.badges) ? [...user.badges] : [];
-          if (dbSession.type === "coding" && !badges.includes("Coding Master")) {
-            badges.push("Coding Master");
-          }
-          if (totalAnswers >= 5 && !badges.includes("Experienced Prep")) {
-            badges.push("Experienced Prep");
-          }
+            const badges = Array.isArray(user.badges) ? [...user.badges] : [];
+            if (dbSession.type === "coding" && !badges.includes("Coding Master")) {
+              badges.push("Coding Master");
+            }
+            if (totalAnswers >= 5 && !badges.includes("Experienced Prep")) {
+              badges.push("Experienced Prep");
+            }
 
-          await query("UPDATE users SET xp = $1, badges = $2 WHERE id = $3", [
-            (user.xp || 0) + xpAward,
-            badges,
-            dbSession.user_id
-          ]);
-        }
+            await client.query("UPDATE users SET xp = xp + $1, badges = $2 WHERE id = $3", [
+              xpAward,
+              badges,
+              dbSession.user_id
+            ]);
+          }
+        });
       } catch (dbErr) {
         console.warn("Database offline during finishSession XP update:", dbErr.message);
       }

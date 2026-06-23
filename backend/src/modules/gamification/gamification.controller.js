@@ -102,28 +102,25 @@ exports.completeChallenge = async (req, res) => {
 
     let dbOffline = false;
     try {
-      const uResult = await query("SELECT xp FROM users WHERE id = $1", [userId]);
-      if (uResult.rows.length > 0) {
-        // Determine XP award amount
-        try {
-          const cResult = await query("SELECT id, xp_reward FROM daily_challenges WHERE id = $1", [challengeId]);
-          if (cResult.rows.length > 0) {
-            xpReward = cResult.rows[0].xp_reward;
-            
-            // Log completion
-            await query(
-              "INSERT INTO daily_challenge_completions (challenge_id, user_id, completed_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING",
-              [challengeId, userId]
-            );
-          }
-        } catch (dbErr) {
-          console.warn('DB query/logging for daily challenges failed:', dbErr.message);
+      // Determine XP award amount
+      try {
+        const cResult = await query("SELECT id, xp_reward FROM daily_challenges WHERE id = $1", [challengeId]);
+        if (cResult.rows.length > 0) {
+          xpReward = cResult.rows[0].xp_reward;
+          
+          // Log completion
+          await query(
+            "INSERT INTO daily_challenge_completions (challenge_id, user_id, completed_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING",
+            [challengeId, userId]
+          );
         }
+      } catch (dbErr) {
+        console.warn('DB query/logging for daily challenges failed:', dbErr.message);
+      }
 
-        const currentXP = uResult.rows[0].xp || 0;
-        updatedXP = currentXP + xpReward;
-
-        await query("UPDATE users SET xp = $1 WHERE id = $2", [updatedXP, userId]);
+      const updateResult = await query("UPDATE users SET xp = xp + $1 WHERE id = $2 RETURNING xp", [xpReward, userId]);
+      if (updateResult.rows.length > 0) {
+        updatedXP = updateResult.rows[0].xp;
       } else {
         return res.status(404).json({ message: "User not found" });
       }

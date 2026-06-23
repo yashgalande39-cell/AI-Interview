@@ -7,7 +7,7 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { query } = require('../../config/pgDb');
+const { query, withTransaction } = require('../../config/pgDb');
 
 const { JWT_SECRET, IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
 const FIREBASE_PROJECT_ID = 'ai-interview-auth-530ed';
@@ -220,21 +220,27 @@ exports.updateXpAndStreak = async (req, res) => {
     const userId = req.user.userId;
     const { xpAmount, badgeToEarn } = req.body;
 
-    const existing = await query('SELECT xp, badges FROM users WHERE id = $1', [userId]);
-    if (!existing.rows[0]) return res.status(404).json({ message: 'User not found' });
+    const result = await withTransaction(async (client) => {
+      const existing = await client.query('SELECT xp, badges FROM users WHERE id = $1 FOR UPDATE', [userId]);
+      if (!existing.rows[0]) return { status: 404, message: 'User not found' };
 
-    const currentXP = existing.rows[0].xp || 0;
-    const newXP = currentXP + (xpAmount || 0);
+      const currentXP = existing.rows[0].xp || 0;
+      const newXP = currentXP + (xpAmount || 0);
 
-    let badges = computeBadges(newXP, existing.rows[0].badges);
-    if (badgeToEarn && !badges.includes(badgeToEarn)) badges.push(badgeToEarn);
+      let badges = computeBadges(newXP, existing.rows[0].badges);
+      if (badgeToEarn && !badges.includes(badgeToEarn)) badges.push(badgeToEarn);
 
-    const result = await query(
-      'UPDATE users SET xp = $1, badges = $2 WHERE id = $3 RETURNING *',
-      [newXP, badges, userId]
-    );
+      const updateRes = await client.query(
+        'UPDATE users SET xp = $1, badges = $2 WHERE id = $3 RETURNING *',
+        [newXP, badges, userId]
+      );
+      return { status: 200, user: sanitize(updateRes.rows[0]) };
+    });
 
-    return res.status(200).json({ message: 'Progress updated', user: sanitize(result.rows[0]) });
+    if (result.status !== 200) {
+      return res.status(result.status).json({ message: result.message });
+    }
+    return res.status(200).json({ message: 'Progress updated', user: result.user });
   } catch (err) {
     console.error('XP Update Error:', err);
     return res.status(500).json({ message: 'Server error updating progress' });
