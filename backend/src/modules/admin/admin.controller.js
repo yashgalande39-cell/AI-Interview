@@ -34,13 +34,8 @@ exports.getStats = async (req, res) => {
       activeToday
     });
   } catch (err) {
-    console.warn("Admin Stats Error, returning offline mock stats fallback:", err.message);
-    return res.status(200).json({
-      totalUsers: 1420,
-      totalInterviews: 4890,
-      avgScore: 78,
-      activeToday: 135
-    });
+    console.error('[Admin Stats] Database error:', err.message);
+    return res.status(503).json({ message: 'Admin service temporarily unavailable' });
   }
 };
 
@@ -70,29 +65,8 @@ exports.getQuestions = async (req, res) => {
 
     return res.status(200).json({ questions });
   } catch (err) {
-    console.warn("Admin Get Questions Error, returning offline mock questions fallback:", err.message);
-    const mockQuestions = [];
-    try {
-      const dsa = require('../../../data/dsa_questions.json');
-      dsa.forEach((ch, idx) => {
-        mockQuestions.push({
-          id: ch.id || `q_dsa_${idx}`,
-          type: "Coding",
-          difficulty: ch.difficulty || "Medium",
-          role: ch.topic || "Algorithms",
-          company: ch.company || "Google",
-          question: ch.description || ch.title,
-          title: ch.title,
-          description: ch.description,
-          testCases: ch.testCases || [],
-          templates: { javascript: ch.template || '' },
-          tags: [ch.topic || "Algorithms"],
-          isActive: true,
-          createdAt: new Date().toISOString()
-        });
-      });
-    } catch (_) {}
-    return res.status(200).json({ questions: mockQuestions });
+    console.error('[Admin GetQuestions] Database error:', err.message);
+    return res.status(503).json({ message: 'Admin service temporarily unavailable' });
   }
 };
 
@@ -126,19 +100,8 @@ exports.addQuestion = async (req, res) => {
       }
     });
   } catch (err) {
-    console.warn("Admin Add Question Error, returning mock added question fallback:", err.message);
-    const { type, difficulty, role, company, question } = req.body;
-    return res.status(201).json({
-      message: "Question added successfully (offline mode)",
-      question: {
-        id: "q_mock_" + Date.now(),
-        type: type,
-        difficulty: difficulty,
-        role: role,
-        company: company,
-        question: question
-      }
-    });
+    console.error('[Admin AddQuestion] Database error:', err.message);
+    return res.status(503).json({ message: 'Admin service temporarily unavailable' });
   }
 };
 
@@ -156,7 +119,7 @@ exports.deleteQuestion = async (req, res) => {
     
     return res.status(200).json({ message: "Question deleted successfully" });
   } catch (err) {
-    console.warn("Admin Delete Question Error, returning success fallback:", err.message);
-    return res.status(200).json({ message: "Question deleted successfully (offline mode)" });
+    console.error('[Admin DeleteQuestion] Database error:', err.message);
+    return res.status(503).json({ message: 'Admin service temporarily unavailable' });
   }
 };

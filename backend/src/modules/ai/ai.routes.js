@@ -60,6 +60,7 @@ router.post('/review-code', requirePlan('pro'), async (req, res) => {
 
 /**
  * POST /api/ai/generate-questions
+ * HR type: free | Technical/Behavioral/Coding type: pro
  */
 router.post('/generate-questions', async (req, res) => {
   try {
@@ -68,14 +69,33 @@ router.post('/generate-questions', async (req, res) => {
       return res.status(400).json({ message: 'Type and role are required' });
     }
 
-    if (type !== 'HR') {
-      const uResult = await query("SELECT plan FROM users WHERE id = $1", [req.user.userId]);
-      const userPlan = uResult.rows[0]?.plan || 'free';
-      if (userPlan === 'free') {
+    // HR questions are free; all other types require Pro
+    // Use planMiddleware inline to support per-type gating cleanly
+    if (type.toUpperCase() !== 'HR') {
+      const { query: dbQuery } = require('../../config/pgDb');
+      const { PLAN_LEVEL } = require('../../middleware/planMiddleware');
+
+      const uResult = await dbQuery(
+        'SELECT plan, plan_expires_at FROM users WHERE id = $1',
+        [req.user.userId]
+      );
+      const dbUser = uResult.rows[0];
+      let userPlan = dbUser?.plan || 'free';
+
+      // Enforce expiry
+      if (userPlan !== 'free' && dbUser?.plan_expires_at) {
+        if (new Date(dbUser.plan_expires_at) < new Date()) {
+          await dbQuery("UPDATE users SET plan = 'free' WHERE id = $1", [req.user.userId]).catch(() => {});
+          userPlan = 'free';
+        }
+      }
+
+      if ((PLAN_LEVEL[userPlan] ?? 0) < PLAN_LEVEL['pro']) {
         return res.status(403).json({
-          message: 'Upgrade to Pro to generate Technical, Behavioral, or Coding questions',
+          message: 'Upgrade to Pro to generate Technical, Behavioral, or Coding questions.',
           requiredPlan: 'pro',
-          userPlan
+          userPlan,
+          upgradeUrl: '/pricing',
         });
       }
     }
@@ -89,6 +109,7 @@ router.post('/generate-questions', async (req, res) => {
     return res.status(500).json({ message: 'Question generation failed', error: err.message });
   }
 });
+
 
 /**
  * POST /api/ai/analyze-jd

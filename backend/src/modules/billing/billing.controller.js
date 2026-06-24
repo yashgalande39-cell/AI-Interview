@@ -30,16 +30,40 @@ exports.createOrder = async (req, res) => {
 // POST /api/billing/verify-payment
 exports.verifyPayment = async (req, res) => {
   try {
-    const { orderId, paymentId, signature, plan } = req.body;
+    const { orderId, paymentId, signature } = req.body;
     const userId = req.user.userId;
 
-    if (!orderId || !paymentId || !plan) {
+    if (!orderId || !paymentId) {
       return res.status(400).json({ message: 'Missing payment details' });
     }
 
-    // Demo mode: orders with demo_ prefix bypass signature check
     const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
     const isDemoOrder = IS_DEMO_AUTH && orderId.startsWith('order_demo_');
+
+    // ── SECURITY: Derive plan server-side from order metadata ─────────────────
+    // Never trust the plan value submitted from the client.
+    let plan;
+    if (isDemoOrder) {
+      // Demo orders encode plan in the ID: order_demo_<plan>_<timestamp>
+      const parts = orderId.split('_');
+      plan = parts[2] || 'pro'; // fallback to 'pro' for legacy demo orders
+    } else {
+      // Fetch the order from Razorpay to get the plan from order notes
+      const rp = require('./razorpay.service');
+      try {
+        const orderDetails = await rp.fetchOrder(orderId);
+        plan = orderDetails?.notes?.plan;
+      } catch (fetchErr) {
+        console.error('[verifyPayment] Failed to fetch order from Razorpay:', fetchErr.message);
+        return res.status(400).json({ message: 'Could not verify order details' });
+      }
+    }
+
+    const validPlans = ['pro', 'teams'];
+    if (!plan || !validPlans.includes(plan)) {
+      return res.status(400).json({ message: 'Invalid plan in order metadata' });
+    }
+
     const isValid = isDemoOrder || billingService.verifySignature(orderId, paymentId, signature);
 
     if (!isValid) {
@@ -49,8 +73,6 @@ exports.verifyPayment = async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + 1);
 
-    // Update user plan in PostgreSQL
-    // Update user plan in PostgreSQL
     let user;
     try {
       const updatedResult = await query(`
@@ -78,20 +100,26 @@ exports.verifyPayment = async (req, res) => {
       }
 
       user = updatedResult.rows[0];
+
+      // Send upgrade confirmation email (fire-and-forget)
+      const emailService = require('../auth/email.service');
+      const planData = billingService.PLANS[plan];
+      emailService.sendPlanUpgradeEmail(user.email, user.name, planData?.name || plan, expiresAt)
+        .catch(err => console.warn('[verifyPayment] Upgrade email failed:', err.message));
+
     } catch (dbErr) {
-      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
       if (IS_DEMO_AUTH) {
         requireDemoMode('billing.verifyPayment');
         user = {
           id: userId,
-          name: "Test User",
-          email: "user@example.com",
+          name: 'Test User',
+          email: 'user@example.com',
           plan: plan,
           plan_activated_at: new Date().toISOString(),
           plan_expires_at: expiresAt.toISOString(),
           xp: 100,
           streak: 1,
-          badges: ["Novice Prep"]
+          badges: ['Novice Prep']
         };
       } else {
         console.error('[verifyPayment] Database error:', dbErr);
@@ -100,7 +128,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan activated! 🎉 (offline mode)`,
+      message: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan activated! 🎉`,
       user,
     });
   } catch (err) {
@@ -170,9 +198,109 @@ exports.cancelSubscription = async (req, res) => {
       }
       requireDemoMode('billing.cancelSubscription');
     }
-    return res.status(200).json({ message: 'Subscription cancelled. Moved to Free plan. (offline mode)' });
+    return res.status(200).json({ message: 'Subscription cancelled. Moved to Free plan.' });
   } catch (err) {
     console.error('Cancel Subscription Error:', err);
     return res.status(500).json({ message: 'Failed to cancel subscription' });
+  }
+};
+
+// ── POST /api/billing/webhook (Razorpay Webhook) ──────────────────────────────
+/**
+ * Razorpay sends webhook events here for async payment confirmation.
+ * This is the AUTHORITATIVE way to update subscription status — it runs
+ * server-side using Razorpay's signature, no client involvement.
+ *
+ * Setup: In Razorpay Dashboard → Webhooks → Add URL:
+ *   https://your-api.com/api/billing/webhook
+ * Select events: payment.captured, payment.failed, order.paid
+ *
+ * Env var: RAZORPAY_WEBHOOK_SECRET (separate from key secret)
+ */
+exports.handleWebhook = async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      console.warn('[Webhook] RAZORPAY_WEBHOOK_SECRET not set — skipping signature verification');
+    } else {
+      // Verify webhook signature
+      const razorpaySignature = req.headers['x-razorpay-signature'];
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+      if (razorpaySignature !== expectedSignature) {
+        console.warn('[Webhook] Invalid Razorpay webhook signature');
+        return res.status(400).json({ message: 'Invalid webhook signature' });
+      }
+    }
+
+    const event   = req.body.event;
+    const payload = req.body.payload;
+
+    console.log(`[Webhook] Received event: ${event}`);
+
+    if (event === 'payment.captured' || event === 'order.paid') {
+      const payment = payload?.payment?.entity || payload?.order?.entity;
+      if (!payment) return res.status(200).json({ status: 'ok' });
+
+      const orderId   = payment.order_id;
+      const paymentId = payment.id;
+      const notes     = payment.notes || {};
+      const plan      = notes.plan;
+
+      const validPlans = ['pro', 'teams'];
+      if (!plan || !validPlans.includes(plan)) {
+        console.warn(`[Webhook] Unknown plan in payment notes: ${plan}`);
+        return res.status(200).json({ status: 'ok' });
+      }
+
+      // Find user by looking up the payment record
+      const paymentRecord = await query(
+        'SELECT user_id FROM payments WHERE razorpay_order_id = $1',
+        [orderId]
+      );
+
+      if (!paymentRecord.rows[0]) {
+        console.warn(`[Webhook] No payment record found for order ${orderId}`);
+        return res.status(200).json({ status: 'ok' });
+      }
+
+      const userId   = paymentRecord.rows[0].user_id;
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+
+      await query(`
+        UPDATE users
+        SET plan = $1, subscription_id = $2, plan_activated_at = NOW(), plan_expires_at = $3
+        WHERE id = $4
+      `, [plan, paymentId, expiresAt.toISOString(), userId]);
+
+      await query(`
+        UPDATE payments SET status = 'paid', paid_at = NOW(), razorpay_payment_id = $1
+        WHERE razorpay_order_id = $2
+      `, [paymentId, orderId]);
+
+      console.log(`[Webhook] ✅ Plan ${plan} activated for user ${userId}`);
+    }
+
+    if (event === 'payment.failed') {
+      const payment = payload?.payment?.entity;
+      if (payment?.order_id) {
+        await query(
+          "UPDATE payments SET status = 'failed' WHERE razorpay_order_id = $1",
+          [payment.order_id]
+        ).catch(err => console.warn('[Webhook] Failed to update payment status:', err.message));
+      }
+    }
+
+    return res.status(200).json({ status: 'ok' });
+  } catch (err) {
+    console.error('[Webhook] Error:', err.message);
+    // Always return 200 to Razorpay to prevent re-delivery
+    return res.status(200).json({ status: 'error', message: err.message });
   }
 };

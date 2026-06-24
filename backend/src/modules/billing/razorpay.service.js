@@ -98,13 +98,15 @@ exports.createOrder = async (planId) => {
   const rp = getRazorpay();
   if (!rp) {
     // Stub: return a deterministic fake order (dev/demo mode)
+    // Plan is encoded in the order ID: order_demo_<plan>_<timestamp>
     return {
-      id:       `order_demo_${Date.now()}`,
+      id:       `order_demo_${planId}_${Date.now()}`,
       amount:   plan.price,
       currency: plan.currency,
       receipt:  `receipt_${Date.now()}`,
       status:   'created',
       demo:     true,
+      notes:    { plan: planId },
     };
   }
 
@@ -112,9 +114,19 @@ exports.createOrder = async (planId) => {
     amount:   plan.price,
     currency: plan.currency,
     receipt:  `tresk_${planId}_${Date.now()}`,
-    notes:    { plan: planId },
+    notes:    { plan: planId },  // plan stored in notes for server-side verification
   });
   return order;
+};
+
+/**
+ * Fetches an existing Razorpay order by ID.
+ * Used server-side to derive the plan from order.notes without trusting the client.
+ */
+exports.fetchOrder = async (orderId) => {
+  const rp = getRazorpay();
+  if (!rp) throw new Error('Razorpay is not configured');
+  return rp.orders.fetch(orderId);
 };
 
 /**

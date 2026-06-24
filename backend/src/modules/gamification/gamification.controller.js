@@ -25,29 +25,119 @@ try {
  */
 exports.getLeaderboard = async (req, res) => {
   try {
-    const result = await query(
-      "SELECT name, xp, streak, badges FROM users ORDER BY xp DESC, streak DESC LIMIT 10"
+    const userId = req.user.userId;
+
+    // 1. Get current user's profile to check peers & rank
+    const userRes = await query('SELECT college_name, branch, xp FROM users WHERE id = $1', [userId]);
+    const currentUser = userRes.rows[0] || {};
+    const college = currentUser.college_name;
+    const branch = currentUser.branch;
+    const userXP = currentUser.xp || 0;
+
+    // Calculate user's rank
+    const rankResult = await query(
+      "SELECT COUNT(*) FROM users WHERE xp > $1",
+      [userXP]
+    );
+    const userRank = parseInt(rankResult.rows[0].count) + 1;
+
+    // Calculate total users
+    const totalResult = await query("SELECT COUNT(*) FROM users");
+    const totalUsers = parseInt(totalResult.rows[0].count) || 1;
+
+    // Calculate percentile
+    const percentile = Math.max(1, Math.min(100, Math.round((userRank / totalUsers) * 100)));
+
+    // 2. Fetch Season Rankings (Top 10 users by total XP)
+    const seasonRes = await query(
+      "SELECT id, name, xp, streak, badges, avatar FROM users ORDER BY xp DESC, streak DESC LIMIT 10"
     );
 
-    const leaderboard = result.rows.map((row, index) => ({
+    // 3. Fetch Global Leaderboard (Top 20 users by total XP)
+    const globalRes = await query(
+      "SELECT id, name, xp, streak, badges, avatar FROM users ORDER BY xp DESC, streak DESC LIMIT 20"
+    );
+
+    // 4. Fetch Friends / Peers (Same college or branch, fallback to global top 10)
+    let friendsRes;
+    if (college || branch) {
+      friendsRes = await query(
+        `SELECT id, name, xp, streak, badges, avatar FROM users 
+         WHERE (college_name = $1 OR branch = $2) AND id != $3
+         ORDER BY xp DESC, streak DESC LIMIT 10`,
+        [college, branch, userId]
+      );
+    }
+
+    let friendsList = friendsRes ? friendsRes.rows : [];
+    // Always include the current user in the friends list if not already there
+    const meRes = await query("SELECT id, name, xp, streak, badges, avatar FROM users WHERE id = $1", [userId]);
+    if (meRes.rows[0]) {
+      friendsList.unshift(meRes.rows[0]);
+    }
+    // Deduplicate friendsList by id
+    const seen = new Set();
+    friendsList = friendsList.filter(u => {
+      if (seen.has(u.id)) return false;
+      seen.add(u.id);
+      return true;
+    });
+
+    // If no other friends/peers, fallback to the top users
+    if (friendsList.length <= 1) {
+      friendsList = globalRes.rows.slice(0, 10);
+    }
+
+    // Helper to format rows
+    const formatUser = (row, index) => ({
       rank: index + 1,
       name: row.name,
       xp: row.xp || 0,
       streak: row.streak || 1,
-      badges: row.badges || []
+      badges: row.badges || [],
+      avatar: row.avatar || '',
+      isMe: row.id === userId
+    });
+
+    const seasonRankings = seasonRes.rows.map(formatUser);
+    const globalRankings = globalRes.rows.map(formatUser);
+    const friendsRankings = friendsList.map((row, index) => ({
+      ...formatUser(row, index),
+      rank: index + 1
     }));
 
-    return res.status(200).json({ leaderboard });
+    return res.status(200).json({
+      season: seasonRankings,
+      global: globalRankings,
+      friends: friendsRankings,
+      userRank,
+      percentile
+    });
   } catch (err) {
     console.warn("Leaderboard Error, returning mock leaderboard fallback:", err.message);
-    const mockLeaderboard = [
-      { rank: 1, name: "Aarav Sharma", xp: 3200, streak: 12, badges: ["Novice Prep", "Coding Master", "Placement Ready"] },
-      { rank: 2, name: "Priya Patel", xp: 2850, streak: 8, badges: ["Novice Prep", "Interview Scholar", "Coding Master"] },
-      { rank: 3, name: "Rohan Das", xp: 2400, streak: 5, badges: ["Novice Prep", "Interview Scholar"] },
-      { rank: 4, name: "Sneha Reddy", xp: 1950, streak: 4, badges: ["Novice Prep", "Coding Master"] },
-      { rank: 5, name: "Amit Gupta", xp: 1550, streak: 3, badges: ["Novice Prep"] }
+    const mockSeason = [
+      { rank: 1, name: "Aarav Sharma", xp: 3200, streak: 12, badges: ["Novice Prep", "Coding Master", "Placement Ready"], avatar: "" },
+      { rank: 2, name: "Priya Patel", xp: 2850, streak: 8, badges: ["Novice Prep", "Interview Scholar", "Coding Master"], avatar: "" },
+      { rank: 3, name: "Rohan Das", xp: 2400, streak: 5, badges: ["Novice Prep", "Interview Scholar"], avatar: "" },
+      { rank: 4, name: "Sneha Reddy", xp: 1950, streak: 4, badges: ["Novice Prep", "Coding Master"], avatar: "" },
+      { rank: 5, name: "Amit Gupta", xp: 1550, streak: 3, badges: ["Novice Prep"], avatar: "" }
     ];
-    return res.status(200).json({ leaderboard: mockLeaderboard });
+    const mockGlobal = [
+      ...mockSeason,
+      { rank: 6, name: "Sarah Jenkins", xp: 1400, streak: 25, badges: ["Interview Scholar"], avatar: "" },
+      { rank: 7, name: "Elena Rostova", xp: 980, streak: 12, badges: ["Coding Master"], avatar: "" }
+    ];
+    const mockFriends = [
+      { rank: 1, name: "Aarav Sharma", xp: 3200, streak: 12, badges: ["Novice Prep", "Coding Master", "Placement Ready"], avatar: "" },
+      { rank: 2, name: "Dev Friend", xp: 950, streak: 2, badges: ["Coding Master"], avatar: "" }
+    ];
+    return res.status(200).json({
+      season: mockSeason,
+      global: mockGlobal,
+      friends: mockFriends,
+      userRank: 4,
+      percentile: 10
+    });
   }
 };
 
@@ -163,12 +253,12 @@ exports.getAptitudeQuestions = async (req, res) => {
     // Check DB first for aptitude questions if seeded under type 'Aptitude'
     try {
       const qResult = await query(`
-        SELECT id, question, templates, description, difficulty, role 
+        SELECT id, question, templates, description, difficulty, role, test_cases 
         FROM questions 
         WHERE type = 'Aptitude' 
           AND is_active = true
-          AND ($1 = 'All' OR difficulty = $1)
-          AND ($2 = 'All' OR role = $2)
+          AND ($1 = 'All' OR LOWER(difficulty) = LOWER($1))
+          AND ($2 = 'All' OR LOWER(role) = LOWER($2))
       `, [difficulty, section]);
       
       if (qResult.rows.length > 0) {
@@ -179,14 +269,23 @@ exports.getAptitudeQuestions = async (req, res) => {
           } catch (pe) {
             opts = row.templates || [];
           }
+          
+          let tc = {};
+          try {
+            tc = typeof row.test_cases === 'string' ? JSON.parse(row.test_cases) : (row.test_cases || {});
+          } catch (pe) {
+            tc = row.test_cases || {};
+          }
+          
           return {
             id: row.id || `apt_${idx}`,
             question: row.question,
             options: opts,
-            answer: row.description,
+            correctIndex: tc.correctIndex !== undefined ? tc.correctIndex : 0,
+            explanation: row.description,
             difficulty: row.difficulty,
             section: row.role || 'General',
-            set: 1
+            set: tc.set !== undefined ? tc.set : 1
           };
         });
         dbSuccess = true;
@@ -219,37 +318,5 @@ exports.getAptitudeQuestions = async (req, res) => {
   } catch (err) {
     console.error("Aptitude Fetch Error:", err);
     return res.status(500).json({ message: "Failed to load aptitude test" });
-  }
-};
-
-/**
- * Fetch Roundtable group discussion topic details.
- */
-exports.getGDTopic = async (req, res) => {
-  try {
-    const gdTopics = [
-      {
-        id: "gd_1",
-        title: "Will AI and Automation eliminate Software Engineering jobs?",
-        description: "Analyze the implications of generative code assistants (like Gemini/GitHub Copilot) on junior developer roles and engineering careers.",
-        participants: [
-          { name: "Rohit (AI Enthusiast)", avatar: "🤖", color: "border-purple-500 text-purple-400" },
-          { name: "Sneha (Experienced Manager)", avatar: "💼", color: "border-cyan-500 text-cyan-400" },
-          { name: "David (Ethicist)", avatar: "⚖️", color: "border-amber-500 text-amber-400" },
-          { name: "Anjali (Junior Dev)", avatar: "💻", color: "border-pink-500 text-pink-400" }
-        ],
-        aiDialogueTemplates: [
-          "I agree with Sneha that AI is an enhancer, not a total replacement. It takes over routine boilerplate code, leaving us to solve core architecture problems.",
-          "Actually, looking at previous industrial revolutions, automation increases productivity which historically expands job markets rather than killing them.",
-          "However, we must consider the ethical risks of code plagiarism and the threat to entry-level learning curves. How will juniors learn if AI writes all basic functions?"
-        ]
-      }
-    ];
-
-    const selected = gdTopics[Math.floor(Math.random() * gdTopics.length)];
-    return res.status(200).json({ gdTopic: selected });
-  } catch (err) {
-    console.error("GD Fetch Error:", err);
-    return res.status(500).json({ message: "Failed to load group discussion session" });
   }
 };

@@ -10,6 +10,9 @@ const { generateInterviewQuestions, generateFollowUp } = require('../../services
 const { evaluateAnswer } = require('../../services/ai/scoringEngine');
 const { generatePerformanceFeedback } = require('../../services/ai/feedbackEngine');
 
+// In-memory fallback for active sessions when PostgreSQL is offline
+const offlineSessions = new Map();
+
 // Rules-based questions synthesizer when AI APIs fail
 const synthesizeResumeQuestions = (type, difficulty, role, company, resume) => {
   const questions = [];
@@ -168,42 +171,60 @@ exports.generateSession = async (req, res) => {
       return res.status(400).json({ message: "Type, difficulty and role are required fields" });
     }
 
-    // Plan Enforcement
+    // Plan Enforcement — server-side (UI PlanGate is just cosmetic)
     let userPlan = 'free';
     let dbOffline = false;
     try {
-      const uResult = await query("SELECT plan FROM users WHERE id = $1", [userId]);
-      userPlan = uResult.rows[0]?.plan || 'free';
+      const uResult = await query(
+        'SELECT plan, plan_expires_at FROM users WHERE id = $1',
+        [userId]
+      );
+      const dbUser = uResult.rows[0];
+      userPlan = dbUser?.plan || 'free';
+
+      // Enforce expiry: auto-downgrade if paid plan has lapsed
+      if (userPlan !== 'free' && dbUser?.plan_expires_at) {
+        const expiry = new Date(dbUser.plan_expires_at);
+        if (expiry < new Date()) {
+          await query("UPDATE users SET plan = 'free' WHERE id = $1", [userId]).catch(() => {});
+          userPlan = 'free';
+          console.log(`[Interview] User ${userId} plan expired, downgraded to free.`);
+        }
+      }
 
       if (userPlan === 'free') {
+        // Free tier: HR only + 5 interviews/month cap
         if (type.toLowerCase() !== 'hr') {
-          return res.status(403).json({ 
-            message: "Free plan users can only access HR mock interviews. Please upgrade to Pro for Technical, Behavioral, and Coding interviews.",
+          return res.status(403).json({
+            message: 'Free plan allows HR interviews only. Upgrade to Pro for Technical, Behavioral, and Coding interviews.',
             requiredPlan: 'pro',
-            userPlan
+            userPlan,
+            upgradeUrl: '/pricing',
           });
         }
 
-        // Check current calendar month limit (3 interviews/month)
-        const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Check rolling 30-day count
         const countResult = await query(
-          "SELECT COUNT(*) FROM interview_sessions WHERE user_id = $1 AND started_at >= $2",
-          [userId, firstDay]
+          `SELECT COUNT(*) FROM interview_sessions
+           WHERE user_id = $1 AND started_at >= NOW() - INTERVAL '30 days'`,
+          [userId]
         );
-        const currentMonthCount = parseInt(countResult.rows[0].count, 10) || 0;
+        const monthCount = parseInt(countResult.rows[0].count, 10) || 0;
 
-        if (currentMonthCount >= 3) {
+        if (monthCount >= 5) {  // Free plan limit: 5 interviews / 30 days
           return res.status(403).json({
-            message: "Monthly mock interview limit (3) reached. Please upgrade to Pro for unlimited mock interviews.",
+            message: 'Free plan limit reached: 5 mock interviews per 30 days. Upgrade to Pro for unlimited interviews.',
             requiredPlan: 'pro',
-            userPlan
+            userPlan,
+            usedThisMonth: monthCount,
+            limit: 5,
+            upgradeUrl: '/pricing',
           });
         }
       }
     } catch (e) {
       dbOffline = true;
-      console.warn("Database offline during plan enforcement:", e.message);
+      console.warn('[Interview] Database offline during plan enforcement:', e.message);
     }
 
     const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
@@ -329,6 +350,7 @@ exports.generateSession = async (req, res) => {
           transcript: [],
           scoreCard: null
         };
+        offlineSessions.set(session.id, session);
       } else {
         console.error('[generateSession] Database error:', dbErr);
         return res.status(503).json({ message: "Service temporarily unavailable" });
@@ -361,6 +383,7 @@ exports.generateSession = async (req, res) => {
         transcript: [],
         scoreCard: null
       };
+      offlineSessions.set(mockSession.id, mockSession);
       return res.status(200).json({
         message: "Session generated successfully (offline mode)",
         session: mockSession
@@ -381,22 +404,35 @@ exports.submitAnswer = async (req, res) => {
     let dbSession;
     let ongoingMetadata = {};
     let usingFallback = false;
+    let isOfflineSession = false;
 
-    try {
-      const sResult = await query("SELECT * FROM interview_sessions WHERE id = $1", [sessionId]);
-      if (sResult.rows.length === 0) {
-        usingFallback = true;
-      } else {
-        dbSession = sResult.rows[0];
-        try {
-          ongoingMetadata = typeof dbSession.score_card === 'string' ? JSON.parse(dbSession.score_card) : dbSession.score_card;
-        } catch (e) {
-          ongoingMetadata = {};
+    if (offlineSessions.has(sessionId)) {
+      dbSession = offlineSessions.get(sessionId);
+      isOfflineSession = true;
+      ongoingMetadata = {
+        questions: dbSession.questions,
+        currentQuestionIndex: dbSession.currentQuestionIndex,
+        difficulty: dbSession.difficulty,
+        language: dbSession.language,
+        resumeId: dbSession.resumeId
+      };
+    } else {
+      try {
+        const sResult = await query("SELECT * FROM interview_sessions WHERE id = $1", [sessionId]);
+        if (sResult.rows.length === 0) {
+          usingFallback = true;
+        } else {
+          dbSession = sResult.rows[0];
+          try {
+            ongoingMetadata = typeof dbSession.score_card === 'string' ? JSON.parse(dbSession.score_card) : dbSession.score_card;
+          } catch (e) {
+            ongoingMetadata = {};
+          }
         }
+      } catch (dbErr) {
+        console.warn("Database offline during submitAnswer query, using offline fallback mode:", dbErr.message);
+        usingFallback = true;
       }
-    } catch (dbErr) {
-      console.warn("Database offline during submitAnswer query, using offline fallback mode:", dbErr.message);
-      usingFallback = true;
     }
 
     if (usingFallback) {
@@ -569,21 +605,30 @@ exports.submitAnswer = async (req, res) => {
 
     const statusLabel = isCompleted ? "completed" : "ongoing";
 
-    try {
-      await query(`
-        UPDATE interview_sessions 
-        SET transcript = $1, 
-            score_card = $2, 
-            status = $3
-        WHERE id = $4
-      `, [
-        JSON.stringify(newTranscript),
-        JSON.stringify(updatedMetadata),
-        statusLabel,
-        sessionId
-      ]);
-    } catch (dbErr) {
-      console.warn("Database offline during submitAnswer update:", dbErr.message);
+    if (isOfflineSession) {
+      dbSession.transcript = newTranscript;
+      dbSession.questions = updatedQuestions;
+      dbSession.currentQuestionIndex = nextIdx;
+      dbSession.difficulty = nextDifficulty;
+      dbSession.status = statusLabel;
+      offlineSessions.set(sessionId, dbSession);
+    } else {
+      try {
+        await query(`
+          UPDATE interview_sessions 
+          SET transcript = $1, 
+              score_card = $2, 
+              status = $3
+          WHERE id = $4
+        `, [
+          JSON.stringify(newTranscript),
+          JSON.stringify(updatedMetadata),
+          statusLabel,
+          sessionId
+        ]);
+      } catch (dbErr) {
+        console.warn("Database offline during submitAnswer update:", dbErr.message);
+      }
     }
 
     return res.status(200).json({
@@ -607,17 +652,23 @@ exports.finishSession = async (req, res) => {
 
     let dbSession;
     let usingFallback = false;
+    let isOfflineSession = false;
 
-    try {
-      const sResult = await query("SELECT * FROM interview_sessions WHERE id = $1", [sessionId]);
-      if (sResult.rows.length === 0) {
+    if (offlineSessions.has(sessionId)) {
+      dbSession = offlineSessions.get(sessionId);
+      isOfflineSession = true;
+    } else {
+      try {
+        const sResult = await query("SELECT * FROM interview_sessions WHERE id = $1", [sessionId]);
+        if (sResult.rows.length === 0) {
+          usingFallback = true;
+        } else {
+          dbSession = sResult.rows[0];
+        }
+      } catch (dbErr) {
+        console.warn("Database offline during finishSession query, using fallback scorecard:", dbErr.message);
         usingFallback = true;
-      } else {
-        dbSession = sResult.rows[0];
       }
-    } catch (dbErr) {
-      console.warn("Database offline during finishSession query, using fallback scorecard:", dbErr.message);
-      usingFallback = true;
     }
 
     if (usingFallback) {
@@ -774,31 +825,38 @@ exports.finishSession = async (req, res) => {
 
     // Write scorecard metrics to PG columns (score_overall, score_technical, score_communication, score_confidence, score_problem_solving)
     // to allow Readiness Engine calculation
-    try {
-      await query(`
-        UPDATE interview_sessions
-        SET status = 'completed',
-            score_card = $1,
-            score_overall = $2,
-            score_technical = $3,
-            score_communication = $4,
-            score_confidence = $5,
-            score_problem_solving = $6,
-            completed_at = NOW(),
-            feedback = $7
-        WHERE id = $8
-      `, [
-        JSON.stringify(scoreCard),
-        overallScore,
-        avgTechnical,
-        avgFluency,
-        avgEyeContact,
-        avgCompleteness, // Map avgCompleteness to problem solving index
-        scoreCard.aiVerdict || "Completed mock interview session.",
-        sessionId
-      ]);
-    } catch (dbErr) {
-      console.warn("Database offline during finishSession update:", dbErr.message);
+    if (isOfflineSession) {
+      dbSession.status = 'completed';
+      dbSession.scoreCard = scoreCard;
+      dbSession.completedAt = new Date().toISOString();
+      offlineSessions.set(sessionId, dbSession);
+    } else {
+      try {
+        await query(`
+          UPDATE interview_sessions
+          SET status = 'completed',
+              score_card = $1,
+              score_overall = $2,
+              score_technical = $3,
+              score_communication = $4,
+              score_confidence = $5,
+              score_problem_solving = $6,
+              completed_at = NOW(),
+              feedback = $7
+          WHERE id = $8
+        `, [
+          JSON.stringify(scoreCard),
+          overallScore,
+          avgTechnical,
+          avgFluency,
+          avgEyeContact,
+          avgCompleteness, // Map avgCompleteness to problem solving index
+          scoreCard.aiVerdict || "Completed mock interview session.",
+          sessionId
+        ]);
+      } catch (dbErr) {
+        console.warn("Database offline during finishSession update:", dbErr.message);
+      }
     }
 
     // Award Gamification XP points (150 XP for completion!)
@@ -931,6 +989,12 @@ exports.getHistory = async (req, res) => {
 exports.getSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
+
+    if (offlineSessions.has(sessionId)) {
+      const session = offlineSessions.get(sessionId);
+      return res.status(200).json({ session });
+    }
+
     const result = await query("SELECT * FROM interview_sessions WHERE id = $1", [sessionId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Mock interview session not found" });

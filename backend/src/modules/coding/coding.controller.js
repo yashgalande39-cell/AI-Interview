@@ -2,14 +2,34 @@
  * TRESK AI — Coding Controller (PostgreSQL)
  * =====================================================================
  * Handles DSA code running, evaluation, submission, and AI-powered feedback.
+ * Uses Piston API for sandboxed, multi-language code execution.
  * Persists coding submissions to the PostgreSQL database.
+ *
+ * SECURITY NOTE: vm2 has been removed — it is abandoned and has known RCE
+ * vulnerabilities (CVE-2023-29017, CVE-2023-37466). Piston runs code in
+ * isolated Docker containers, making it safe for untrusted user code.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { VM } = require('vm2');
 const { query, withTransaction } = require('../../config/pgDb');
 const { reviewCode } = require('../../services/ai/scoringEngine');
+
+// ── Piston API Language Map ────────────────────────────────────────────────────
+// Maps our language identifiers to Piston's runtime names and versions
+const PISTON_LANGUAGES = {
+  javascript: { language: 'javascript', version: '18.15.0' },
+  python:     { language: 'python',     version: '3.10.0'  },
+  java:       { language: 'java',       version: '15.0.2'  },
+  cpp:        { language: 'c++',        version: '10.2.0'  },
+  c:          { language: 'c',          version: '10.2.0'  },
+  typescript: { language: 'typescript', version: '5.0.3'   },
+  go:         { language: 'go',         version: '1.16.2'  },
+  rust:       { language: 'rust',       version: '1.50.0'  },
+  ruby:       { language: 'ruby',       version: '3.0.1'   },
+};
+
+const PISTON_API_URL = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston';
 
 const QUESTIONS_PATH = path.join(__dirname, '../../../data/dsa_questions.json');
 let fileChallenges = [];
@@ -182,6 +202,7 @@ exports.getChallengeById = async (req, res) => {
           description: row.description,
           constraints: [],
           template: row.templates ? row.templates.javascript : '',
+          templates: row.templates || {},
           testCases: row.test_cases || []
         });
       }
@@ -202,12 +223,20 @@ exports.getChallengeById = async (req, res) => {
 };
 
 /**
- * Helper to run Javascript code inside a vm2 sandbox.
+ * Execute code via the Piston API (isolated Docker containers — safe for untrusted code).
+ * Piston supports 50+ languages including JS, Python, Java, C++, Go, Rust, TypeScript.
+ *
+ * Docs: https://github.com/engineer-man/piston
+ * Public API: https://emkc.org/api/v2/piston
  */
-const executeJsCode = (code, challenge, funcName) => {
+const executePistonCode = async (code, language, testCases = [], funcName = 'solution') => {
+  const pistonLang = PISTON_LANGUAGES[language];
+  if (!pistonLang) {
+    throw new Error(`Unsupported language: ${language}`);
+  }
+
   const results = [];
   let allPassed = true;
-  const testCases = challenge.testCases || challenge.test_cases || [];
 
   for (let i = 0; i < testCases.length; i++) {
     const tc = testCases[i];
@@ -218,77 +247,95 @@ const executeJsCode = (code, challenge, funcName) => {
       expected = tc.expected;
     }
 
-    // Defense-in-depth: block structural escape keywords
-    if (/__proto__|constructor|process|require|global/i.test(code)) {
-      allPassed = false;
-      results.push({
-        caseNum: i + 1,
-        input: tc.input,
-        expected: tc.expected,
-        actual: null,
-        status: "ERROR",
-        error: "Security Violation: Access to restricted sandbox keywords (constructor, process, require, global, etc.) is blocked.",
-        logs: [],
-        durationMs: 0
-      });
-      continue;
-    }
-
-    const consoleLogs = [];
-    const vmInstance = new VM({
-      timeout: 3000,
-      sandbox: {
-        console: {
-          log: (...args) => {
-            consoleLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-          }
-        }
-      }
-    });
-
     const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
 
-    const runScriptText = `
-      ${code}
-      (() => {
-        const inputs = ${inputStr};
-        const result = ${funcName}(...inputs);
-        return JSON.stringify(result);
-      })()
-    `;
+    // Build a wrapper that calls the submitted function with the test case inputs
+    let execCode = code;
+    if (language === 'javascript') {
+      execCode = `
+${code}
+
+// Test harness
+const __inputs = ${inputStr};
+const __result = ${funcName}(...__inputs);
+console.log(JSON.stringify(__result));
+`;
+    } else if (language === 'python') {
+      execCode = `
+import json, sys
+${code}
+
+__inputs = ${inputStr.replace(/null/g, 'None').replace(/true/g, 'True').replace(/false/g, 'False')}
+__result = solution(*__inputs)
+print(json.dumps(__result))
+`;
+    }
+    // Other languages use the code as-is (user must handle I/O)
 
     try {
-      const startTime = process.hrtime();
-      const returnedValStr = vmInstance.run(runScriptText);
-      const hrDuration = process.hrtime(startTime);
-      const durationMs = parseFloat((hrDuration[0] * 1000 + hrDuration[1] / 1000000).toFixed(2));
-      
-      const actual = JSON.parse(returnedValStr);
-      
-      // Compare output
+      const startMs = Date.now();
+      const response = await fetch(`${PISTON_API_URL}/execute`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: pistonLang.language,
+          version:  pistonLang.version,
+          files:    [{ name: 'solution', content: execCode }],
+          stdin:    '',
+          args:     [],
+          run_timeout:     5000,  // 5 second execution limit
+          compile_timeout: 10000, // 10 second compile limit
+          compile_memory_limit: -1,
+          run_memory_limit:     256 * 1024 * 1024, // 256 MB
+        }),
+        signal: AbortSignal.timeout(15000), // 15s total HTTP timeout
+      });
+      const durationMs = Date.now() - startMs;
+
+      if (!response.ok) {
+        throw new Error(`Piston API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const run  = data.run;
+
+      if (run.code !== 0 || run.stderr) {
+        const errMsg = (run.stderr || run.output || 'Runtime error').trim().slice(0, 500);
+        allPassed = false;
+        results.push({
+          caseNum: i + 1, input: tc.input, expected: tc.expected,
+          actual: null, status: 'ERROR', error: errMsg, logs: [], durationMs
+        });
+        continue;
+      }
+
+      const outputRaw = (run.stdout || '').trim();
+      let actual;
+      try {
+        actual = JSON.parse(outputRaw);
+      } catch {
+        actual = outputRaw;
+      }
+
       const pass = JSON.stringify(actual) === JSON.stringify(expected);
       if (!pass) allPassed = false;
 
       results.push({
         caseNum: i + 1,
-        input: tc.input,
+        input:    tc.input,
         expected: tc.expected,
-        actual: returnedValStr,
-        status: pass ? "PASS" : "FAIL",
-        logs: consoleLogs,
-        durationMs
+        actual:   JSON.stringify(actual),
+        status:   pass ? 'PASS' : 'FAIL',
+        logs:     [],
+        durationMs,
       });
     } catch (err) {
       allPassed = false;
       results.push({
-        caseNum: i + 1,
-        input: tc.input,
-        expected: tc.expected,
-        actual: null,
-        status: "ERROR",
-        error: err.message,
-        logs: consoleLogs,
-        durationMs: 0
+        caseNum: i + 1, input: tc.input, expected: tc.expected,
+        actual: null, status: 'ERROR',
+        error:  err.name === 'TimeoutError' ? 'Code execution timed out (5s limit)' : err.message,
+        logs: [], durationMs: 0
       });
     }
   }
@@ -327,36 +374,20 @@ exports.runCode = async (req, res) => {
     }
 
     const testCases = challenge.testCases || challenge.test_cases || [];
+    const match = code.match(/function\s+(\w+)\s*\(/) ||
+                  code.match(/def\s+(\w+)\s*\(/)       ||
+                  code.match(/func\s+(\w+)\s*\(/);
+    const funcName = match ? match[1] : ARCHETYPE_FUNCS[getArchetypeKey(challengeId)] || 'solution';
 
-    if (language === 'javascript') {
-      const match = code.match(/function\s+(\w+)\s*\(/);
-      const funcName = match ? match[1] : ARCHETYPE_FUNCS[getArchetypeKey(challengeId)] || 'solution';
-      
-      const execution = executeJsCode(code, challenge, funcName);
-      return res.status(200).json({
-        success: execution.allPassed,
-        results: execution.results,
-        message: execution.allPassed ? "All test cases passed!" : "Some test cases failed."
-      });
-    } else {
-      // Non-JS runner simulation
-      const results = testCases.map((tc, idx) => ({
-        caseNum: idx + 1,
-        input: tc.input,
-        expected: tc.expected,
-        actual: tc.expected,
-        status: "PASS",
-        durationMs: 42
-      }));
-      return res.status(200).json({
-        success: true,
-        results,
-        message: `Compiled and simulated ${language} environment successfully!`
-      });
-    }
+    const execution = await executePistonCode(code, language, testCases, funcName);
+    return res.status(200).json({
+      success: execution.allPassed,
+      results: execution.results,
+      message: execution.allPassed ? 'All test cases passed!' : 'Some test cases failed.'
+    });
   } catch (err) {
-    console.error("Run Code Error:", err);
-    return res.status(500).json({ message: "Compilation failure in code runner." });
+    console.error('Run Code Error:', err);
+    return res.status(500).json({ message: 'Compilation failure in code runner.' });
   }
 };
 
@@ -396,23 +427,14 @@ exports.submitCode = async (req, res) => {
     let success = false;
     let results = [];
 
-    if (language === 'javascript') {
-      const match = code.match(/function\s+(\w+)\s*\(/);
-      const funcName = match ? match[1] : ARCHETYPE_FUNCS[getArchetypeKey(challengeId)] || 'solution';
-      const execution = executeJsCode(code, challenge, funcName);
-      success = execution.allPassed;
-      results = execution.results;
-    } else {
-      success = true;
-      results = testCases.map((tc, idx) => ({
-        caseNum: idx + 1,
-        input: tc.input,
-        expected: tc.expected,
-        actual: tc.expected,
-        status: "PASS",
-        durationMs: 45
-      }));
-    }
+    const match = code.match(/function\s+(\w+)\s*\(/) ||
+                  code.match(/def\s+(\w+)\s*\(/)       ||
+                  code.match(/func\s+(\w+)\s*\(/);
+    const funcName = match ? match[1] : ARCHETYPE_FUNCS[getArchetypeKey(challengeId)] || 'solution';
+
+    const execution = await executePistonCode(code, language, testCases, funcName);
+    success = execution.allPassed;
+    results = execution.results;
 
     const totalCases = testCases.length;
     const passedCases = results.filter(r => r.status === 'PASS').length;

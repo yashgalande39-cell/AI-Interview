@@ -75,10 +75,6 @@ export default function InterviewLobby() {
       console.log('👤 Another peer joined room:', socketId);
     });
 
-    socketRef.current.on('gd_message_receive', ({ sender, text, avatar }) => {
-      setChatMessages(prev => [...prev, { sender, text, avatar }]);
-    });
-
     socketRef.current.on('draw_update', ({ drawData }) => {
       drawPeerPath(drawData);
     });

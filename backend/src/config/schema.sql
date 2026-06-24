@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   college_name        TEXT,
   branch              TEXT,
   graduation_year     TEXT,
-  current_role        TEXT,
+  "current_role"      TEXT,
   location            TEXT,
   bio                 TEXT,
 
@@ -43,7 +43,17 @@ CREATE TABLE IF NOT EXISTS users (
   plan_activated_at   TIMESTAMPTZ,
   plan_expires_at     TIMESTAMPTZ,
 
+  -- Email verification
+  email_verified      BOOLEAN     NOT NULL DEFAULT FALSE,
+  email_verify_token  TEXT,
+  email_verify_expiry TIMESTAMPTZ,
+
+  -- Password reset
+  reset_token         TEXT,
+  reset_token_expiry  TIMESTAMPTZ,
+
   -- Auth
+  role                TEXT        NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'moderator')),
   auth_provider       TEXT        NOT NULL DEFAULT 'local',
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -312,3 +322,44 @@ DROP TRIGGER IF EXISTS trg_resumes_updated ON resumes;
 CREATE TRIGGER trg_resumes_updated
   BEFORE UPDATE ON resumes
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =============================================================================
+-- REFRESH TOKEN SESSIONS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS refresh_sessions (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash    TEXT        NOT NULL UNIQUE,  -- SHA-256 hash of refresh token
+  user_agent    TEXT,
+  ip_address    TEXT,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_sessions_user ON refresh_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_sessions_token ON refresh_sessions(token_hash);
+
+-- =============================================================================
+-- SAFE MIGRATION — Add columns to existing DBs if they don't already exist
+-- =============================================================================
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email_verified') THEN
+    ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email_verify_token') THEN
+    ALTER TABLE users ADD COLUMN email_verify_token TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email_verify_expiry') THEN
+    ALTER TABLE users ADD COLUMN email_verify_expiry TIMESTAMPTZ;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_token') THEN
+    ALTER TABLE users ADD COLUMN reset_token TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_token_expiry') THEN
+    ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMPTZ;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
+    ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'moderator'));
+  END IF;
+END $$;

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { usePlan } from './hooks/usePlan';
+import EmailVerificationBanner from './components/EmailVerificationBanner';
 
 // UI Components
 import CommandPalette from './components/ui/CommandPalette';
@@ -20,7 +21,6 @@ const InterviewRoom = lazy(() => import('./pages/InterviewRoom'));
 const CodingEditor = lazy(() => import('./pages/CodingEditor'));
 const ResumeAnalyzer = lazy(() => import('./pages/ResumeAnalyzer'));
 const JobAnalyzer = lazy(() => import('./pages/JobAnalyzer'));
-const GroupDiscussion = lazy(() => import('./pages/GroupDiscussion'));
 const AptitudeEngine = lazy(() => import('./pages/AptitudeEngine'));
 const CareerRoadmap = lazy(() => import('./pages/CareerRoadmap'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
@@ -29,6 +29,8 @@ const FeedbackAnalysis = lazy(() => import('./pages/FeedbackAnalysis'));
 const Settings = lazy(() => import('./pages/Settings'));
 const InterviewReplay = lazy(() => import('./pages/InterviewReplay'));
 const Pricing = lazy(() => import('./pages/Pricing'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
 import {
   LayoutDashboard, Mic, Code2, FileText, Briefcase,
@@ -38,11 +40,11 @@ import {
   Crown, Shield, Zap, Users2, PlayCircle, CreditCard, Bot
 } from 'lucide-react';
 
-// ── Route Guards ──────────────────────────────────────────────
+// ── Route Guards ────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
-  const { token, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   if (loading) return null;
-  return token ? children : <Navigate to="/login" replace />;
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
 // ── Nav Item ─────────────────────────────────────────────────
@@ -74,9 +76,9 @@ function NavItem({ to, icon: Icon, label, isActive, isLocked, collapsed }) {
   );
 }
 
-// ── App Layout ────────────────────────────────────────────────
+// ── App Layout ────────────────────────────────────────────
 const AppLayout = ({ children }) => {
-  const { user, token, logout, theme, toggleTheme } = useAuth();
+  const { user, isAuthenticated, logout, theme, toggleTheme } = useAuth();
   const { plan } = usePlan();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -121,7 +123,6 @@ const AppLayout = ({ children }) => {
     '/coding':            'Coding Arena',
     '/resume':            'Resume Analyzer',
     '/job-analyzer':      'Job Analyzer',
-    '/gd':                'Group Discussion',
     '/feedback':          'Analytics',
     '/roadmap':           'Learning Roadmap',
     '/aptitude':          'Aptitude Test',
@@ -133,7 +134,7 @@ const AppLayout = ({ children }) => {
   };
   const pageTitle = PAGE_TITLES[location.pathname] || 'Workspace';
 
-  if (!token) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)', color: '#F1F5F9' }}>
         <main className="flex-1 flex flex-col min-w-0">{children}</main>
@@ -179,7 +180,6 @@ const AppLayout = ({ children }) => {
           <NavItem to="/coding"       icon={Code2}        label="Coding Arena"     isActive={isActive('/coding')}       isLocked={plan==='free'} collapsed={collapsed} />
           <NavItem to="/resume"       icon={FileText}     label="Resume Analyzer"  isActive={isActive('/resume')}       isLocked={plan==='free'} collapsed={collapsed} />
           <NavItem to="/job-analyzer" icon={Briefcase}     label="Job Analyzer"     isActive={isActive('/job-analyzer')} isLocked={plan==='free'} collapsed={collapsed} />
-          <NavItem to="/gd"           icon={Users2}       label="Group Discussion" isActive={isActive('/gd')}           isLocked={plan==='free'} collapsed={collapsed} />
           <NavItem to="/aptitude"     icon={FlaskConical} label="Aptitude Test"    isActive={isActive('/aptitude')}     isLocked={plan==='free'} collapsed={collapsed} />
 
           {/* INTELLIGENCE */}
@@ -276,6 +276,11 @@ const AppLayout = ({ children }) => {
       {/* ── Main Content ─────────────────────────────── */}
       <main className="flex-1 flex flex-col h-full overflow-hidden" style={{ background: 'var(--bg)' }}>
 
+        {/* Email verification banner (soft enforcement) */}
+        {user && user.auth_provider === 'local' && user.email_verified === false && (
+          <EmailVerificationBanner />
+        )}
+
         {/* Header */}
         <header
           className="h-16 flex items-center justify-between px-6 flex-shrink-0 border-b"
@@ -325,11 +330,10 @@ const AppLayout = ({ children }) => {
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 border-2 border-bg" />
                 )}
               </button>
-              <NotificationPanel 
-                isOpen={notifOpen} 
-                onClose={() => setNotifOpen(false)} 
-                token={token} 
-                user={user} 
+              <NotificationPanel
+                isOpen={notifOpen}
+                onClose={() => setNotifOpen(false)}
+                user={user}
               />
             </div>
 
@@ -384,6 +388,8 @@ export default function App() {
             <Route path="/"         element={<LandingPage />} />
             <Route path="/login"    element={<AppLayout><Login /></AppLayout>} />
             <Route path="/register" element={<AppLayout><Register /></AppLayout>} />
+            <Route path="/privacy"  element={<PrivacyPolicy />} />
+            <Route path="/terms"    element={<TermsOfService />} />
 
             {/* Protected */}
             <Route path="/dashboard"     element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
@@ -392,7 +398,6 @@ export default function App() {
             <Route path="/coding"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CodingEditor /></PlanGate></AppLayout></ProtectedRoute>} />
             <Route path="/resume"        element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><ResumeAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
             <Route path="/job-analyzer"  element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><JobAnalyzer /></PlanGate></AppLayout></ProtectedRoute>} />
-            <Route path="/gd"            element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><GroupDiscussion /></PlanGate></AppLayout></ProtectedRoute>} />
             <Route path="/aptitude"      element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><AptitudeEngine /></PlanGate></AppLayout></ProtectedRoute>} />
             <Route path="/roadmap"       element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><CareerRoadmap /></PlanGate></AppLayout></ProtectedRoute>} />
             <Route path="/leaderboard"   element={<ProtectedRoute><AppLayout><PlanGate requires="pro"><Leaderboard /></PlanGate></AppLayout></ProtectedRoute>} />

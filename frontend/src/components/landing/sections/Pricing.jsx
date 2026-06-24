@@ -15,19 +15,19 @@ const plans = [
     icon: Zap,
     monthlyPrice: 0,
     annualPrice: 0,
-    period: "/forever",
-    desc: "Get a feel for AI interviewing at zero cost.",
+    period: "forever",
+    desc: "Start your placement journey",
     badge: null,
-    color: "#7c6fcd",
+    color: "#64748B",
     features: [
-      { text: "3 mock interviews / month", included: true },
-      { text: "Basic performance report", included: true },
-      { text: "HR question bank", included: true },
-      { text: "Community support", included: true },
-      { text: "Unlimited interviews", included: false },
-      { text: "Real-time coding evaluation", included: false },
-      { text: "Advanced analytics & roadmap", included: false },
-      { text: "Resume + JD targeting", included: false },
+      { text: "5 mock interviews / month", included: true },
+      { text: "Basic resume scoring", included: true },
+      { text: "10 coding challenges / month", included: true },
+      { text: "Community leaderboard", included: true },
+      { text: "TRESK AI Career Copilot", included: false },
+      { text: "Interview Replay", included: false },
+      { text: "Company placement insights", included: false },
+      { text: "Daily challenges + contests", included: false },
     ],
     cta: "Start Free",
     featured: false,
@@ -36,53 +36,52 @@ const plans = [
     id: "pro",
     name: "Pro",
     icon: Crown,
-    monthlyPrice: 2499,
-    annualPrice: 1666,
+    monthlyPrice: 499,
+    annualPrice: 333,
     period: "/month",
-    desc: "For serious candidates landing dream offers.",
-    badge: "Most Popular",
-    color: "#a855f7",
+    desc: "Everything you need to crack top companies",
+    badge: "🔥 Most Popular",
+    color: "#6366F1",
     features: [
-      { text: "Everything in Starter", included: true },
       { text: "Unlimited mock interviews", included: true },
-      { text: "Real-time coding evaluation", included: true },
-      { text: "Advanced analytics & roadmap", included: true },
-      { text: "Resume + JD targeting", included: true },
-      { text: "Priority AI feedback", included: true },
-      { text: "Leaderboard & aptitude tests", included: true },
-      { text: "Cohort dashboards", included: false },
+      { text: "Full ATS resume analysis", included: true },
+      { text: "Unlimited coding challenges", included: true },
+      { text: "Company leaderboard + XP", included: true },
+      { text: "TRESK AI Career Copilot", included: true },
+      { text: "Interview Replay & analytics", included: true },
+      { text: "Company placement insights", included: true },
+      { text: "Daily challenges + weekly contests", included: true },
     ],
-    cta: "Start Mock Interview",
+    cta: "Upgrade to Pro",
     featured: true,
   },
   {
     id: "teams",
     name: "Teams",
     icon: Users,
-    monthlyPrice: 8299,
-    annualPrice: 5833,
+    monthlyPrice: 1999,
+    annualPrice: 1333,
     period: "/month",
-    desc: "For bootcamps, colleges & career teams.",
-    badge: "Best Value",
-    color: "#06b6d4",
+    desc: "For placement cells and coding clubs",
+    badge: null,
+    color: "#F59E0B",
     features: [
       { text: "Everything in Pro", included: true },
-      { text: "Up to 25 seats", included: true },
-      { text: "Cohort dashboards", included: true },
-      { text: "Custom question sets", included: true },
-      { text: "Dedicated success manager", included: true },
-      { text: "Priority enterprise support", included: true },
-      { text: "SSO & advanced security", included: true },
+      { text: "Up to 25 team members", included: true },
+      { text: "Admin dashboard & analytics", included: true },
       { text: "Custom branding", included: true },
+      { text: "Priority support (24h SLA)", included: true },
+      { text: "Bulk interview scheduling", included: true },
+      { text: "Export reports (PDF/CSV)", included: true },
+      { text: "Dedicated onboarding", included: true },
     ],
-    cta: "Talk to Sales",
+    cta: "Upgrade to Teams",
     featured: false,
   },
 ];
 
 /* ─── Helpers ───────────────────────────────────────────── */
-const fmt = (n) =>
-  n === 0 ? "Free" : `₹${n.toLocaleString("en-IN")}`;
+const fmt = (n) => `₹${n.toLocaleString("en-IN")}`;
 
 /* ─── Confirmation Modal ────────────────────────────────── */
 function PlanModal({ plan, annual, onConfirm, onClose }) {
@@ -267,7 +266,7 @@ export function Pricing() {
                   whileHover={{ y: -8 }}
                   className={`lp-plan-card ${p.featured ? "lp-plan-featured" : ""} ${isActive ? "lp-plan-active" : ""}`}
                 >
-                  {p.featured && (
+                  {p.featured && p.badge && (
                     <>
                       <motion.div
                         aria-hidden
@@ -275,7 +274,7 @@ export function Pricing() {
                         animate={{ rotate: 360 }}
                         transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
                       />
-                      <span className="lp-plan-badge">Most Popular</span>
+                      <span className="lp-plan-badge">{p.badge}</span>
                     </>
                   )}
 
@@ -305,7 +304,7 @@ export function Pricing() {
                     >
                       {fmt(price)}
                     </motion.span>
-                    {price > 0 && (
+                    {(price > 0 || p.id === "free") && (
                       <span className="lp-plan-period">{p.period}</span>
                     )}
                   </div>

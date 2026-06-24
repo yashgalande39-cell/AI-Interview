@@ -92,6 +92,16 @@ const MOCK_CHALLENGES = [
   }
 ];
 
+// Helper to safely parse JSON or return the raw value if parsing fails
+function safeJsonParse(val) {
+  if (typeof val !== 'string') return val;
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    return val;
+  }
+}
+
 // Helper to deserialize array to binary tree structure
 function arrayToTree(arr) {
   if (!arr || arr.length === 0) return null;
@@ -221,7 +231,7 @@ export default function CodingEditor() {
         setConsoleLogs([]);
         setSubmitFeedback(null);
         const draft = localStorage.getItem(`draft_${first.id}_${language}`);
-        setCode(draft ? draft : (first.templates[language] || ""));
+        setCode(draft ? draft : (first.templates?.[language] || ""));
       }
     } finally {
       setLoadingList(false);
@@ -246,7 +256,7 @@ export default function CodingEditor() {
         if (draft) {
           setCode(draft);
         } else {
-          setCode(data.templates[language] || "");
+          setCode(data.templates?.[language] || data.template || "");
         }
       } else {
         throw new Error("Failed to load details");
@@ -260,7 +270,7 @@ export default function CodingEditor() {
         setConsoleLogs([]);
         setSubmitFeedback(null);
         const draft = localStorage.getItem(`draft_${localChal.id}_${language}`);
-        setCode(draft ? draft : (localChal.templates[language] || ""));
+        setCode(draft ? draft : (localChal.templates?.[language] || ""));
       }
     } finally {
       setLoadingDetail(false);
@@ -292,7 +302,7 @@ export default function CodingEditor() {
     if (activeChallenge) {
       const draft = localStorage.getItem(`draft_${activeChallenge.id}_${language}`);
       const timer = setTimeout(() => {
-        setCode(draft ? draft : (activeChallenge.templates[language] || ""));
+        setCode(draft ? draft : (activeChallenge.templates?.[language] || activeChallenge.template || ""));
         setTestResults([]);
         setConsoleLogs([]);
         setSubmitFeedback(null);
@@ -329,7 +339,7 @@ export default function CodingEditor() {
   const handleResetTemplate = () => {
     if (activeChallenge && window.confirm("Are you sure you want to reset your editor to the default template?")) {
       localStorage.removeItem(`draft_${activeChallenge.id}_${language}`);
-      setCode(activeChallenge.templates[language] || "");
+      setCode(activeChallenge.templates?.[language] || activeChallenge.template || "");
     }
   };
 
@@ -342,8 +352,9 @@ export default function CodingEditor() {
     try {
       activeChallenge.testCases.forEach((tc, idx) => {
         const caseNum = tc.caseNum || (idx + 1);
-        const rawArgs = JSON.parse(tc.input);
-        const expected = JSON.parse(tc.expected);
+        let rawArgs = safeJsonParse(tc.input);
+        if (!Array.isArray(rawArgs)) rawArgs = [rawArgs];
+        const expected = safeJsonParse(tc.expected);
         
         try {
           // Deserialization helper triggers
@@ -356,8 +367,12 @@ export default function CodingEditor() {
             args[0] = arrayToTree(args[0]);
           }
 
+          const match = code.match(/function\s+(\w+)\s*\(/);
+          const funcName = match ? match[1] : 'solution';
+          
           const runnerFn = new Function('args', `
             ${code}
+            if (typeof ${funcName} === 'function') return ${funcName}(...args);
             if (typeof twoSum === 'function') return twoSum(args[0], args[1]);
             if (typeof reverseList === 'function') return reverseList(args[0]);
             if (typeof maxPathSum === 'function') return maxPathSum(args[0]);
@@ -505,8 +520,9 @@ export default function CodingEditor() {
 
     activeChallenge.testCases.forEach((tc, idx) => {
       const caseNum = tc.caseNum || (idx + 1);
-      const rawArgs = JSON.parse(tc.input);
-      const expected = JSON.parse(tc.expected);
+      let rawArgs = safeJsonParse(tc.input);
+      if (!Array.isArray(rawArgs)) rawArgs = [rawArgs];
+      const expected = safeJsonParse(tc.expected);
       
       try {
         let args = [...rawArgs];
@@ -516,8 +532,12 @@ export default function CodingEditor() {
           args[0] = arrayToTree(args[0]);
         }
 
+        const match = code.match(/function\s+(\w+)\s*\(/);
+        const funcName = match ? match[1] : 'solution';
+        
         const runnerFn = new Function('args', `
           ${code}
+          if (typeof ${funcName} === 'function') return ${funcName}(...args);
           if (typeof twoSum === 'function') return twoSum(args[0], args[1]);
           if (typeof reverseList === 'function') return reverseList(args[0]);
           if (typeof maxPathSum === 'function') return maxPathSum(args[0]);
@@ -908,8 +928,8 @@ export default function CodingEditor() {
                     </h4>
                     <div className="space-y-3">
                       {activeChallenge.testCases.slice(0, 2).map((tc, i) => {
-                        const inputParsed = JSON.parse(tc.input);
-                        const expectedParsed = JSON.parse(tc.expected);
+                        const inputParsed = safeJsonParse(tc.input);
+                        const expectedParsed = safeJsonParse(tc.expected);
                         return (
                           <div key={i} className="p-4 rounded-2xl bg-slate-950/40 border border-slate-900 space-y-2 text-xs">
                             <div className="flex justify-between font-black text-[10px] text-slate-500 uppercase tracking-wider">

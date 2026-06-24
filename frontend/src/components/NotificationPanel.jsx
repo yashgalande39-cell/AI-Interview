@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bell, X, Check, Award, Flame, Mic, ShieldAlert, Sparkles } from 'lucide-react';
-import { API_BASE } from '../config';
+import { Bell, X, Check, Award, Flame, Mic, Sparkles } from 'lucide-react';
+import { apiGet } from '../services/api';
 
-export default function NotificationPanel({ isOpen, onClose, token, user }) {
+export default function NotificationPanel({ isOpen, onClose, user }) {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
@@ -49,26 +49,21 @@ export default function NotificationPanel({ isOpen, onClose, token, user }) {
 
       // Fetch history for interview notifications
       try {
-        const res = await fetch(`${API_BASE}/interviews/history`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const data = await apiGet('/interviews/history');
+        const history = data.history || [];
+        history.slice(0, 3).forEach((interview, idx) => {
+          if (interview.status === 'completed') {
+            const score = interview.scoreCard?.overallScore || 70;
+            list.push({
+              id: `interview_${interview.id || idx}`,
+              title: 'Interview Evaluated',
+              desc: `Completed ${interview.type} interview for ${interview.role} with a score of ${score}%.`,
+              time: 'Recently',
+              read: true,
+              icon: <Mic className="w-4 h-4 text-emerald-400" />
+            });
+          }
         });
-        if (res.ok) {
-          const data = await res.json();
-          const history = data.history || [];
-          history.slice(0, 3).forEach((interview, idx) => {
-            if (interview.status === 'completed') {
-              const score = interview.scoreCard?.overallScore || 70;
-              list.push({
-                id: `interview_${interview.id || idx}`,
-                title: 'Interview Evaluated',
-                desc: `Completed ${interview.type} interview for ${interview.role} with a score of ${score}%.`,
-                time: 'Recently',
-                read: true,
-                icon: <Mic className="w-4 h-4 text-emerald-400" />
-              });
-            }
-          });
-        }
       } catch (err) {
         console.warn('Could not fetch notifications history:', err.message);
       }
@@ -84,7 +79,7 @@ export default function NotificationPanel({ isOpen, onClose, token, user }) {
     };
 
     generateNotifications();
-  }, [token, user]);
+  }, [user]);
 
   const markAllRead = () => {
     const allIds = notifications.map(n => n.id);

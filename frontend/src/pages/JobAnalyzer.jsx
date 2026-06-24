@@ -153,7 +153,7 @@ Responsibilities:
 const DEFAULT_USER_SKILLS = ["React", "JavaScript", "Python", "HTML5", "CSS3", "Git", "Data Structures", "REST APIs", "SQL"];
 
 export default function JobAnalyzer() {
-  const { updateXp } = useAuth();
+  const { token, updateXp } = useAuth();
   
   // Input job description state
   const [jobText, setJobText] = useState(PRESETS.google_swe.description);
@@ -283,7 +283,6 @@ export default function JobAnalyzer() {
     setAnalysisStep('Sending to AI Analyzer...');
 
     try {
-      const token = localStorage.getItem('token') || '';
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/analyze-jd`, {
         method: 'POST',
         headers: {
@@ -380,6 +379,20 @@ export default function JobAnalyzer() {
   // Conic match score calculations
   const matchScoreColor = analysis.matchScore >= 85 ? "text-green-400" : (analysis.matchScore >= 70 ? "text-amber-400" : "text-rose-400");
   const matchScoreLabel = analysis.matchScore >= 85 ? "Great Match!" : (analysis.matchScore >= 70 ? "Good Match" : "Fair Match");
+
+  const aiInsights = analysis.aiInsights || {
+    responsibilities: [
+      "Design and deploy scalable web and software applications.",
+      "Write clean, efficient, and well-tested codebase units.",
+      "Collaborate with engineering teams to optimize application latency."
+    ],
+    interviewTopics: [
+      "Data Structures & Algorithms",
+      "System Design & Scalability Basics",
+      "Behavioral Alignment & Googleness"
+    ],
+    redFlags: []
+  };
 
   return (
     <div className="space-y-8 pt-6 w-full relative">
@@ -710,6 +723,53 @@ export default function JobAnalyzer() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* AI Recruiter Insights Section */}
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 md:col-span-6 glass-card rounded-2xl p-6 bg-[#141624]/70">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <i className="fas fa-list-check text-indigo-400"></i> Core Responsibilities
+          </h3>
+          <ul className="space-y-3">
+            {aiInsights.responsibilities.map((resp, idx) => (
+              <li key={idx} className="text-xs text-[#94a3b8] leading-relaxed flex items-start gap-2.5">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mt-1.5 shrink-0"></span>
+                <span>{resp}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="col-span-12 md:col-span-6 glass-card rounded-2xl p-6 bg-[#141624]/70">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <i className="fas fa-lightbulb text-[#f59e0b]"></i> Expected Interview Topics
+          </h3>
+          <ul className="space-y-3">
+            {aiInsights.interviewTopics.map((topic, idx) => (
+              <li key={idx} className="text-xs text-[#94a3b8] leading-relaxed flex items-start gap-2.5">
+                <span className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full mt-1.5 shrink-0"></span>
+                <span>{topic}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {aiInsights.redFlags && aiInsights.redFlags.length > 0 && (
+          <div className="col-span-12 glass-card rounded-2xl p-6 bg-red-950/10 border border-red-500/25">
+            <h3 className="text-lg font-semibold text-red-400 mb-4 flex items-center gap-2">
+              <i className="fas fa-circle-exclamation text-red-500"></i> Job Description Warnings / Red Flags
+            </h3>
+            <ul className="space-y-3">
+              {aiInsights.redFlags.map((flag, idx) => (
+                <li key={idx} className="text-xs text-red-200 leading-relaxed flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 shrink-0"></span>
+                  <span>{flag}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Roadmap Section */}

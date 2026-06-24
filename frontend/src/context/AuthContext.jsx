@@ -1,336 +1,260 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+/**
+ * TRESK AI — Auth Context
+ * =====================================================================
+ * Phase 2:
+ *  - Access token stored in memory only (NOT localStorage) — XSS safe
+ *  - Cookies (httpOnly) carry the refresh token — managed by browser
+ *  - On app load, silently calls /api/auth/refresh to restore session
+ *  - Offline mock fallback removed from production builds
+ */
+import { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider, hasConfig as firebaseReady } from '../firebase';
 import { API_BASE } from '../config';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { setAccessToken, clearAccessToken, apiPost, apiGet, apiPut } from '../services/api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const queryClient = useQueryClient();
+  const [user, setUser]           = useState(null);
+  const [token, setToken]         = useState('');
   const [initializing, setInitializing] = useState(true);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [fontSize, setFontSize] = useState(parseInt(localStorage.getItem('font-size')) || 100);
-  const [plan, setPlan] = useState(localStorage.getItem('user_plan') || 'free');
+  const [theme, setTheme]         = useState(localStorage.getItem('theme') || 'dark');
+  const [fontSize, setFontSize]   = useState(parseInt(localStorage.getItem('font-size')) || 100);
+  const [plan, setPlan]           = useState('free');
+  const refreshAttempted          = useRef(false);
 
-  // Fetch real profile data using React Query
-  const { data: profileData, error: profileError } = useQuery({
-    queryKey: ['userProfile', token],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/auth/profile`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          logout();
-          throw new Error('Unauthorized');
-        }
-        throw new Error('Profile fetch failed');
-      }
-      return res.json();
-    },
-    enabled: !!token,
-    retry: 1,
-  });
-
+  // ── On mount: try to restore session via refresh token cookie ──────────────
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      setInitializing(false);
-    }
+    if (refreshAttempted.current) return;
+    refreshAttempted.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setAccessToken(data.token);
+          setToken(data.token);
+
+          // Fetch user profile with fresh token
+          const profileRes = await fetch(`${API_BASE}/auth/profile`, {
+            headers: { 
+              'Authorization': `Bearer ${data.token}`,
+              'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            credentials: 'include',
+          });
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            if (profileData.user) {
+              setUser(profileData.user);
+              setPlan(profileData.user.plan || 'free');
+            }
+          }
+        }
+        // If refresh fails (401), user is simply not logged in — that's OK
+      } catch {
+        // Network error — user stays unauthenticated
+      } finally {
+        setInitializing(false);
+      }
+    })();
   }, []);
 
-  useEffect(() => {
-    if (profileData?.user) {
-      setUser(profileData.user);
-      localStorage.setItem('user_cache', JSON.stringify(profileData.user));
-      if (profileData.user.plan) {
-        setPlan(profileData.user.plan);
-        localStorage.setItem('user_plan', profileData.user.plan);
-      }
-      setInitializing(false);
-    }
-  }, [profileData]);
-
-  useEffect(() => {
-    if (profileError) {
-      console.warn("Initial auth check failed, using offline fallback:", profileError.message);
-      const cachedUser = localStorage.getItem('user_cache');
-      if (cachedUser) {
-        setUser(JSON.parse(cachedUser));
-      }
-      setInitializing(false);
-    }
-  }, [profileError]);
-
-  const loading = initializing;
-
-  // Sync theme to root HTML element for Tailwind dark classes
+  // ── Theme sync ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    if (theme === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Sync font size accessibility scaling to HTML root element
+  // ── Font size sync ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const root = window.document.documentElement;
-    root.style.fontSize = `${fontSize}%`;
+    window.document.documentElement.style.fontSize = `${fontSize}%`;
     localStorage.setItem('font-size', fontSize);
   }, [fontSize]);
 
+  // ── Register ────────────────────────────────────────────────────────────────
   const register = async (name, email, password, collegeName, branch, graduationYear) => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, collegeName, branch, graduationYear })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Registration failed');
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      body: JSON.stringify({ name, email, password, collegeName, branch, graduationYear }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Registration failed');
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user_cache', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
-      if (data.user && data.user.plan) {
-        setPlan(data.user.plan);
-        localStorage.setItem('user_plan', data.user.plan);
-      }
-      return data;
-    } catch (err) {
-      console.warn("Register server call failed, using mock local register:", err.message);
-      // Offline fallback: Create mock local user
-      const mockUser = {
-        id: 'usr_mock_' + Date.now(),
-        name,
-        email,
-        collegeName,
-        branch,
-        graduationYear,
-        xp: 100,
-        streak: 1,
-        badges: ["Novice Prep"],
-        createdAt: new Date().toISOString()
-      };
-      localStorage.setItem('token', 'mock_jwt_token');
-      localStorage.setItem('user_cache', JSON.stringify(mockUser));
-      setToken('mock_jwt_token');
-      setUser(mockUser);
-      return { user: mockUser };
-    }
+    setAccessToken(data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setPlan(data.user?.plan || 'free');
+    return data;
   };
 
+  // ── Login ───────────────────────────────────────────────────────────────────
   const login = async (email, password) => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Login failed');
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Login failed');
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user_cache', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
-      if (data.user && data.user.plan) {
-        setPlan(data.user.plan);
-        localStorage.setItem('user_plan', data.user.plan);
-      }
-      return data;
-    } catch (err) {
-      console.warn("Login server call failed, checking cached local registration:", err.message);
-      // Offline fallback check
-      const cached = localStorage.getItem('user_cache');
-      if (cached) {
-        const cachedUser = JSON.parse(cached);
-        if (cachedUser.email === email) {
-          localStorage.setItem('token', 'mock_jwt_token');
-          setToken('mock_jwt_token');
-          setUser(cachedUser);
-          return { user: cachedUser };
-        }
-      }
-      throw new Error("Invalid email or password (or server is offline)", { cause: err });
-    }
+    setAccessToken(data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setPlan(data.user?.plan || 'free');
+    return data;
   };
 
+  // ── Google Login ────────────────────────────────────────────────────────────
   const loginWithGoogle = async () => {
     if (!firebaseReady || !auth || !googleProvider) {
       throw new Error(
-        'Google login is not configured yet. Please add your Firebase credentials to frontend/.env — see frontend/.env.example for instructions.'
+        'Google login is not configured. Add Firebase credentials to frontend/.env'
       );
     }
 
-    try {
-      // Open Google sign-in popup
-      const result = await signInWithPopup(auth, googleProvider);
-      const firebaseUser = result.user;
-
-      // Get the Firebase ID token to send to our backend for verification
-      const idToken = await firebaseUser.getIdToken();
-
-      // Exchange Firebase ID token for our app's JWT
-      const res = await fetch(`${API_BASE}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Google authentication failed');
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user_cache', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
-      if (data.user && data.user.plan) {
-        setPlan(data.user.plan);
-        localStorage.setItem('user_plan', data.user.plan);
-      }
-      return data;
-    } catch (err) {
-      // Don't swallow popup-closed-by-user errors silently
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        throw new Error('Sign-in was cancelled. Please try again.');
-      }
-      throw err;
+    const result = await signInWithPopup(auth, googleProvider);
+    if (result.user.code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign-in was cancelled. Please try again.');
     }
+
+    const idToken = await result.user.getIdToken();
+
+    const res = await fetch(`${API_BASE}/auth/google`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      body: JSON.stringify({ idToken }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Google authentication failed');
+
+    setAccessToken(data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setPlan(data.user?.plan || 'free');
+    return data;
   };
 
-  function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_cache');
-    localStorage.removeItem('user_plan');
+  // ── Logout ──────────────────────────────────────────────────────────────────
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* best-effort */ }
+
+    clearAccessToken();
     setToken('');
     setUser(null);
     setPlan('free');
-  }
+    queryClient.clear();
+    // Remove any legacy localStorage remnants
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_cache');
+    localStorage.removeItem('user_plan');
+  };
 
+  // ── Update XP ───────────────────────────────────────────────────────────────
   const updateXp = async (amount, badgeToEarn = null) => {
     try {
-      const res = await fetch(`${API_BASE}/auth/progress`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ xpAmount: amount, badgeToEarn })
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await apiPost('/auth/progress', { xpAmount: amount, badgeToEarn });
+      if (data.user) {
         setUser(data.user);
-        localStorage.setItem('user_cache', JSON.stringify(data.user));
       }
     } catch {
-      // Local offline state update
+      // Local state update on API failure
       if (user) {
-        const updatedUser = { ...user };
-        updatedUser.xp = (updatedUser.xp || 0) + amount;
-        if (badgeToEarn && !updatedUser.badges.includes(badgeToEarn)) {
-          updatedUser.badges.push(badgeToEarn);
+        const updatedUser = { ...user, xp: (user.xp || 0) + amount };
+        if (badgeToEarn && !updatedUser.badges?.includes(badgeToEarn)) {
+          updatedUser.badges = [...(updatedUser.badges || []), badgeToEarn];
         }
         setUser(updatedUser);
-        localStorage.setItem('user_cache', JSON.stringify(updatedUser));
       }
     }
   };
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  const setAccessibilitySize = (percent) => {
-    setFontSize(percent);
-  };
-
-  const selectPlan = async (newPlan) => {
-    const validPlans = ['free', 'pro', 'teams'];
-    if (validPlans.includes(newPlan)) {
-      setPlan(newPlan);
-      localStorage.setItem('user_plan', newPlan);
-      // Update cached user plan
-      const cached = localStorage.getItem('user_cache');
-      if (cached) {
-        const u = JSON.parse(cached);
-        u.plan = newPlan;
-        localStorage.setItem('user_cache', JSON.stringify(u));
-      }
-
-      // Sync user plan to backend if token is available
-      const storedToken = localStorage.getItem('token') || token;
-      if (storedToken) {
-        try {
-          const res = await fetch(`${API_BASE}/auth/plan`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${storedToken}`
-            },
-            body: JSON.stringify({ plan: newPlan })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUser(data.user);
-            localStorage.setItem('user_cache', JSON.stringify(data.user));
-          }
-        } catch (e) {
-          console.warn("Failed to sync plan switch with backend database:", e.message);
-        }
-      }
-    }
-  };
-
+  // ── Update Profile ──────────────────────────────────────────────────────────
   const updateProfile = async (profileData) => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setUser(data.user);
-        localStorage.setItem('user_cache', JSON.stringify(data.user));
-        return { success: true, user: data.user };
-      } else {
-        throw new Error(data.message || 'Profile update failed');
-      }
-    } catch (err) {
-      // Offline fallback: update locally
-      console.warn("Profile update API failed, updating locally:", err.message);
-      if (user) {
-        const updatedUser = { ...user, ...profileData };
-        setUser(updatedUser);
-        localStorage.setItem('user_cache', JSON.stringify(updatedUser));
-        return { success: true, user: updatedUser, offline: true };
-      }
-      throw err;
+    const data = await apiPut('/auth/profile', profileData);
+    if (data.user) {
+      setUser(data.user);
     }
+    return { success: true, user: data.user };
   };
 
-  // Instantly update user state (e.g. after billing plan change)
+  // ── Update user locally (e.g. after billing change) ─────────────────────────
   const updateUser = (updatedUser) => {
     setUser(updatedUser);
-    if (updatedUser?.plan) {
-      setPlan(updatedUser.plan);
-      localStorage.setItem('user_plan', updatedUser.plan);
-    }
-    localStorage.setItem('user_cache', JSON.stringify(updatedUser));
+    if (updatedUser?.plan) setPlan(updatedUser.plan);
   };
 
+  // ── Select Plan (local UI + backend sync) ────────────────────────────────────
+  const selectPlan = async (newPlan) => {
+    const validPlans = ['free', 'pro', 'teams'];
+    if (!validPlans.includes(newPlan)) return;
+
+    setPlan(newPlan);
+    try {
+      const data = await apiPost('/auth/plan', { plan: newPlan });
+      if (data.user) setUser(data.user);
+    } catch (e) {
+      console.warn('[selectPlan] Backend sync failed:', e.message);
+    }
+  };
+
+  const toggleTheme       = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const setAccessibilitySize = (percent) => setFontSize(percent);
+
+  // Expose token as boolean for components that just need isLoggedIn
+  const isAuthenticated = !!user;
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, loginWithGoogle, firebaseReady, logout, updateXp, updateProfile, updateUser, theme, toggleTheme, fontSize, setAccessibilitySize, plan, selectPlan }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading: initializing,
+      isAuthenticated,
+      register,
+      login,
+      loginWithGoogle,
+      firebaseReady,
+      logout,
+      updateXp,
+      updateProfile,
+      updateUser,
+      theme,
+      toggleTheme,
+      fontSize,
+      setAccessibilitySize,
+      plan,
+      selectPlan,
+    }}>
       {children}
     </AuthContext.Provider>
   );

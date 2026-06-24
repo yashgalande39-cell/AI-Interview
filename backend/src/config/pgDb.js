@@ -48,15 +48,29 @@ const createPool = () => {
 /**
  * Initialise the pool and run schema migrations.
  * Called once at server startup from index.js.
+ * Retries up to 5 times with exponential backoff (handles Docker startup race).
  */
 const connectPG = async () => {
   if (pool) return pool;
   pool = createPool();
 
-  // Test connectivity
-  const client = await pool.connect();
-  console.log('🐘 PostgreSQL connected successfully.');
-  client.release();
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const client = await pool.connect();
+      console.log('🐘 PostgreSQL connected successfully.');
+      client.release();
+      break; // Connected — exit retry loop
+    } catch (err) {
+      if (attempt === MAX_ATTEMPTS) {
+        console.error(`❌ PostgreSQL connection failed after ${MAX_ATTEMPTS} attempts.`);
+        throw err; // Let index.js handle offline mode
+      }
+      const delay = Math.min(1000 * 2 ** (attempt - 1), 16000); // 1s, 2s, 4s, 8s, 16s
+      console.warn(`⚠️  PostgreSQL not ready (attempt ${attempt}/${MAX_ATTEMPTS}). Retrying in ${delay / 1000}s…`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
 
   // Run auto-migration (idempotent CREATE TABLE IF NOT EXISTS)
   await runMigrations(pool);

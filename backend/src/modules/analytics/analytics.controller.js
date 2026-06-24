@@ -64,29 +64,8 @@ exports.getStats = async (req, res) => {
       }
     });
   } catch (err) {
-    console.warn('[Analytics Stats] Database offline, returning mock stats fallback:', err.message);
-    return res.status(200).json({
-      success: true,
-      data: {
-        sessions: {
-          sessions_completed: 3,
-          avg_score: 84.0,
-          best_score: 91,
-          technical_count: 1,
-          hr_count: 1,
-          behavioral_count: 1
-        },
-        coding: {
-          problems_solved: 6,
-          total_submissions: 8,
-          acceptance_rate: 75.0
-        },
-        recent_sessions: [
-          { id: 'sess_mock_1', company: 'Google', role: 'Software Engineer', type: 'technical', score_overall: 85, score_technical: 88, score_communication: 82, status: 'completed', started_at: new Date(Date.now() - 24*3600*1000).toISOString() },
-          { id: 'sess_mock_2', company: 'Amazon', role: 'SDE Intern', type: 'hr', score_overall: 82, score_technical: 80, score_communication: 85, status: 'completed', started_at: new Date(Date.now() - 3*24*3600*1000).toISOString() }
-        ]
-      }
-    });
+    console.error('[Analytics Stats] Database error:', err.message);
+    return res.status(503).json({ success: false, message: 'Analytics service temporarily unavailable' });
   }
 };
 
@@ -97,8 +76,10 @@ exports.getStats = async (req, res) => {
 exports.getHistory = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const days = parseInt(req.query.days) || 30;
+    // Validate and cap days to prevent abuse (1–365)
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 30));
 
+    // ✅ Safe: cast days to integer in application, use $2 as parameterized integer
     const result = await query(`
       SELECT
         DATE(started_at) AS date,
@@ -107,24 +88,14 @@ exports.getHistory = async (req, res) => {
       FROM interview_sessions
       WHERE user_id = $1
         AND status = 'completed'
-        AND started_at >= NOW() - INTERVAL '${days} days'
+        AND started_at >= NOW() - ($2 * INTERVAL '1 day')
       GROUP BY DATE(started_at)
       ORDER BY date ASC
-    `, [userId]);
+    `, [userId, days]);
 
     return res.status(200).json({ success: true, data: result.rows });
   } catch (err) {
-    console.warn('[Analytics History] Database offline, returning mock history fallback:', err.message);
-    const mockHistory = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      mockHistory.push({
-        date: d.toISOString().split('T')[0],
-        avg_score: 75 + Math.round(Math.random() * 15),
-        sessions: 1
-      });
-    }
-    return res.status(200).json({ success: true, data: mockHistory });
+    console.error('[Analytics History] Database error:', err.message);
+    return res.status(503).json({ success: false, message: 'Analytics service temporarily unavailable' });
   }
 };

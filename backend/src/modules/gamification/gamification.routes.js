@@ -14,6 +14,5 @@ router.post('/complete-challenge', gamificationController.completeChallenge);
 // Pro-gated features
 router.get('/leaderboard', requirePlan('pro'), gamificationController.getLeaderboard);
 router.get('/aptitude',    requirePlan('pro'), gamificationController.getAptitudeQuestions);
-router.get('/gd-topic',    requirePlan('pro'), gamificationController.getGDTopic);
 
 module.exports = router;

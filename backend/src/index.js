@@ -3,19 +3,36 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
-const { connectPG, query } = require('./config/pgDb'); // Import query helper for database health status checks later
+const { connectPG, query } = require('./config/pgDb');
 const jwt = require('jsonwebtoken');
 
-// ── Modular SaaS Module Routes ───────────────────────────────────────────────
+// ── Structured Logger ─────────────────────────────────────────────────────────
+// Uses pino when available, falls back to console. Install with: npm install pino
+let logger;
+try {
+  const pino = require('pino');
+  logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+} catch {
+  logger = {
+    info:  (...a) => console.log('[INFO]',  ...a),
+    warn:  (...a) => console.warn('[WARN]',  ...a),
+    error: (...a) => console.error('[ERROR]', ...a),
+    debug: (...a) => { if (process.env.LOG_LEVEL === 'debug') console.log('[DEBUG]', ...a); },
+  };
+}
+global.logger = logger;
+
+// ── Modular SaaS Module Routes ────────────────────────────────────────────────
 const authRoutes         = require('./modules/auth/auth.routes');
 const interviewRoutes    = require('./modules/interview/interview.routes');
 const resumeRoutes       = require('./modules/resume/resume.routes');
 const gamificationRoutes = require('./modules/gamification/gamification.routes');
 const codingRoutes       = require('./modules/coding/coding.routes');
 const aiRoutes           = require('./modules/ai/ai.routes');
-const adminRoutes         = require('./modules/admin/admin.routes');
+const adminRoutes        = require('./modules/admin/admin.routes');
 const analyticsRoutes    = require('./modules/analytics/analytics.routes');
 const treskRoutes        = require('./modules/ai/tresk.routes');
 const billingRoutes      = require('./modules/billing/billing.routes');
@@ -24,34 +41,81 @@ const replayRoutes       = require('./modules/interview/replay.routes');
 const app = express();
 const server = http.createServer(app);
 
-// Enable CORS (Must be registered first to ensure rate-limited or error responses include CORS headers)
+// ── Enable CORS (Must be registered first) ─────────────────────────────────────
 app.use(cors({
   origin: CORS_ORIGIN,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'x-timezone'],
+  credentials: true,   // Required for httpOnly cookies to be sent cross-origin
 }));
 
-// Secure Headers with Helmet
-app.use(helmet());
+// ── Secure Headers with Helmet ─────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,  // Allow embedding (for webcam/audio features)
+  contentSecurityPolicy: false,       // Managed by frontend
+}));
 
-// Global Limiter
-const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
+// ── Global Rate Limiter ────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 app.use(globalLimiter);
 
-// Stricter Auth Limiters
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Too many attempts, please try again later.' });
-app.use('/api/auth/login',    authLimiter);
-app.use('/api/auth/register', authLimiter);
+// ── Stricter Auth Limiters ────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login',          authLimiter);
+app.use('/api/auth/register',       authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/refresh',        authLimiter); // Prevent refresh token brute-force
 
-// AI Limiter
+// ── AI Limiter ─────────────────────────────────────────────────────────────────
 const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
 app.use('/api/ai',    aiLimiter);
 app.use('/api/tresk', aiLimiter);
 
-// Body Parsers with limits
-app.use(express.json({ limit: '1mb' }));
+// ── Billing webhook MUST be registered before express.json() ──────────────────
+// (billing.routes.js handles its own raw body parsing for HMAC verification)
+app.use('/api/billing', billingRoutes);
 
-// Diagnostic status check endpoint
+// ── Cookie Parser (must be before routes that need cookies) ───────────────────────
+app.use(cookieParser());
+
+// ── Body Parsers (after webhook route) ────────────────────────────────────────
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ── Health Check Endpoints ────────────────────────────────────────────────────
+// /health/live — simple liveness probe (always 200 if process is up)
+app.get('/health/live', (req, res) => {
+  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
+});
+
+// /health/ready — readiness probe (checks DB connection)
+app.get('/health/ready', async (req, res) => {
+  let dbReady = false;
+  try {
+    await query('SELECT 1');
+    dbReady = true;
+  } catch { /* ignore */ }
+
+  const ready = dbReady;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not_ready',
+    checks: { database: dbReady ? 'ok' : 'fail' },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ── Diagnostic status check ───────────────────────────────────────────────────
 app.get('/api/status', async (req, res) => {
   let dbStatus = 'disconnected';
   try {
@@ -65,13 +129,15 @@ app.get('/api/status', async (req, res) => {
     status: 'online',
     database: dbStatus,
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    version: process.env.npm_package_version || '1.0.0',
+    env: process.env.NODE_ENV || 'development',
   });
 });
 
-// Register routes
+// ── Register routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',              authRoutes);
-app.use('/api/interviews/replay', replayRoutes); // more specific first
+app.use('/api/interviews/replay', replayRoutes);  // more specific first
 app.use('/api/interviews',        interviewRoutes);
 app.use('/api/resumes',           resumeRoutes);
 app.use('/api/gamification',      gamificationRoutes);
@@ -80,27 +146,42 @@ app.use('/api/ai',                aiRoutes);
 app.use('/api/admin',             adminRoutes);
 app.use('/api/analytics',         analyticsRoutes);
 app.use('/api/tresk',             treskRoutes);
-app.use('/api/billing',           billingRoutes);
+// Note: /api/billing is already registered above (before json parser)
 
-// Global error handling middleware
+// ── Multer Error Handler (file upload validation) ─────────────────────────────
 app.use((err, req, res, next) => {
-  const status = err.status || err.statusCode || 500;
-  console.error(`[${status}] ${err.message}`);
-  res.status(status).json({ message: err.message || 'Internal server error' });
+  if (err.name === 'MulterError' || err.message?.includes('Invalid file type')) {
+    return res.status(400).json({ message: err.message });
+  }
+  next(err);
 });
 
-console.log('🤖 OpenRouter AI service registered on /api/ai');
-console.log('🧠 TRESK Career Copilot registered on /api/tresk');
-console.log('💳 Billing (Razorpay) registered on /api/billing');
-console.log('📼 Interview Replay registered on /api/interviews/replay');
-console.log('📈 Analytics Dashboard registered on /api/analytics');
+// ── Global Error Handler ──────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  logger.error({ err, path: req.path, method: req.method }, `[${status}] ${err.message}`);
+  res.status(status).json({
+    message: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+  });
+});
 
-// Socket.IO configurations for Peer-to-Peer, Collaboration, Whiteboard & Pair-coding
+logger.info('🤖 OpenRouter AI service registered on /api/ai');
+logger.info('🧠 TRESK Career Copilot registered on /api/tresk');
+logger.info('💳 Billing (Razorpay) registered on /api/billing');
+logger.info('📼 Interview Replay registered on /api/interviews/replay');
+logger.info('📈 Analytics Dashboard registered on /api/analytics');
+
+// ── Socket.IO configuration ───────────────────────────────────────────────────
 const io = new Server(server, {
   cors: {
     origin: CORS_ORIGIN,
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+  // Graceful ping timeouts
+  pingTimeout:  60000,
+  pingInterval: 25000,
 });
 
 // Socket.IO Auth Middleware
@@ -128,26 +209,18 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
+  logger.debug({ socketId: socket.id }, '🔌 Client connected');
 
-  // Room Lobby Management
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
-    console.log(`👤 Client ${socket.id} joined room: ${roomId}`);
+    logger.debug({ socketId: socket.id, roomId }, '👤 Client joined room');
     socket.to(roomId).emit('peer_joined', { socketId: socket.id });
   });
 
-  // Real-time Group Discussion message relay between peers
-  socket.on('gd_message', ({ roomId, sender, text, avatar }) => {
-    socket.to(roomId).emit('gd_message_receive', { sender, text, avatar });
-  });
-
-  // Collaborative Coding synchronization
   socket.on('code_change', ({ roomId, code, language }) => {
     socket.to(roomId).emit('code_update', { code, language });
   });
 
-  // Whiteboard drawing synchronizations
   socket.on('draw_path', ({ roomId, drawData }) => {
     socket.to(roomId).emit('draw_update', { drawData });
   });
@@ -156,29 +229,67 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('canvas_cleared');
   });
 
-  // Peer-to-peer signalling relay (WebRTC simple signaling broker fallback)
   socket.on('signal', ({ roomId, signalData }) => {
     socket.to(roomId).emit('signal_receive', { signalData, senderId: socket.id });
   });
 
   socket.on('disconnect', () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
+    logger.debug({ socketId: socket.id }, '🔌 Client disconnected');
   });
 });
 
-// Boot Database and Listen
+// ── Boot Database and Listen ──────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
+
+let httpServer = null;
+
 connectPG()
   .then(() => {
-    server.listen(PORT, () => {
-      console.log(`🚀 TRESK AI Backend (PostgreSQL-backed) running on http://localhost:${PORT}`);
+    httpServer = server.listen(PORT, () => {
+      logger.info(`🚀 TRESK AI Backend (PostgreSQL) running on http://localhost:${PORT}`);
     });
   })
   .catch((err) => {
-    console.error("❌ Failed to connect to PostgreSQL:", err.message);
-    console.log("🔄 Starting server without database connection (endpoints requiring PostgreSQL will fail).");
-    server.listen(PORT, () => {
-      console.log(`🚀 TRESK AI Backend (Offline Mode) running on http://localhost:${PORT}`);
+    logger.error({ err }, '❌ Failed to connect to PostgreSQL');
+    logger.info('🔄 Starting in offline mode (DB-dependent endpoints will fail)');
+    httpServer = server.listen(PORT, () => {
+      logger.info(`🚀 TRESK AI Backend (Offline Mode) on http://localhost:${PORT}`);
     });
   });
 
+// ── Graceful Shutdown ─────────────────────────────────────────────────────────
+const shutdown = (signal) => {
+  logger.info({ signal }, 'Received shutdown signal. Closing server gracefully...');
+
+  if (httpServer) {
+    httpServer.close((err) => {
+      if (err) {
+        logger.error({ err }, 'Error during server close');
+        process.exit(1);
+      }
+      logger.info('✅ HTTP server closed. Goodbye.');
+      process.exit(0);
+    });
+
+    // Force exit after 10s if connections don't drain
+    setTimeout(() => {
+      logger.warn('⚠️  Forced shutdown after 10s timeout');
+      process.exit(1);
+    }, 10000).unref();
+  } else {
+    process.exit(0);
+  }
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
+// ── Unhandled Promise Rejections ──────────────────────────────────────────────
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error({ reason, promise }, '⚠️  Unhandled Promise Rejection');
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, '💥 Uncaught Exception — shutting down');
+  shutdown('uncaughtException');
+});

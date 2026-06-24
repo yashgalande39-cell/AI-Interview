@@ -33,22 +33,6 @@ export default function Leaderboard() {
     enabled: !!token,
   });
 
-  const liveLeaderboard = useMemo(() => {
-    if (!leaderboardData || !leaderboardData.leaderboard || leaderboardData.leaderboard.length === 0) {
-      return [];
-    }
-    return leaderboardData.leaderboard.map((u, i) => ({
-      rank: i + 1,
-      name: u.name,
-      xp: u.xp || 0,
-      streak: u.streak || 1,
-      badges: u.badges || [],
-      isMe: u.name === (user?.name || ''),
-      initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
-    }));
-  }, [leaderboardData, user?.name]);
-
-
   // User particulars — prefer live data
   const currentUserName = user?.name || 'Yash';
   const currentUserXP = user?.xp || 5980;
@@ -110,8 +94,12 @@ export default function Leaderboard() {
 
   // Leaderboard data configurations for different tabs
   const seasonRankingsList = useMemo(() => {
-    // Use live leaderboard if populated
-    if (liveLeaderboard.length > 0) return liveLeaderboard;
+    if (leaderboardData?.season && leaderboardData.season.length > 0) {
+      return leaderboardData.season.map(u => ({
+        ...u,
+        initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
+      }));
+    }
     // Static fallback
     return [
       {
@@ -156,79 +144,97 @@ export default function Leaderboard() {
         avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVv2h0nexnAbOBa1T8JZVrbXfDl5_h8Nt1FivpLsTtO1pmcKNpzAtcphWJlJr8djHIfA4zY-IQHINWTmuiqLWwakoHz1SMz_DwVFp59lIw7NaNGzvJjaa1kq9Y_uTgjfXV4a-YNob_f__XykJ-HWUD4Ot9yAvIuLXDLbfM--toLcRUnjXVYiYaoLwhITN9sui8ZR03zPte2VFCWnIdaD6WMcF0urrx3v6-tMaUPV7rvu0OPRw26AjaE2rUpfX1I_4vU-ghT48E5WXP'
       }
     ];
-  }, [liveLeaderboard, currentUserName, currentUserXP, currentUserStreak]);
+  }, [leaderboardData, currentUserName, currentUserXP, currentUserStreak]);
 
-  const globalRankingsList = useMemo(() => [
-    {
-      rank: 1,
-      name: currentUserName,
-      xp: currentUserXP + 12000,
-      streak: currentUserStreak + 10,
-      badges: ['Novice Prep', 'Roadmap Pioneer', 'Coding Master'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
-      isMe: true
-    },
-    {
-      rank: 2,
-      name: 'Sarah Jenkins',
-      xp: 15400,
-      streak: 25,
-      badges: ['Interview Scholar', 'Aptitude Scholar'],
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80'
-    },
-    {
-      rank: 3,
-      name: 'Raj',
-      xp: 14200,
-      streak: 8,
-      badges: ['Novice Prep', 'Debating Scholar'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
-    },
-    {
-      rank: 4,
-      name: 'Elena Rostova',
-      xp: 9800,
-      streak: 12,
-      badges: ['Coding Master'],
-      initials: 'ER'
-    },
-    {
-      rank: 5,
-      name: 'John Doe',
-      xp: 8400,
-      streak: 5,
-      badges: ['Roadmap Pioneer'],
-      initials: 'JD'
+  const globalRankingsList = useMemo(() => {
+    if (leaderboardData?.global && leaderboardData.global.length > 0) {
+      return leaderboardData.global.map(u => ({
+        ...u,
+        initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
+      }));
     }
-  ], [currentUserName, currentUserXP, currentUserStreak]);
+    // Static fallback
+    return [
+      {
+        rank: 1,
+        name: currentUserName,
+        xp: currentUserXP + 12000,
+        streak: currentUserStreak + 10,
+        badges: ['Novice Prep', 'Roadmap Pioneer', 'Coding Master'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
+        isMe: true
+      },
+      {
+        rank: 2,
+        name: 'Sarah Jenkins',
+        xp: 15400,
+        streak: 25,
+        badges: ['Interview Scholar', 'Aptitude Scholar'],
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80'
+      },
+      {
+        rank: 3,
+        name: 'Raj',
+        xp: 14200,
+        streak: 8,
+        badges: ['Novice Prep', 'Debating Scholar'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
+      },
+      {
+        rank: 4,
+        name: 'Elena Rostova',
+        xp: 9800,
+        streak: 12,
+        badges: ['Coding Master'],
+        initials: 'ER'
+      },
+      {
+        rank: 5,
+        name: 'John Doe',
+        xp: 8400,
+        streak: 5,
+        badges: ['Roadmap Pioneer'],
+        initials: 'JD'
+      }
+    ];
+  }, [leaderboardData, currentUserName, currentUserXP, currentUserStreak]);
 
-  const friendsRankingsList = useMemo(() => [
-    {
-      rank: 1,
-      name: currentUserName,
-      xp: currentUserXP,
-      streak: currentUserStreak,
-      badges: ['Novice Prep', 'Roadmap Pioneer'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
-      isMe: true
-    },
-    {
-      rank: 2,
-      name: 'Raj',
-      xp: 1380,
-      streak: 1,
-      badges: ['Novice Prep', 'Debating Scholar'],
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
-    },
-    {
-      rank: 3,
-      name: 'Dev Friend',
-      xp: 950,
-      streak: 2,
-      badges: ['Coding Master'],
-      initials: 'DF'
+  const friendsRankingsList = useMemo(() => {
+    if (leaderboardData?.friends && leaderboardData.friends.length > 0) {
+      return leaderboardData.friends.map(u => ({
+        ...u,
+        initials: u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN'
+      }));
     }
-  ], [currentUserName, currentUserXP, currentUserStreak]);
+    // Static fallback
+    return [
+      {
+        rank: 1,
+        name: currentUserName,
+        xp: currentUserXP,
+        streak: currentUserStreak,
+        badges: ['Novice Prep', 'Roadmap Pioneer'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfGSD6ra-XuaEnuJNqvDum-X6p9y4D0KA0y8SYGz8x-CgUBgDBWUT4f07SGb2QF6Dsok4ptDVguoFLcl41HriaMOEBKt5njIn_fG4qdu2yPaUIy3UXDbmjfBALx82RCEYm2MuQ_3VOKWSRznzLZ5WQrepzPOlFxOycUmoLry2MgqkI83go0TsykgK2692I2edTjKerPjveXcamIFPMWxt9MFMGDYVXAPe7kdBWD26SmaWKWjPeKoj1P8YbXc_qaJBih98xyCFV0kgF',
+        isMe: true
+      },
+      {
+        rank: 2,
+        name: 'Raj',
+        xp: 1380,
+        streak: 1,
+        badges: ['Novice Prep', 'Debating Scholar'],
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCu6KRju1XP1IogN6kwGogA-CU94sCZQm9q5HXV9vr74BJ7D5cTRdFmIfjTn9LZdWbb7HVCdp9GC_J_NbWVfW-AcIzMdUzl7lYOU8barxpSsWaoXMAtF9CB_VuOMPBpmdF6yGWXK7VhOG8qzeRmBH0AGfrdQAJiBTrjSCKmYzf6WHzJIgoosfO1c2qoHgOeLaSZPlCWljXvs_CIDXdxDpbnZrMbOXCAaGtS6j_a0YsdH9Db6_SHoC2K7MjK9ZG18zACBLjBf3I8QUCL'
+      },
+      {
+        rank: 3,
+        name: 'Dev Friend',
+        xp: 950,
+        streak: 2,
+        badges: ['Coding Master'],
+        initials: 'DF'
+      }
+    ];
+  }, [leaderboardData, currentUserName, currentUserXP, currentUserStreak]);
 
   // Determine active board dataset
   const activeBoardData = useMemo(() => {
@@ -344,9 +350,9 @@ export default function Leaderboard() {
               
               <div>
                 <p className="text-xs text-gray-500 mb-1">Your Rank</p>
-                <div className="text-2xl font-bold text-purple-400 mb-1">#1</div>
+                <div className="text-2xl font-bold text-purple-400 mb-1">#{leaderboardData?.userRank || 1}</div>
                 <p className="text-[11px] text-yellow-500 flex items-center gap-1">
-                  <i className="fa-solid fa-crown"></i> Top 1% of learners
+                  <i className="fa-solid fa-crown"></i> Top {leaderboardData?.percentile || 1}% of learners
                 </p>
               </div>
 
@@ -597,12 +603,12 @@ export default function Leaderboard() {
             <div className="flex justify-between items-center mb-6 px-1">
               <div className="text-center">
                 <p className="text-[10px] text-gray-500 mb-0.5 uppercase tracking-wider">Rank</p>
-                <p className="text-lg font-bold text-white">#1</p>
+                <p className="text-lg font-bold text-white">#{leaderboardData?.userRank || 1}</p>
               </div>
               <div className="w-px h-8 bg-gray-800"></div>
               <div className="text-center">
                 <p className="text-[10px] text-gray-500 mb-0.5 uppercase tracking-wider">Percentile</p>
-                <p className="text-lg font-bold text-white">Top 1%</p>
+                <p className="text-lg font-bold text-white">Top {leaderboardData?.percentile || 1}%</p>
               </div>
               <div className="w-px h-8 bg-gray-800"></div>
               <div className="text-center">
