@@ -5,7 +5,7 @@
  * Uses Piston API for sandboxed, multi-language code execution.
  * Persists coding submissions to the PostgreSQL database.
  *
- * SECURITY NOTE: vm2 has been removed — it is abandoned and has known RCE
+ * SECURITY NOTE: The deprecated sandbox engine has been removed — it is abandoned and has known RCE
  * vulnerabilities (CVE-2023-29017, CVE-2023-37466). Piston runs code in
  * isolated Docker containers, making it safe for untrusted user code.
  */
