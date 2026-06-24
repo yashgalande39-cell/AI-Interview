@@ -125,21 +125,22 @@ export default function Dashboard() {
   const readinessReport = readinessData || null;
 
   const readinessScore = useMemo(() => {
-    if (readinessReport && readinessReport.score) {
+    const completed = history.filter(h => h.status === 'completed' || h.scoreCard);
+    if (completed.length === 0) {
+      return 0;
+    }
+    if (readinessReport && readinessReport.score !== undefined && readinessReport.score !== null) {
       return readinessReport.score;
     }
     if (user) {
       let base = 50;
       base += Math.min(25, Math.floor((user.xp || 0) / 100));
       base += Math.min(10, (user.streak || 1) * 2);
-      const completed = history.filter(h => h.status === 'completed' || h.scoreCard);
-      if (completed.length > 0) {
-        const avgScore = completed.reduce((sum, h) => sum + (h.scoreCard?.overallScore || 65), 0) / completed.length;
-        base += Math.min(15, Math.floor(avgScore - 60));
-      }
+      const avgScore = completed.reduce((sum, h) => sum + (h.scoreCard?.overallScore || 65), 0) / completed.length;
+      base += Math.min(15, Math.floor(avgScore - 60));
       return Math.min(98, Math.max(45, base));
     }
-    return 87;
+    return 0;
   }, [user, history, readinessReport]);
 
   const loading = historyLoading || resumesLoading || readinessLoading;
@@ -170,11 +171,11 @@ export default function Dashboard() {
     avgStress = Math.round(stressSum / completedCount);
   }
 
-  const finalTechnical = avgTech ? avgTech : Math.min(95, 60 + Math.floor(userXp / 100));
-  const finalCommunication = avgComm ? avgComm : 65;
-  const finalProblemSolving = Math.min(95, 55 + Math.floor(userXp / 80));
-  const finalLeadership = avgTech ? Math.round((avgTech + avgComm) / 2) : 60;
-  const finalConfidence = avgEye ? Math.round((avgEye + (100 - avgStress)) / 2) : 70;
+  const finalTechnical = avgTech;
+  const finalCommunication = avgComm;
+  const finalProblemSolving = completedCount > 0 ? Math.min(95, 55 + Math.floor(userXp / 80)) : 0;
+  const finalLeadership = avgTech ? Math.round((avgTech + avgComm) / 2) : 0;
+  const finalConfidence = avgEye ? Math.round((avgEye + (100 - avgStress)) / 2) : 0;
 
   // Radar points geometry (relative to center 50,50 within 100x100 SVG)
   const rTechnical = 45 * (finalTechnical / 100);
@@ -197,43 +198,17 @@ export default function Dashboard() {
     .filter(h => h.status === 'completed' && h.scoreCard)
     .sort((a, b) => new Date(a.scoreCard.completedAt || a.startedAt) - new Date(b.scoreCard.completedAt || b.startedAt));
 
-  if (completedHistory.length >= 2) {
-    for (let i = 0; i < 5; i++) {
-      const ratio = i / 4;
-      const historyIndex = Math.round(ratio * (completedHistory.length - 1));
-      const session = completedHistory[historyIndex];
+  if (completedHistory.length > 0) {
+    completedHistory.forEach((session, index) => {
       const sessionDate = new Date(session.scoreCard.completedAt || session.startedAt);
       const dateStr = sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const interviewsCount = historyIndex + 1;
-      const runningCompleted = completedHistory.slice(0, interviewsCount);
-      const avgScore = runningCompleted.reduce((sum, h) => sum + (h.scoreCard?.overallScore || 65), 0) / interviewsCount;
-      let tempReadiness = 50;
-      tempReadiness += Math.min(25, Math.floor((userXp * (runningCompleted.length / completedHistory.length)) / 100));
-      tempReadiness += Math.min(10, userStreak * 2 * (runningCompleted.length / completedHistory.length));
-      tempReadiness += Math.min(15, Math.floor(avgScore - 60));
-      const stepReadiness = Math.min(98, Math.max(45, tempReadiness));
-      const stepCoding = Math.round(codingScore * (i + 1) / 5);
       areaChartData.push({
         date: dateStr,
-        readiness: stepReadiness,
-        coding: stepCoding,
-        interviews: interviewsCount
+        readiness: session.scoreCard?.overallScore || 0,
+        coding: Math.round(codingScore * (index + 1) / completedHistory.length),
+        interviews: index + 1
       });
-    }
-  } else {
-    const totalSteps = 5;
-    for (let i = 0; i < totalSteps; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - (totalSteps - 1 - i) * 3);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const ratio = (i + 1) / totalSteps;
-      areaChartData.push({
-        date: dateStr,
-        readiness: Math.round(50 + (readinessScore - 50) * ratio),
-        coding: Math.round(codingScore * ratio),
-        interviews: Math.round(completedCount * ratio)
-      });
-    }
+    });
   }
 
   // Pre-calculate target interview variables
@@ -282,8 +257,8 @@ export default function Dashboard() {
       label: 'Hiring Readiness',
       value: readinessScore,
       suffix: '/100',
-      change: userStreak > 1 ? `+${userStreak * 2}% this week` : '+5% this week',
-      changePositive: true,
+      change: readinessScore > 0 ? (userStreak > 1 ? `+${userStreak * 2}% this week` : '+5% this week') : 'No progress yet',
+      changePositive: readinessScore > 0,
       iconBg: 'linear-gradient(135deg, #10B981, #06B6D4)',
       accentColor: '#10B981',
       icon: <Shield size={16} className="text-white" />,
@@ -530,35 +505,43 @@ export default function Dashboard() {
                 <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2 h-2 rounded-full bg-emerald-500" />Readiness</span>
               </div>
             </div>
-            <div className="h-52 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={areaChartData} margin={{ top: 5, right: 5, left: -28, bottom: 5 }}>
-                  <defs>
-                    <linearGradient id="readinessGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="codingGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.12}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="interviewsGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.12}/>
-                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} />
-                  <YAxis stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} domain={[0, 100]} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'rgba(13,18,32,0.98)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '11px', backdropFilter: 'blur(12px)' }}
-                    itemStyle={{ color: '#94A3B8' }}
-                    labelStyle={{ color: '#F1F5F9', fontWeight: 600, marginBottom: 4 }}
-                  />
-                  <Area type="monotone" dataKey="readiness"  stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#readinessGrad)" />
-                  <Area type="monotone" dataKey="coding"     stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#codingGrad)" />
-                  <Area type="monotone" dataKey="interviews" stroke="#8B5CF6" strokeWidth={2} fillOpacity={1} fill="url(#interviewsGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-52 w-full relative flex items-center justify-center">
+              {completedCount === 0 ? (
+                <div className="text-center py-6">
+                  <BarChart3 size={32} className="text-slate-700 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400">No performance data available yet</p>
+                  <p className="text-[10px] text-slate-500 mt-1">Complete interviews and code challenges to unlock analytics.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={areaChartData} margin={{ top: 5, right: 5, left: -28, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="readinessGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="codingGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="interviewsGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} />
+                    <YAxis stroke="#374151" strokeOpacity={0.5} fontSize={9} tickLine={false} domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'rgba(13,18,32,0.98)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '11px', backdropFilter: 'blur(12px)' }}
+                      itemStyle={{ color: '#94A3B8' }}
+                      labelStyle={{ color: '#F1F5F9', fontWeight: 600, marginBottom: 4 }}
+                    />
+                    <Area type="monotone" dataKey="readiness"  stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#readinessGrad)" />
+                    <Area type="monotone" dataKey="coding"     stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#codingGrad)" />
+                    <Area type="monotone" dataKey="interviews" stroke="#8B5CF6" strokeWidth={2} fillOpacity={1} fill="url(#interviewsGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
@@ -640,7 +623,7 @@ export default function Dashboard() {
               Report <ArrowRight size={12} />
             </Link>
           </div>
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center relative">
             <div className="relative w-44 h-44">
               {/* Radar background */}
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
@@ -654,21 +637,23 @@ export default function Dashboard() {
                 <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="50" y1="50" x2="5" y2="38"/>
               </svg>
               {/* Data polygon */}
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-                <defs>
-                  <linearGradient id="polyGrad2" x1="0%" x2="100%" y1="0%" y2="100%">
-                    <stop offset="0%" stopColor="rgba(59,130,246,0.5)"/>
-                    <stop offset="100%" stopColor="rgba(139,92,246,0.5)"/>
-                  </linearGradient>
-                </defs>
-                <polygon fill="url(#polyGrad2)" points={pointsString}
-                  stroke="#6366F1" strokeWidth="1.5"
-                  style={{ filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.4))' }}/>
-                {[p0,p1,p2,p3,p4].map((p,i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="white" opacity="0.9"
-                    style={{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.8))' }}/>
-                ))}
-              </svg>
+              {completedCount > 0 && (
+                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+                  <defs>
+                    <linearGradient id="polyGrad2" x1="0%" x2="100%" y1="0%" y2="100%">
+                      <stop offset="0%" stopColor="rgba(59,130,246,0.5)"/>
+                      <stop offset="100%" stopColor="rgba(139,92,246,0.5)"/>
+                    </linearGradient>
+                  </defs>
+                  <polygon fill="url(#polyGrad2)" points={pointsString}
+                    stroke="#6366F1" strokeWidth="1.5"
+                    style={{ filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.4))' }}/>
+                  {[p0,p1,p2,p3,p4].map((p,i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="white" opacity="0.9"
+                      style={{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.8))' }}/>
+                  ))}
+                </svg>
+              )}
               {/* Labels */}
               <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] text-slate-400 text-center whitespace-nowrap">Technical<br/><span className="text-white font-bold">{finalTechnical}</span></span>
               <span className="absolute top-6 -right-9 text-[9px] text-slate-400 text-center">Comm.<br/><span className="text-white font-bold">{finalCommunication}</span></span>
@@ -676,6 +661,13 @@ export default function Dashboard() {
               <span className="absolute -bottom-5 left-1 text-[9px] text-slate-400 text-center">Problem<br/><span className="text-white font-bold">{finalProblemSolving}</span></span>
               <span className="absolute top-6 -left-7 text-[9px] text-slate-400 text-center">Conf.<br/><span className="text-white font-bold">{finalConfidence}</span></span>
             </div>
+            {completedCount === 0 && (
+              <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center rounded-xl border border-white/5">
+                <Bot size={20} className="text-indigo-400 mb-1" />
+                <p className="text-[10px] text-slate-300 font-medium">No profile data yet</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Start mock practice to map your skills.</p>
+              </div>
+            )}
           </div>
           <div className="mt-4 pt-4 border-t flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
             <div>

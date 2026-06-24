@@ -13,9 +13,11 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const localDb = require('./localDb');
 
 // ─── Connection Pool ──────────────────────────────────────────────────────────
 let pool = null;
+let isOffline = false;
 
 const createPool = () => {
   const config = {};
@@ -60,10 +62,12 @@ const connectPG = async () => {
       const client = await pool.connect();
       console.log('🐘 PostgreSQL connected successfully.');
       client.release();
+      isOffline = false;
       break; // Connected — exit retry loop
     } catch (err) {
       if (attempt === MAX_ATTEMPTS) {
         console.error(`❌ PostgreSQL connection failed after ${MAX_ATTEMPTS} attempts.`);
+        isOffline = true;
         throw err; // Let index.js handle offline mode
       }
       const delay = Math.min(1000 * 2 ** (attempt - 1), 16000); // 1s, 2s, 4s, 8s, 16s
@@ -73,7 +77,9 @@ const connectPG = async () => {
   }
 
   // Run auto-migration (idempotent CREATE TABLE IF NOT EXISTS)
-  await runMigrations(pool);
+  if (!isOffline) {
+    await runMigrations(pool);
+  }
 
   return pool;
 };
@@ -98,9 +104,18 @@ const runMigrations = async (pgPool) => {
  * @param {string} text  - SQL text with $1, $2 … placeholders
  * @param {any[]}  params - Positional parameter values
  */
-const query = (text, params) => {
-  if (!pool) throw new Error('PostgreSQL pool is not initialised. Call connectPG() first.');
-  return pool.query(text, params);
+const query = async (text, params) => {
+  if (isOffline) {
+    return localDb.query(text, params);
+  }
+  try {
+    if (!pool) pool = createPool();
+    return await pool.query(text, params);
+  } catch (err) {
+    console.warn('⚠️ PostgreSQL query failed. Routing to local JSON database fallback.', err.message);
+    isOffline = true;
+    return localDb.query(text, params);
+  }
 };
 
 /**
@@ -108,18 +123,27 @@ const query = (text, params) => {
  * @param {(client: import('pg').PoolClient) => Promise<any>} callback
  */
 const withTransaction = async (callback) => {
-  if (!pool) throw new Error('PostgreSQL pool is not initialised.');
-  const client = await pool.connect();
+  if (isOffline) {
+    return localDb.withTransaction(callback);
+  }
   try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
+    if (!pool) pool = createPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+    console.warn('⚠️ PostgreSQL transaction failed. Routing to local JSON database fallback.', err.message);
+    isOffline = true;
+    return localDb.withTransaction(callback);
   }
 };
 

@@ -97,7 +97,7 @@ const schemas = {
       orderId:   Joi.string().required(),
       paymentId: Joi.string().required(),
       signature: Joi.string().allow('').optional(), // may be empty in demo mode
-      // NOTE: plan is now derived server-side from the order, not trusted from client
+      plan:      Joi.string().optional(),           // client can submit it, but server derives from order
     }),
   },
 
