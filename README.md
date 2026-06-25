@@ -45,7 +45,7 @@ An extremely premium, feature-complete full-stack AI-powered mock interview trai
 
 ### Prerequisites
 - Node.js installed (v18+ recommended)
-- PostgreSQL database installed (or use Docker Compose below)
+- Hosted PostgreSQL database (e.g. Supabase - recommended) or local PostgreSQL instance
 - Optional: OpenRouter / Gemini API Keys
 
 ### 1. Setup Backend
@@ -56,17 +56,21 @@ An extremely premium, feature-complete full-stack AI-powered mock interview trai
 2. Set up environmental keys. Create a `.env` file:
    ```env
    PORT=5000
+   NODE_ENV=development
    JWT_SECRET=super_secret_ai_interview_token
-   DATABASE_URL=postgresql://postgres:password123@localhost:5432/tresk_ai
    ALLOW_DEMO_AUTH=true
    CORS_ORIGIN=http://localhost:5173
+
+   # PostgreSQL / Supabase connection (Cloud databases require PG_SSL=true)
+   DATABASE_URL=postgresql://postgres.xxx:password@aws-0-xx.pooler.supabase.com:6543/postgres
+   PG_SSL=true
    ```
-   *(Setting `ALLOW_DEMO_AUTH=true` enables robust local file-based database and AI rule simulator fallbacks when external services are offline!)*
+   *(Setting `ALLOW_DEMO_AUTH=true` enables a robust local JSON file fallback database (`backend/data/local_db.json`) and AI rule simulator when PostgreSQL or Supabase is disconnected!)*
 3. Install dependencies:
    ```bash
    npm install
    ```
-4. Seed the database with Aptitude and DSA Coding questions (make sure PostgreSQL is running):
+4. Seed the database with 5,721 Aptitude and DSA coding questions:
    ```bash
    npm run seed
    ```
