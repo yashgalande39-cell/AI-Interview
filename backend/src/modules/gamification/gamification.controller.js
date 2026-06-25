@@ -2,7 +2,7 @@
  * TRESK AI — Gamification & Learning Controller (PostgreSQL)
  * =====================================================================
  * Handles gamification features including Leaderboard, Daily Challenges,
- * Aptitude tests, and Group Discussion topics.
+ * and Aptitude tests.
  */
 
 const fs = require('fs');

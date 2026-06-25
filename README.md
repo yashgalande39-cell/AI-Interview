@@ -10,7 +10,6 @@ An extremely premium, feature-complete full-stack AI-powered mock interview trai
 2. **HTML5 Gaze & Stress Canvas Analyzer**: Overlays glowing coordinate meshes on candidate webcam feeds, measuring stress percentages and tracking eye-alignment limits.
 3. **Double-Panel Coding Sandbox**: Renders algorithmic challenges with active terminal execution and compilers checking outputs against multiple hidden cases.
 4. **ATS Resume Scanner & Builder**: Interactive builder paired with live template printouts and automated keyword matching scans.
-5. **Virtual Round-Table Group Discussions**: Arranges debates with 4 animated AI avatars conversing, commenting, and responding to candidate comments in real-time.
 6. **Aptitude Quiz Engine**: Timed tests with detailed solutions, section toggles, and charts.
 7. **Gamified XP Economy & Career Roadmaps**: Daily challenge checklists, streaks indicators, achievement badges ("Coding Master"), and SVG career tracks.
 8. **Anti-Cheat Lock**: Focus loss blurs count strikes, copy-paste disables.

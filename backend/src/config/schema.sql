@@ -222,18 +222,7 @@ CREATE TABLE IF NOT EXISTS tresk_messages (
 
 CREATE INDEX IF NOT EXISTS idx_tresk_session ON tresk_messages(session_id, created_at);
 
--- =============================================================================
--- GROUP DISCUSSIONS
--- =============================================================================
-CREATE TABLE IF NOT EXISTS gd_rooms (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_code   TEXT        UNIQUE NOT NULL,
-  topic       TEXT        NOT NULL,
-  host_id     UUID        REFERENCES users(id) ON DELETE SET NULL,
-  status      TEXT        NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'active', 'ended')),
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  ended_at    TIMESTAMPTZ
-);
+
 
 -- =============================================================================
 -- AI READINESS SCORES (cached for dashboard display)
