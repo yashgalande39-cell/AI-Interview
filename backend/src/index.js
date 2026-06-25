@@ -83,8 +83,21 @@ app.use('/api/ai',    aiLimiter);
 app.use('/api/tresk', aiLimiter);
 
 // ── Billing webhook MUST be registered before express.json() ──────────────────
-// (billing.routes.js handles its own raw body parsing for HMAC verification)
-app.use('/api/billing', billingRoutes);
+// Only the /webhook sub-route needs raw body for HMAC signature verification.
+// All other billing routes (create-order, verify-payment, etc.) need JSON body.
+const billingWebhookRouter = express.Router();
+billingWebhookRouter.post('/webhook',
+  express.raw({ type: 'application/json' }),
+  (req, res, next) => {
+    if (Buffer.isBuffer(req.body)) {
+      req.rawBody = req.body;
+      try { req.body = JSON.parse(req.body.toString('utf-8')); } catch (e) { req.body = {}; }
+    }
+    next();
+  },
+  require('./modules/billing/billing.controller').handleWebhook
+);
+app.use('/api/billing', billingWebhookRouter);
 
 // ── Cookie Parser (must be before routes that need cookies) ───────────────────────
 app.use(cookieParser());
@@ -146,7 +159,7 @@ app.use('/api/ai',                aiRoutes);
 app.use('/api/admin',             adminRoutes);
 app.use('/api/analytics',         analyticsRoutes);
 app.use('/api/tresk',             treskRoutes);
-// Note: /api/billing is already registered above (before json parser)
+app.use('/api/billing',           billingRoutes);  // registered after express.json() for req.body
 
 // ── Multer Error Handler (file upload validation) ─────────────────────────────
 app.use((err, req, res, next) => {

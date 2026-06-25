@@ -60,20 +60,31 @@ const PLANS = {
 };
 
 // ---------------------------------------------------------------------------
-// Lazily initialise Razorpay only when the keys are present
+// Lazily initialise Razorpay only when real (non-placeholder) keys are present
 // ---------------------------------------------------------------------------
+const PLACEHOLDER_KEY_ID     = 'rzp_test_XXXXXXXXXXXXXXXX';
+const PLACEHOLDER_KEY_SECRET = 'your_razorpay_secret';
+
 let razorpayInstance = null;
 function getRazorpay() {
+  // Return null (demo mode) if keys are missing or still placeholder values
+  if (
+    !RAZORPAY_KEY_ID     || RAZORPAY_KEY_ID     === PLACEHOLDER_KEY_ID ||
+    !RAZORPAY_KEY_SECRET || RAZORPAY_KEY_SECRET === PLACEHOLDER_KEY_SECRET
+  ) {
+    return null; // No real credentials configured — use demo stub
+  }
+
   if (razorpayInstance) return razorpayInstance;
   try {
-    const Razorpay = require('razorpay'); // optional dep — install when ready
+    const Razorpay = require('razorpay');
     razorpayInstance = new Razorpay({
       key_id:     RAZORPAY_KEY_ID,
       key_secret: RAZORPAY_KEY_SECRET,
     });
     return razorpayInstance;
   } catch {
-    return null; // package not installed yet
+    return null; // Package not installed yet
   }
 }
 
