@@ -10,6 +10,7 @@
  */
 
 const { query } = require('../config/pgDb');
+const { IS_DEMO_AUTH, requireDemoMode } = require('../config/env');
 
 const PLAN_LEVEL = {
   free:  0,
@@ -65,7 +66,6 @@ const requirePlan = (requiredPlan) => {
       req.dbUser = { ...user, plan: userPlan };
       next();
     } catch (err) {
-      const { IS_DEMO_AUTH, requireDemoMode } = require('../config/env');
       if (IS_DEMO_AUTH) {
         requireDemoMode('planMiddleware.requirePlan');
         req.dbUser = { plan: 'pro', plan_expires_at: null };

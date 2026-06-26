@@ -6,6 +6,7 @@
 
 const billingService = require('./razorpay.service');
 const { query } = require('../../config/pgDb');
+const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
 
 // GET /api/billing/plans
 exports.getPlans = (req, res) => {
@@ -37,7 +38,6 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ message: 'Missing payment details' });
     }
 
-    const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
     const isDemoOrder = IS_DEMO_AUTH && orderId.startsWith('order_demo_');
 
     // ── SECURITY: Derive plan server-side from order metadata ─────────────────
@@ -48,10 +48,8 @@ exports.verifyPayment = async (req, res) => {
       const parts = orderId.split('_');
       plan = parts[2] || 'pro'; // fallback to 'pro' for legacy demo orders
     } else {
-      // Fetch the order from Razorpay to get the plan from order notes
-      const rp = require('./razorpay.service');
       try {
-        const orderDetails = await rp.fetchOrder(orderId);
+        const orderDetails = await billingService.fetchOrder(orderId);
         plan = orderDetails?.notes?.plan;
       } catch (fetchErr) {
         console.error('[verifyPayment] Failed to fetch order from Razorpay:', fetchErr.message);
@@ -204,6 +202,32 @@ exports.cancelSubscription = async (req, res) => {
     return res.status(500).json({ message: 'Failed to cancel subscription' });
   }
 };
+
+// GET /api/billing/history
+exports.getPaymentHistory = async (req, res) => {
+  try {
+    let payments = [];
+    try {
+      const result = await query(
+        'SELECT plan, amount_paise, status, paid_at, created_at, razorpay_order_id, razorpay_payment_id FROM payments WHERE user_id = $1 ORDER BY paid_at DESC NULLS LAST LIMIT 20',
+        [req.user.userId]
+      );
+      payments = result.rows;
+    } catch (dbErr) {
+      console.warn('[getPaymentHistory] DB error:', dbErr.message);
+      const { IS_DEMO_AUTH } = require('../../config/env');
+      if (!IS_DEMO_AUTH) {
+        return res.status(503).json({ message: 'Service temporarily unavailable' });
+      }
+    }
+    return res.status(200).json({ payments });
+  } catch (err) {
+    console.error('Get Payment History Error:', err);
+    return res.status(500).json({ message: 'Failed to fetch payment history' });
+  }
+};
+
+
 
 // ── POST /api/billing/webhook (Razorpay Webhook) ──────────────────────────────
 /**

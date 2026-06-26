@@ -133,9 +133,14 @@ export const AuthProvider = ({ children }) => {
       );
     }
 
-    const result = await signInWithPopup(auth, googleProvider);
-    if (result.user.code === 'auth/popup-closed-by-user') {
-      throw new Error('Sign-in was cancelled. Please try again.');
+    let result;
+    try {
+      result = await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        throw new Error('Sign-in was cancelled. Please try again.');
+      }
+      throw err;
     }
 
     const idToken = await result.user.getIdToken();

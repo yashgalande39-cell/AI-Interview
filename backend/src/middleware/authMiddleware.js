@@ -1,8 +1,9 @@
 /**
  * TRESK AI — Auth Middleware
  * =====================================================================
- * Phase 2: Supports both httpOnly cookie (preferred) and
- * Authorization: Bearer <token> header (legacy / mobile clients).
+ * Access tokens are issued in the JSON login/register response and
+ * stored in-memory by the frontend (never in localStorage).
+ * They are sent to the API as: Authorization: Bearer <token>
  *
  * Token payload: { userId, role }
  */
@@ -11,20 +12,9 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/env');
 
 module.exports = (req, res, next) => {
-  let token = null;
-
-  // 1. Prefer httpOnly cookie (XSS-safe)
-  if (req.cookies?.tresk_access) {
-    token = req.cookies.tresk_access;
-  }
-
-  // 2. Fallback: Authorization header (for API clients / legacy)
-  if (!token) {
-    const authHeader = req.header('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    }
-  }
+  // Read token from Authorization: Bearer header
+  const authHeader = req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
   if (!token) {
     return res.status(401).json({ message: 'Access denied. No authentication token provided.' });

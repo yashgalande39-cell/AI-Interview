@@ -268,7 +268,6 @@ exports.getProfile = async (req, res) => {
   } catch (err) {
     if (IS_DEMO_AUTH) {
       requireDemoMode('auth.getProfile');
-      const crypto = require('crypto');
       const mockUser = {
         id: req.user.userId || crypto.randomUUID(),
         name: "Atlas Test User",

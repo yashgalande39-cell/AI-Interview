@@ -21,3 +21,7 @@ frontend/.env
 
 # Local database
 backend/data/
+
+# Portable node
+node-portable/
+

@@ -4,6 +4,7 @@
  */
 
 const { query } = require('../../config/pgDb');
+const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
 
 // Offline in-memory fallback store for session replay events
 const inMemoryReplayStorage = new Map();
@@ -99,7 +100,6 @@ exports.getReplay = async (req, res) => {
 
     // 2. Fallback to memory / mockDb
     if (!session) {
-      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
       if (IS_DEMO_AUTH) {
         requireDemoMode('replay.getReplay');
         // Create a default session shell so page doesn't break
@@ -155,7 +155,6 @@ exports.listReplays = async (req, res) => {
         communicationScore: r.score_communication || 0
       }));
     } catch (dbErr) {
-      const { IS_DEMO_AUTH, requireDemoMode } = require('../../config/env');
       if (IS_DEMO_AUTH) {
         requireDemoMode('replay.listReplays');
         replays = [

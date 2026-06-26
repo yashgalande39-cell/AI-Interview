@@ -38,4 +38,7 @@ router.get('/subscription', billingController.getSubscription);
 // POST /api/billing/cancel — cancel subscription
 router.post('/cancel', billingController.cancelSubscription);
 
+// GET /api/billing/history — get user payment history
+router.get('/history', billingController.getPaymentHistory);
+
 module.exports = router;

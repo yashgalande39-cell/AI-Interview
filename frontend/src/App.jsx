@@ -376,7 +376,7 @@ const AppLayout = ({ children }) => {
 // ── Root App ──────────────────────────────────────────────────
 export default function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <Suspense fallback={
           <div className="flex h-screen items-center justify-center bg-[#080C14] text-slate-400">

@@ -72,10 +72,7 @@ router.post('/generate-questions', async (req, res) => {
     // HR questions are free; all other types require Pro
     // Use planMiddleware inline to support per-type gating cleanly
     if (type.toUpperCase() !== 'HR') {
-      const { query: dbQuery } = require('../../config/pgDb');
-      const { PLAN_LEVEL } = require('../../middleware/planMiddleware');
-
-      const uResult = await dbQuery(
+      const uResult = await query(
         'SELECT plan, plan_expires_at FROM users WHERE id = $1',
         [req.user.userId]
       );
@@ -85,7 +82,7 @@ router.post('/generate-questions', async (req, res) => {
       // Enforce expiry
       if (userPlan !== 'free' && dbUser?.plan_expires_at) {
         if (new Date(dbUser.plan_expires_at) < new Date()) {
-          await dbQuery("UPDATE users SET plan = 'free' WHERE id = $1", [req.user.userId]).catch(() => {});
+          await query("UPDATE users SET plan = 'free' WHERE id = $1", [req.user.userId]).catch(() => {});
           userPlan = 'free';
         }
       }
