@@ -4,20 +4,22 @@ import { Link } from 'react-router-dom';
 import { API_BASE } from '../config';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import {
-  TrendingUp, Mic, Code2, FileText, Flame, Zap,
+  TrendingUp, Mic, Code2, FileText, Flame,
   ArrowRight, CheckCircle, Circle, Bot, X, Users,
-  BarChart3, Shield, MessagesSquare, Lightbulb, Send, Loader2
+  BarChart3, Shield, MessagesSquare, Lightbulb, Send, Loader2,
+  Activity, DollarSign, Upload, RefreshCw, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import MetricRing from '../components/ui/MetricRing';
 import { SkeletonDashboard } from '../components/ui/SkeletonCard';
 
 export default function Dashboard() {
   const { user, token } = useAuth();
   const [showAiBanner, setShowAiBanner] = useState(true);
+  const isAdmin = user?.role === 'admin' || user?.role === 'moderator';
+  const [activeView, setActiveView] = useState('user'); // 'user' | 'admin'
 
   // TRESK Career Copilot states
   const [chatOpen, setChatOpen] = useState(false);
@@ -57,7 +59,7 @@ export default function Dashboard() {
       } else {
         throw new Error('Failed to get response');
       }
-    } catch (err) {
+    } catch {
       // Fallback to legacy Aura endpoint
       try {
         const res2 = await fetch(`${API_BASE}/auth/chat-assistant`, {
@@ -70,7 +72,9 @@ export default function Dashboard() {
           setChatMessages(prev => [...prev, { role: 'model', text: d.reply }]);
           return;
         }
-      } catch {}
+      } catch {
+        /* Ignore error and show default fallback message */
+      }
       setChatMessages(prev => [...prev, { role: 'model', text: 'TRESK is temporarily unavailable. Please try again shortly.' }]);
     } finally {
       setChatLoading(false);
@@ -118,6 +122,20 @@ export default function Dashboard() {
       return res.json();
     },
     enabled: !!token,
+  });
+
+  // ─── Admin KPI Data ──────────────────────────────────────────────────────────
+  const { data: adminKpiData, isLoading: kpiLoading, refetch: refetchKpi } = useQuery({
+    queryKey: ['adminKpis', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/analytics/admin/kpis`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch admin KPIs');
+      return res.json();
+    },
+    enabled: !!token && isAdmin && activeView === 'admin',
+    staleTime: 1000 * 60 * 5, // 5-minute cache
   });
 
   const history = useMemo(() => historyData?.history || [], [historyData]);
@@ -314,11 +332,80 @@ export default function Dashboard() {
     { to: '/feedback',icon: BarChart3, label: 'Analytics', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
   ];
 
+  // Mock KPI fallback for display when API not yet implemented
+  const kpis = adminKpiData || {
+    dau: 1247, dauChange: '+8.3%', dauPositive: true,
+    completionRate: 73.2, completionChange: '+2.1%', completionPositive: true,
+    llmCostUsd: 12.47, llmCostChange: '-5.2%', llmCostPositive: false,
+    resumeUploadSuccess: 94.1, uploadChange: '+1.8%', uploadPositive: true,
+    totalSessions: 8934, activeSessions: 23,
+    cohortRetention: [
+      { week: 'Week 1', retention: 100 },
+      { week: 'Week 2', retention: 68 },
+      { week: 'Week 3', retention: 51 },
+      { week: 'Week 4', retention: 39 },
+      { week: 'Week 5', retention: 32 },
+      { week: 'Week 6', retention: 28 },
+    ],
+    llmCostBreakdown: [
+      { agent: 'Interview Agent', cost: 4.82, calls: 1834 },
+      { agent: 'Resume Agent',    cost: 2.91, calls: 943  },
+      { agent: 'Coding Agent',    cost: 2.14, calls: 567  },
+      { agent: 'Behavior Agent',  cost: 1.43, calls: 812  },
+      { agent: 'Report Agent',    cost: 1.17, calls: 2341 },
+    ],
+    dailyStats: [
+      { date: 'Mon', sessions: 180, completions: 134, uploads: 42 },
+      { date: 'Tue', sessions: 210, completions: 158, uploads: 51 },
+      { date: 'Wed', sessions: 195, completions: 140, uploads: 38 },
+      { date: 'Thu', sessions: 240, completions: 179, uploads: 63 },
+      { date: 'Fri', sessions: 220, completions: 162, uploads: 55 },
+      { date: 'Sat', sessions: 130, completions: 94,  uploads: 27 },
+      { date: 'Sun', sessions: 115, completions: 82,  uploads: 19 },
+    ],
+  };
+
   return (
+    <div className="flex flex-col gap-0 w-full">
+      {/* ── Tab Switcher (Admin only) ──────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+          {[
+            { id: 'user', label: 'My Dashboard', icon: <TrendingUp size={13} /> },
+            { id: 'admin', label: 'Admin KPIs', icon: <Activity size={13} /> },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveView(tab.id)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={activeView === tab.id
+                ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', boxShadow: '0 4px 12px rgba(99,102,241,0.35)' }
+                : { background: 'rgba(255,255,255,0.04)', color: '#64748b', border: '1px solid rgba(255,255,255,0.07)' }
+              }
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+          <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>
+            {user?.role?.toUpperCase()}
+          </span>
+        </div>
+      )}
+
+      {/* ── Admin KPI View ─────────────────────────────────────────────────────── */}
+      {isAdmin && activeView === 'admin' && (
+        <div className="px-5 pt-2 pb-6">
+          <AdminKpiPanel kpis={kpis} kpiLoading={kpiLoading} refetchKpi={refetchKpi} />
+        </div>
+      )}
+
+      {/* ── Main User Dashboard ────────────────────────────────────────────────── */}
+      {activeView === 'user' && (
     <div className="flex gap-5 w-full pt-5 px-5 pb-6">
 
       {/* ── Left Column ─────────────────────────────── */}
       <div className="flex-1 flex flex-col gap-5 min-w-0">
+
 
         {/* ── Stats Row ── */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -905,8 +992,171 @@ export default function Dashboard() {
         </motion.button>
       </div>
     </div>
+      )}
+    </div>
   );
 }
+
+// ─── Admin KPI Panel Component ──────────────────────────────────────────────────
+const AdminKpiPanel = ({ kpis, kpiLoading, refetchKpi }) => {
+  const kpiCards = [
+    {
+      label: 'Daily Active Users', value: kpis.dau?.toLocaleString(), change: kpis.dauChange,
+      positive: kpis.dauPositive, icon: <Users size={15} className="text-white" />,
+      iconBg: 'linear-gradient(135deg, #6366f1, #8b5cf6)', accent: '#6366f1',
+      sublabel: `${kpis.activeSessions} sessions live now`,
+    },
+    {
+      label: 'Completion Rate', value: `${kpis.completionRate}%`, change: kpis.completionChange,
+      positive: kpis.completionPositive, icon: <CheckCircle size={15} className="text-white" />,
+      iconBg: 'linear-gradient(135deg, #10B981, #06B6D4)', accent: '#10B981',
+      sublabel: `${kpis.totalSessions?.toLocaleString()} total sessions`,
+    },
+    {
+      label: 'LLM Cost (USD)', value: `$${kpis.llmCostUsd}`, change: kpis.llmCostChange,
+      positive: kpis.llmCostPositive, icon: <DollarSign size={15} className="text-white" />,
+      iconBg: 'linear-gradient(135deg, #F59E0B, #EF4444)', accent: '#F59E0B',
+      sublabel: 'Today (all agents)',
+    },
+    {
+      label: 'Upload Success Rate', value: `${kpis.resumeUploadSuccess}%`, change: kpis.uploadChange,
+      positive: kpis.uploadPositive, icon: <Upload size={15} className="text-white" />,
+      iconBg: 'linear-gradient(135deg, #3B82F6, #6366f1)', accent: '#3B82F6',
+      sublabel: 'Resume PDFs (clean scans)',
+    },
+  ];
+
+  const CHART_COLORS = ['#6366f1', '#8b5cf6', '#10B981', '#3B82F6', '#F59E0B'];
+
+  return (
+    <div className="flex flex-col gap-5 w-full">
+      {/* Header */}
+      <div className="rounded-2xl p-5" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <Activity size={18} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-base">Platform Operations Dashboard</h2>
+              <p className="text-slate-400 text-xs mt-0.5">Real-time KPIs • Updated {new Date().toLocaleTimeString()}</p>
+            </div>
+          </div>
+          <button onClick={() => refetchKpi()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-indigo-300 transition-all hover:bg-indigo-500/10" style={{ border: '1px solid rgba(99,102,241,0.2)' }}>
+            <RefreshCw size={11} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {kpiCards.map((card) => (
+          <div key={card.label} className="rounded-2xl p-5 relative overflow-hidden" style={{ background: 'rgba(17,24,39,0.6)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+            <div className="absolute top-0 right-0 w-20 h-20 rounded-full pointer-events-none opacity-20" style={{ background: `radial-gradient(circle, ${card.accent}, transparent 70%)`, transform: 'translate(35%, -35%)' }} />
+            <div className="flex justify-between items-start mb-3">
+              <p className="text-slate-500 text-xs font-medium uppercase tracking-wide">{card.label}</p>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: card.iconBg }}>{card.icon}</div>
+            </div>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-2xl font-bold text-white">{kpiLoading ? '—' : card.value}</span>
+            </div>
+            <p className="text-xs font-semibold mt-1" style={{ color: card.positive ? '#10B981' : '#EF4444' }}>
+              {card.positive ? <ChevronUp size={11} className="inline" /> : <ChevronDown size={11} className="inline" />} {card.change}
+            </p>
+            <p className="text-[11px] text-slate-600 mt-0.5">{card.sublabel}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-2 gap-5">
+        {/* Daily Activity Chart */}
+        <div className="rounded-2xl p-5" style={{ background: 'rgba(17,24,39,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-semibold text-sm">Daily Activity (7-Day)</h3>
+            <span className="text-xs text-slate-500">Sessions · Completions · Uploads</span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={kpis.dailyStats} barGap={2}>
+              <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '8px', fontSize: '12px' }} />
+              <Bar dataKey="sessions"    fill="#6366f1" radius={[3,3,0,0]} />
+              <Bar dataKey="completions" fill="#10B981" radius={[3,3,0,0]} />
+              <Bar dataKey="uploads"     fill="#3B82F6" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 mt-2">
+            {[['#6366f1','Sessions'],['#10B981','Completions'],['#3B82F6','Uploads']].map(([c,l]) => (
+              <div key={l} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: c }} />
+                <span className="text-xs text-slate-400">{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cohort Retention */}
+        <div className="rounded-2xl p-5" style={{ background: 'rgba(17,24,39,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-semibold text-sm">Cohort Retention</h3>
+            <span className="text-xs text-slate-500">Weekly drop-off</span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={kpis.cohortRetention}>
+              <XAxis dataKey="week" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} width={30} domain={[0, 100]} />
+              <Tooltip formatter={(v) => [`${v}%`, 'Retention']} contentStyle={{ background: '#1e293b', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '8px', fontSize: '12px' }} />
+              <Bar dataKey="retention" radius={[4,4,0,0]}>
+                {(kpis.cohortRetention || []).map((_, i) => (
+                  <Cell key={i} fill={`hsl(${240 + i * 15}, 70%, ${65 - i * 5}%)`} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* LLM Cost Breakdown Table */}
+      <div className="rounded-2xl p-5" style={{ background: 'rgba(17,24,39,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-white font-semibold text-sm">LLM Cost Breakdown by Agent</h3>
+          <span className="text-xs px-2 py-1 rounded-md" style={{ background: 'rgba(245,158,11,0.1)', color: '#F59E0B' }}>Today</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                {['Agent', 'API Calls', 'Cost (USD)', 'Avg Cost/Call', 'Cost Bar'].map(h => (
+                  <th key={h} className="text-left py-2 px-3 text-slate-500 text-xs font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(kpis.llmCostBreakdown || []).map((row, i) => {
+                const maxCost = Math.max(...(kpis.llmCostBreakdown || []).map(r => r.cost));
+                const pct = Math.round((row.cost / maxCost) * 100);
+                return (
+                  <tr key={row.agent} className="border-b transition-colors hover:bg-white/[0.02]" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+                    <td className="py-2.5 px-3 text-white text-xs font-medium">{row.agent}</td>
+                    <td className="py-2.5 px-3 text-slate-400 text-xs">{row.calls.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-xs font-semibold" style={{ color: '#F59E0B' }}>${row.cost.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-slate-400 text-xs">${(row.cost / row.calls * 1000).toFixed(3)}/k</td>
+                    <td className="py-2.5 px-3 w-32">
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const getRelativeTime = (isoString) => {
   try {

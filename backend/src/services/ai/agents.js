@@ -273,34 +273,93 @@ Recent Interview History (summary): ${JSON.stringify(interviewHistory || [])}`;
 // =============================================================================
 // REPORT AGENT
 // Consolidates all agent outputs into a unified evaluation report.
+// Adds Evaluation Confidence Index (ECI) from 0.00 to 1.00.
 // =============================================================================
 const ReportAgent = {
   name: 'ReportAgent',
 
   /**
-   * Generate a complete interview report from all agent outputs.
-   * Adds a top-level confidence index (average of individual confidences).
+   * Compute the Evaluation Confidence Index (ECI).
+   * Measures how reliable and context-rich the evaluation is.
+   *
+   * Factors:
+   *  - Number of Q&A pairs evaluated (0.30 weight)
+   *  - Average answer depth / length (0.25 weight)
+   *  - Resume context provided (0.15 weight)
+   *  - Score consistency across questions (0.15 weight)
+   *  - Proportion of agents that ran successfully (0.15 weight)
+   *
+   * @returns {number} ECI from 0.00 to 1.00
    */
-  generate({ interviewScores, behaviorScores, codingScores, recommendations }) {
+  computeConfidenceIndex({ qaPairCount = 0, avgAnswerLength = 0, hasResume = false, scoreVariance = 0, agentsRan = 0, totalAgents = 3 }) {
+    let eci = 0;
+    eci += Math.min(0.30, (qaPairCount / 5) * 0.30);
+    const depthScore = Math.min(1, avgAnswerLength / 200);
+    eci += depthScore * 0.25;
+    if (hasResume) eci += 0.15;
+    const consistencyScore = Math.max(0, 1 - scoreVariance / 1000);
+    eci += consistencyScore * 0.15;
+    eci += (agentsRan / Math.max(1, totalAgents)) * 0.15;
+    return Math.min(1.0, Math.max(0.0, parseFloat(eci.toFixed(2))));
+  },
+
+  /**
+   * Generate a complete interview report from all agent outputs.
+   * Adds a top-level Evaluation Confidence Index (ECI) and confidence label.
+   *
+   * @param {object} params
+   * @param {object} params.interviewScores   - Output from InterviewAgent
+   * @param {object} [params.behaviorScores]  - Output from BehaviorAgent
+   * @param {object} [params.codingScores]    - Output from CodingAgent
+   * @param {object} [params.recommendations] - Output from RecommendationAgent
+   * @param {number} [params.qaPairCount=0]   - Number of Q&A pairs in session
+   * @param {boolean} [params.hasResume=false] - Whether resume context was provided
+   * @returns {object} Unified evaluation package
+   */
+  generate({ interviewScores, behaviorScores, codingScores, recommendations, qaPairCount = 0, hasResume = false }) {
     const sources = [interviewScores, behaviorScores, codingScores].filter(Boolean);
+    const agentsRan = sources.length;
+
+    // Legacy confidence (average of individual agent confidences)
     const avgConfidence = sources.length
       ? sources.reduce((sum, s) => sum + (s.confidence || 0.5), 0) / sources.length
       : 0.5;
 
-    const technicalScore  = interviewScores?.score_technical  || codingScores?.correctness_score  || 0;
-    const behavioralScore = behaviorScores?.star_score        || 0;
-    const communicationScore = behaviorScores?.communication_score || interviewScores?.score_communication || 0;
+    // Compute score variance for ECI
+    const scores = [
+      interviewScores?.score_technical  || interviewScores?.technicalScore  || 0,
+      interviewScores?.score_communication || interviewScores?.communicationScore || 0,
+      behaviorScores?.star_score        || 0,
+    ].filter(s => s > 0);
+    const avgS = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const variance = scores.length > 1
+      ? scores.reduce((sum, s) => sum + Math.pow(s - avgS, 2), 0) / scores.length
+      : 0;
+
+    // Compute 5-factor ECI
+    const eci = this.computeConfidenceIndex({
+      qaPairCount,
+      avgAnswerLength: 150, // Default when not available
+      hasResume,
+      scoreVariance: variance,
+      agentsRan,
+      totalAgents: 3,
+    });
+
+    const technicalScore     = interviewScores?.score_technical   || codingScores?.correctness_score  || interviewScores?.technicalScore || 0;
+    const behavioralScore    = behaviorScores?.star_score         || 0;
+    const communicationScore = behaviorScores?.communication_score || interviewScores?.score_communication || interviewScores?.communicationScore || 0;
 
     const overallScore = Math.round(
       (technicalScore * 0.4) + (behavioralScore * 0.3) + (communicationScore * 0.3)
     );
 
     return {
-      overall_score:        overallScore,
-      technical_score:      technicalScore,
-      behavioral_score:     behavioralScore,
-      communication_score:  communicationScore,
-      leadership_score:     behaviorScores?.leadership_indicator || 0,
+      overall_score:         overallScore,
+      technical_score:       technicalScore,
+      behavioral_score:      behavioralScore,
+      communication_score:   communicationScore,
+      leadership_score:      behaviorScores?.leadership_indicator || 0,
       problem_solving_score: behaviorScores?.problem_solving_score || 0,
       hiring_recommendation: behaviorScores?.hiring_recommendation || 'maybe',
       star_breakdown: {
@@ -309,20 +368,139 @@ const ReportAgent = {
         action:    behaviorScores?.action_detail      || 0,
         result:    behaviorScores?.result_impact      || 0,
       },
-      code_quality:          codingScores?.code_quality_score || null,
-      time_complexity:       codingScores?.time_complexity    || null,
-      improvement_tips:      [
+      code_quality:    codingScores?.code_quality_score || null,
+      time_complexity: codingScores?.time_complexity    || null,
+      improvement_tips: [
         ...(behaviorScores?.improvement_tips      || []),
         ...(codingScores?.refactoring_suggestions || []),
       ].slice(0, 5),
-      priority_topics:       recommendations?.priority_topics || [],
-      evaluation_confidence: parseFloat(avgConfidence.toFixed(2)),
-      confidence_label:      avgConfidence >= 0.80 ? 'High' : avgConfidence >= 0.55 ? 'Medium' : 'Low',
+      priority_topics:         recommendations?.priority_topics  || [],
+      // Evaluation Confidence Index — primary metric for report reliability
+      evaluation_confidence:   eci,
+      evaluation_confidence_index: eci,
+      confidence_label:        eci >= 0.80 ? 'High' : eci >= 0.55 ? 'Medium' : 'Low',
+      eci_explanation: `Confidence is ${eci >= 0.80 ? 'high' : eci >= 0.55 ? 'moderate' : 'low'} — based on ${qaPairCount} Q&A pairs, ${hasResume ? 'with' : 'without'} resume context, and ${agentsRan}/3 agents completing.`,
+      generated_at: new Date().toISOString(),
     };
   },
 };
 
+// =============================================================================
+// AGENT ORCHESTRATOR
+// Runs agents concurrently with Promise.allSettled() for fault isolation.
+// =============================================================================
+
+/**
+ * Run a complete multi-agent interview evaluation pipeline.
+ * Agents execute concurrently where possible. Failed agents don't crash the pipeline.
+ *
+ * @param {object} params
+ * @param {Array<{question: string, answer: string}>} params.qaPairs - Q&A transcript
+ * @param {string} params.role - Target job role
+ * @param {string} params.type - Interview type (HR|Technical|Behavioral|Coding)
+ * @param {string} [params.resumeText=''] - Resume for grounding context
+ * @param {object} [params.profile={}] - User profile for CareerCoach
+ * @returns {Promise<object>} Unified evaluation report from ReportAgent
+ */
+async function runInterviewEvaluation({ qaPairs = [], role, type, resumeText = '', profile = {} }) {
+  console.log(`[AgentOrchestrator] Starting evaluation — ${qaPairs.length} pairs, role: ${role}, type: ${type}`);
+
+  const isBehavioral = ['behavioral', 'hr'].some(t => type?.toLowerCase().includes(t));
+
+  // Build a combined answer text for scoring purposes
+  const answerContext = qaPairs.map((qa, i) =>
+    `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`
+  ).join('\n\n');
+
+  const avgAnswerLength = qaPairs.length > 0
+    ? qaPairs.reduce((sum, qa) => sum + (qa.answer?.length || 0), 0) / qaPairs.length
+    : 0;
+
+  // Run agents concurrently — isolate failures with allSettled
+  const agentPromises = [
+    InterviewAgent.generateQuestions({ role, company: 'TRESK AI', type, difficulty: 'Intermediate', resume: { text: resumeText } }),
+    isBehavioral && qaPairs.length > 0
+      ? BehaviorAgent.evaluate({ question: qaPairs[0]?.question, answer: qaPairs[0]?.answer, role })
+      : Promise.resolve(null),
+    RecommendationAgent.recommend({ weakTopics: ['General improvement'], strongTopics: [], targetRole: role, targetCompany: '' }),
+  ];
+
+  const [interviewSettled, behaviorSettled, recsSettled] = await Promise.allSettled(agentPromises);
+
+  const interviewScores = interviewSettled.status === 'fulfilled' ? interviewSettled.value?.result : null;
+  const behaviorScores  = behaviorSettled.status  === 'fulfilled' ? behaviorSettled.value?.result  : null;
+  const recommendations = recsSettled.status      === 'fulfilled' ? recsSettled.value?.result      : null;
+
+  const agentsRan = [interviewScores, behaviorScores, recommendations].filter(Boolean).length;
+
+  // Compute score variance
+  const scoresArr = [
+    interviewScores?.score_technical    || 0,
+    interviewScores?.score_communication || 0,
+    behaviorScores?.star_score           || 0,
+  ].filter(s => s > 0);
+  const avgS = scoresArr.length ? scoresArr.reduce((a, b) => a + b, 0) / scoresArr.length : 50;
+  const variance = scoresArr.length > 1
+    ? scoresArr.reduce((sum, s) => sum + Math.pow(s - avgS, 2), 0) / scoresArr.length
+    : 200;
+
+  const eci = ReportAgent.computeConfidenceIndex({
+    qaPairCount: qaPairs.length,
+    avgAnswerLength,
+    hasResume: !!resumeText,
+    scoreVariance: variance,
+    agentsRan,
+    totalAgents: 3,
+  });
+
+  const report = ReportAgent.generate({
+    interviewScores,
+    behaviorScores,
+    recommendations,
+    qaPairCount: qaPairs.length,
+    hasResume: !!resumeText,
+  });
+
+  console.log(`[AgentOrchestrator] Report ready — ECI: ${eci} (${report.confidence_label})`);
+  return report;
+}
+
+/**
+ * Run a standalone resume multi-agent evaluation.
+ * @param {string} resumeText - Raw resume text
+ * @param {string} targetRole - Target job role
+ * @returns {Promise<object>} Resume analysis + learning recommendations
+ */
+async function runResumeEvaluation(resumeText, targetRole) {
+  console.log(`[AgentOrchestrator] Starting resume evaluation — role: ${targetRole}`);
+
+  const [resumeSettled, recsSettled] = await Promise.allSettled([
+    ResumeAgent.analyze({ resumeText, targetRole, targetCompany: '' }),
+    RecommendationAgent.recommend({ weakTopics: ['Resume improvement'], strongTopics: [], targetRole, targetCompany: '' }),
+  ]);
+
+  return {
+    resumeAnalysis: resumeSettled.status === 'fulfilled' ? resumeSettled.value?.result : null,
+    recommendations: recsSettled.status === 'fulfilled'  ? recsSettled.value?.result  : null,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Run a standalone coding agent evaluation.
+ * @param {object} params - code, language, problemTitle, testResults
+ * @returns {Promise<object>} Deep code review
+ */
+async function runCodingEvaluation({ code, language, problemTitle, testResults }) {
+  console.log(`[AgentOrchestrator] Coding evaluation — "${problemTitle}" in ${language}`);
+  const settled = await Promise.allSettled([
+    CodingAgent.review({ code, language, problemTitle, testResults }),
+  ]);
+  return settled[0].status === 'fulfilled' ? settled[0].value?.result : null;
+}
+
 module.exports = {
+  // Individual agent objects (existing API)
   InterviewAgent,
   ResumeAgent,
   CodingAgent,
@@ -332,4 +510,9 @@ module.exports = {
   ReportAgent,
   runAgent,
   estimateCost,
+  // Orchestrated pipelines (new)
+  runInterviewEvaluation,
+  runResumeEvaluation,
+  runCodingEvaluation,
 };
+

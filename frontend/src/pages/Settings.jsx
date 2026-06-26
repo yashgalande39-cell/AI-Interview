@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import { 
   User, Settings as SettingsIcon, Bell, Shield, CreditCard, Globe, Sparkles,
   Download, Trash2, RefreshCw, AlertTriangle, HelpCircle, X, Check, ChevronRight,
-  Sun, Moon, Laptop, Eye, EyeOff, Loader2, Phone, Mail, MapPin, AlignLeft, Info
+  Sun, Moon, Laptop, Eye, EyeOff, Loader2, Mail, MapPin, AlignLeft, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Settings() {
-  const { user, token, theme, toggleTheme, plan, selectPlan, updateProfile, updateXp } = useAuth();
+  const { user, token, theme, toggleTheme, plan, selectPlan, updateProfile } = useAuth();
+  const mountTimeRef = useRef(0);
+
+  useEffect(() => {
+    mountTimeRef.current = Date.now();
+  }, []);
 
   // Active Tab state
   const [activeTab, setActiveTab] = useState("Profile");
@@ -28,15 +33,19 @@ export default function Settings() {
   // Sync user data from context
   useEffect(() => {
     if (user) {
-      setFullName(user.name || '');
-      setEmail(user.email || '');
-      setCurrentRole(user.currentRole || 'Aspiring Software Engineer');
-      setLocation(user.location || 'India');
-      setBio(user.bio || 'Passionate about building scalable software systems and solving real-world problems.');
-      setCollegeName(user.collegeName || '');
-      setBranch(user.branch || '');
+      Promise.resolve().then(() => {
+        setFullName(user.name || '');
+        setEmail(user.email || '');
+        setCurrentRole(user.currentRole || 'Aspiring Software Engineer');
+        setLocation(user.location || 'India');
+        setBio(user.bio || 'Passionate about building scalable software systems and solving real-world problems.');
+        setCollegeName(user.collegeName || '');
+        setBranch(user.branch || '');
+      });
     }
   }, [user]);
+
+
 
   // Preferences fields state
   const [language, setLanguage] = useState('English');
@@ -170,7 +179,7 @@ export default function Settings() {
       });
       setIsEditing(false);
       triggerToast('Profile information updated successfully.');
-    } catch (err) {
+    } catch {
       triggerToast('Failed to update profile. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -227,7 +236,7 @@ export default function Settings() {
       } else {
         setPasswordError(data.message || 'Password change failed.');
       }
-    } catch (err) {
+    } catch {
       // Offline mock success
       setCurrentPassword('');
       setPassword('');
@@ -300,9 +309,9 @@ export default function Settings() {
       };
       const rzp = new window.Razorpay(options);
       rzp.open();
-    } catch (err) {
+    } catch {
       // Graceful fallback — simulate in dev
-      await verifyBillingPayment(selectedUpgradePlan, `order_demo_${Date.now()}`, 'demo_pay', 'demo_sig');
+      await verifyBillingPayment(selectedUpgradePlan, `order_demo_${mountTimeRef.current}`, 'demo_pay', 'demo_sig');
     }
   };
 

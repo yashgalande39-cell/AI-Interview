@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import {
   Mic, MicOff, Video, VideoOff,
-  ShieldAlert, Edit3, ArrowRight,
-  Phone, PhoneOff, Grid, Volume1, Play,
-  ChevronRight, Clock, AlertTriangle, X,
-  Send, Square, BarChart2, Eye, Brain
+  Edit3, ArrowRight,
+  Phone, PhoneOff, Volume1,
+  AlertTriangle, X,
+  Send, Square, Eye, Brain
 } from 'lucide-react';
 import MetricRing from '../components/ui/MetricRing';
 
@@ -44,10 +44,6 @@ export default function InterviewRoom() {
   // Telephony Simulator states
   const [telephonyMode, setTelephonyMode] = useState(false);
   const [callState, setCallState] = useState('idle'); // 'idle', 'ringing', 'connected'
-  const [phoneMuted, setPhoneMuted] = useState(false);
-  const [phoneSpeaker, setPhoneSpeaker] = useState(true);
-  const [showKeypad, setShowKeypad] = useState(false);
-  const [keypadInput, setKeypadInput] = useState('');
 
   // Anti-Cheat Warnings
   const [strikeCount, setStrikeCount] = useState(0);
@@ -626,22 +622,7 @@ export default function InterviewRoom() {
     }
   };
 
-  const handleKeypadPress = (val) => {
-    setKeypadInput(prev => prev + val);
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.frequency.value = 400;
-      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.15);
-    } catch {
-      // AudioContext blocks
-    }
-  };
+
 
   if (loading && !session) {
     return (
@@ -973,6 +954,157 @@ export default function InterviewRoom() {
               ))}
             </div>
 
+            {/* ── Evaluation Confidence Index Gauge ── */}
+            {(() => {
+              const eyePct   = Math.round(goodEyeContactFrames / Math.max(1, eyeContactFrames) * 100);
+              const answerLengthScore = Math.min(100, (answerText.length / 150) * 100);
+              const eci = Math.min(100, Math.round(
+                (eyePct * 0.25) +
+                ((100 - stressLevelPercent) * 0.25) +
+                (answerLengthScore * 0.30) +
+                ((currentIndex / Math.max(1, totalQuestions - 1)) * 100 * 0.20)
+              ));
+              const eciColor = eci >= 75 ? '#10B981' : eci >= 50 ? '#F59E0B' : '#EF4444';
+              const eciLabel = eci >= 75 ? 'High' : eci >= 50 ? 'Moderate' : 'Low';
+              const circumference = 2 * Math.PI * 32;
+              const strokeDash = (eci / 100) * circumference;
+
+              return (
+                <div className="rounded-2xl p-5" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-white font-semibold text-sm">Confidence Index</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${eciColor}18`, color: eciColor }}>
+                      {eciLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {/* SVG Arc Gauge */}
+                    <div className="relative flex-shrink-0">
+                      <svg width="76" height="76" viewBox="0 0 76 76">
+                        <circle cx="38" cy="38" r="32" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
+                        <circle
+                          cx="38" cy="38" r="32" fill="none"
+                          stroke={eciColor} strokeWidth="6"
+                          strokeDasharray={`${strokeDash} ${circumference}`}
+                          strokeLinecap="round"
+                          transform="rotate(-90 38 38)"
+                          style={{ transition: 'stroke-dasharray 0.8s ease, stroke 0.5s ease', filter: `drop-shadow(0 0 6px ${eciColor}60)` }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-lg font-black text-white leading-none">{eci}</span>
+                        <span className="text-[9px] text-slate-500 font-medium">/ 100</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-2 text-xs">
+                      <p className="text-slate-400 leading-snug">Evaluation reliability based on eye contact, stress, answer depth, and session progress.</p>
+                      <div className="flex flex-col gap-1">
+                        {[
+                          { label: 'Eye Contact', v: eyePct },
+                          { label: 'Answer Depth', v: Math.round(answerLengthScore) },
+                          { label: 'Composure', v: Math.round(100 - stressLevelPercent) },
+                        ].map(f => (
+                          <div key={f.label}>
+                            <div className="flex justify-between mb-0.5">
+                              <span className="text-slate-600">{f.label}</span>
+                              <span className="text-slate-400 font-semibold">{f.v}%</span>
+                            </div>
+                            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${f.v}%`, background: eciColor }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── STAR Compliance Tracker ── */}
+            {(() => {
+              const answerLen = answerText.length;
+              // Heuristic STAR estimations based on answer structure and length
+              const situation  = Math.min(100, answerLen > 30  ? Math.round(25 + (answerLen / 300) * 35) : 0);
+              const task       = Math.min(100, answerLen > 80  ? Math.round(20 + (answerLen / 400) * 30) : 0);
+              const action     = Math.min(100, answerLen > 150 ? Math.round(30 + (answerLen / 500) * 40) : 0);
+              const result     = Math.min(100, answerLen > 250 ? Math.round(15 + (answerLen / 600) * 45) : 0);
+              const starAvg    = Math.round((situation + task + action + result) / 4);
+
+              const starItems = [
+                { label: 'S — Situation', value: situation, color: '#6366f1' },
+                { label: 'T — Task',      value: task,      color: '#8b5cf6' },
+                { label: 'A — Action',    value: action,    color: '#3B82F6' },
+                { label: 'R — Result',    value: result,    color: '#10B981' },
+              ];
+
+              return (
+                <div className="rounded-2xl p-5" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-white font-semibold text-sm">STAR Compliance</h3>
+                    <span className="text-xs font-bold" style={{ color: starAvg >= 70 ? '#10B981' : starAvg >= 40 ? '#F59E0B' : '#EF4444' }}>{starAvg}%</span>
+                  </div>
+                  <div className="space-y-3">
+                    {starItems.map(item => (
+                      <div key={item.label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-medium text-slate-400">{item.label}</span>
+                          <span className="text-[11px] font-bold" style={{ color: item.color }}>{item.value}%</span>
+                        </div>
+                        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${item.value}%`, background: `linear-gradient(90deg, ${item.color}80, ${item.color})` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-600 mt-3">
+                    {starAvg >= 70 ? '✅ Strong STAR structure detected' : starAvg >= 40 ? '⚠️ Include measurable results' : '💡 Use Situation → Task → Action → Result'}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* ── Pacing Indicator ── */}
+            {(() => {
+              const wordCount  = answerText.trim().split(/\s+/).filter(w => w).length;
+              const wpm        = speechTimer > 5 ? Math.round((wordCount / speechTimer) * 60) : 0;
+              const pacingGood = wpm >= 120 && wpm <= 160;
+              const pacingColor = pacingGood ? '#10B981' : wpm > 0 && wpm < 120 ? '#3B82F6' : wpm > 160 ? '#F59E0B' : '#475569';
+              const pacingLabel = wpm === 0 ? 'Speak to measure' : pacingGood ? 'Ideal pacing' : wpm < 120 ? 'Slightly slow' : 'Slightly fast';
+
+              return (
+                <div className="rounded-2xl p-4" style={{ background: 'rgba(13,18,32,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-white font-semibold text-sm">Speaking Pace</h3>
+                    <span className="text-[10px] font-semibold" style={{ color: pacingColor }}>{pacingLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-center">
+                      <span className="text-2xl font-black" style={{ color: pacingColor }}>{wpm || '—'}</span>
+                      <p className="text-[10px] text-slate-600 mt-0.5">WPM</p>
+                    </div>
+                    <div className="flex-1">
+                      {/* WPM Dial — 0 to 200 WPM */}
+                      <div className="relative h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                        {/* Target zone highlight: 120-160 WPM */}
+                        <div className="absolute top-0 bottom-0 rounded-full" style={{ left: '60%', width: '20%', background: 'rgba(16,185,129,0.2)' }} />
+                        {/* Current position */}
+                        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (wpm / 200) * 100)}%`, background: `linear-gradient(90deg, ${pacingColor}60, ${pacingColor})` }} />
+                      </div>
+                      <div className="flex justify-between mt-1 text-[9px] text-slate-700">
+                        <span>0</span>
+                        <span style={{ color: '#10B981' }}>120-160 target</span>
+                        <span>200+</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* End session */}
             <button
               onClick={() => navigate('/feedback')}
@@ -984,6 +1116,7 @@ export default function InterviewRoom() {
               End Session
             </button>
           </div>
+
         </div>
       </div>
     </div>

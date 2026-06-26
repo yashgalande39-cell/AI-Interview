@@ -41,4 +41,4 @@ if (hasConfig) {
   );
 }
 
-export { auth, googleProvider, hasConfig };
+export { app, auth, googleProvider, hasConfig };

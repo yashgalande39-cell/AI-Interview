@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Home, Mic, Code2, FileText, BarChart3,
-  Map, Trophy, Settings, Zap, ArrowRight, User,
+  Map, Trophy, Settings, Zap, User,
   Command, ChevronRight
 } from 'lucide-react';
 
@@ -48,12 +48,8 @@ export default function CommandPalette({ open, onClose }) {
   const flat = filtered.flatMap(g => g.items);
 
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setFocusedIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open]);
+    inputRef.current?.focus();
+  }, []);
 
   const handleSelect = useCallback((item) => {
     navigate(item.path);

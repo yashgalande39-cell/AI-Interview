@@ -5,7 +5,7 @@ import { usePlan } from '../hooks/usePlan';
 import { io } from 'socket.io-client';
 import { BACKEND_URL, API_BASE } from '../config';
 import { 
-  ShieldCheck, AlertCircle, Sparkles, CheckSquare,
+  ShieldCheck, AlertCircle, Sparkles,
   Zap, Loader2, Users, Send, Trash2,
   Check, BookOpen, XCircle, UploadCloud, Video, Mic, Heart, HelpCircle
 } from 'lucide-react';
@@ -88,7 +88,7 @@ export default function InterviewLobby() {
         socketRef.current.disconnect();
       }
     };
-  }, []);
+  }, [token]);
 
   // Initialize canvas for matched P2P whiteboard when matched
   useEffect(() => {

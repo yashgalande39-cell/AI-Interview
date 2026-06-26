@@ -11,8 +11,8 @@ import { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider, hasConfig as firebaseReady } from '../firebase';
 import { API_BASE } from '../config';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { setAccessToken, clearAccessToken, apiPost, apiGet, apiPut } from '../services/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { setAccessToken, clearAccessToken, apiPost, apiPut } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -138,7 +138,7 @@ export const AuthProvider = ({ children }) => {
       result = await signInWithPopup(auth, googleProvider);
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        throw new Error('Sign-in was cancelled. Please try again.');
+        throw new Error('Sign-in was cancelled. Please try again.', { cause: err });
       }
       throw err;
     }

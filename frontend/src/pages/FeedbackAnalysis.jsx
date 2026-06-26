@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import { 
   Trophy, ChevronRight, ChevronLeft, Printer, RefreshCw, X, HelpCircle, Sparkles, 
-  AlertCircle, CheckCircle, BookOpen, Activity, Flame, MessageSquare, Loader2, Calendar, Clock, BarChart3
+  BookOpen, Activity, Flame, MessageSquare, Loader2, Calendar, Clock, BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricRing from '../components/ui/MetricRing';
@@ -53,8 +53,8 @@ export default function FeedbackAnalysis() {
     if (!token) return;
 
     if (sessionId) {
-      setLoading(true);
       const fetchScorecard = async () => {
+        setLoading(true);
         // Skip mock/offline sessions — go straight to fallback
         const isMockSession = !sessionId || sessionId.startsWith('int_mock_') || sessionId.startsWith('mock_');
 
@@ -115,8 +115,8 @@ export default function FeedbackAnalysis() {
       };
       fetchScorecard();
     } else {
-      setLoadingHistory(true);
       const fetchHistory = async () => {
+        setLoadingHistory(true);
         try {
           const res = await fetch(`${API_BASE}/interviews/history`, {
             headers: {

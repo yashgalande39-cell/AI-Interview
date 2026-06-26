@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import { Link } from 'react-router-dom';
 import {
   Check, Zap, Crown, Users, ArrowRight, Shield,
-  Star, Mic, Code2, FileText, Bot, BarChart3, Sparkles,
+  Star, Mic, Code2, Bot, BarChart3, Sparkles,
   X, AlertTriangle, Clock, CreditCard, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, Calendar, Receipt, RefreshCw, ArrowDownCircle
+  CheckCircle2, XCircle, Calendar, Receipt, ArrowDownCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -311,12 +311,13 @@ function ConfirmModal({ isOpen, onClose, onConfirm, plan, action, currentPlan, l
 // ─── Subscription Info Panel ──────────────────────────────────────────────────
 function SubscriptionPanel({ subscription, onCancel, cancelLoading }) {
   const [expanded, setExpanded] = useState(false);
+  const [now] = useState(() => Date.now());
   if (!subscription || subscription.plan === 'free') return null;
 
   const plan = PLANS.find(p => p.id === subscription.plan);
   const expiresAt = subscription.expiresAt ? new Date(subscription.expiresAt) : null;
   const activatedAt = subscription.activatedAt ? new Date(subscription.activatedAt) : null;
-  const daysLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000)) : null;
+  const daysLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - now) / 86400000)) : null;
 
   return (
     <motion.div
@@ -502,6 +503,11 @@ export default function Pricing() {
   const [subscription, setSubscription] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const mountTimeRef = useRef(0);
+
+  useEffect(() => {
+    mountTimeRef.current = Date.now();
+  }, []);
 
   const currentPlan = user?.plan || 'free';
 
@@ -549,8 +555,10 @@ export default function Pricing() {
   }, [token]);
 
   useEffect(() => {
-    fetchSubscription();
-    fetchPaymentHistory();
+    Promise.resolve().then(() => {
+      fetchSubscription();
+      fetchPaymentHistory();
+    });
   }, [fetchSubscription, fetchPaymentHistory]);
 
   // ── Determine button action for a plan ──────────────────────────────────────
@@ -639,7 +647,7 @@ export default function Pricing() {
     } catch (err) {
       console.error('Upgrade error:', err);
       // Graceful dev fallback
-      await verifyPayment(planId, `order_demo_${planId}_${Date.now()}`, 'demo_pay', 'demo_sig');
+      await verifyPayment(planId, `order_demo_${planId}_${mountTimeRef.current}`, 'demo_pay', 'demo_sig');
     }
   };
 

@@ -37,7 +37,7 @@ import {
   Trophy, BarChart3, Map, FlaskConical, Settings2,
   Bell, Search, Flame, Moon, Sun, LogOut,
   ChevronLeft, ChevronRight, Sparkles, Command,
-  Crown, Shield, Zap, Users2, PlayCircle, CreditCard, Bot
+  Crown, Shield, Zap, PlayCircle, CreditCard
 } from 'lucide-react';
 
 // ── Route Guards ────────────────────────────────────────────
@@ -83,7 +83,7 @@ const AppLayout = ({ children }) => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [notifications, setNotifications] = useState(1);
+  const [notifications] = useState(1);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const PLAN_META = {
@@ -368,7 +368,7 @@ const AppLayout = ({ children }) => {
       </main>
 
       {/* Command Palette */}
-      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <CommandPalette key={cmdOpen} open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
   );
 };

@@ -7,7 +7,7 @@ import {
   Plus, Trash2, UploadCloud, CheckCircle, 
   AlertTriangle, ShieldCheck, Download, 
   Briefcase, Compass, FileText, Loader2, 
-  Settings, Palette, LayoutTemplate, BriefcaseIcon, Sparkles, Send, GraduationCap, Calendar, User, Phone, Mail, Award
+  Settings, Palette, LayoutTemplate, Sparkles, User, Phone, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricRing from '../components/ui/MetricRing';
