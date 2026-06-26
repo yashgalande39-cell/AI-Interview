@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const { connectPG, query } = require('./config/pgDb');
 const jwt = require('jsonwebtoken');
+const { flagsMiddleware } = require('./config/featureFlags');
+const { promptGuardMiddleware } = require('./services/ai/safetyLayer');
 
 // ── Structured Logger ─────────────────────────────────────────────────────────
 // Uses pino when available, falls back to console. Install with: npm install pino
@@ -105,6 +107,13 @@ app.use(cookieParser());
 // ── Body Parsers (after webhook route) ────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ── Feature Flags (attached to every request as req.flags) ───────────────────
+app.use(flagsMiddleware());
+
+// ── AI Safety: Prompt Injection Guard on all AI routes ───────────────────────
+app.use('/api/ai',    promptGuardMiddleware(['answer', 'question', 'message', 'query', 'prompt']));
+app.use('/api/tresk', promptGuardMiddleware(['message', 'query', 'prompt']));
 
 // ── Health Check Endpoints ────────────────────────────────────────────────────
 // /health/live — simple liveness probe (always 200 if process is up)

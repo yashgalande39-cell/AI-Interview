@@ -330,9 +330,120 @@ CREATE INDEX IF NOT EXISTS idx_refresh_sessions_user ON refresh_sessions(user_id
 CREATE INDEX IF NOT EXISTS idx_refresh_sessions_token ON refresh_sessions(token_hash);
 
 -- =============================================================================
+-- AUDIT LOGS — Security trail for critical user/admin actions
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id          BIGSERIAL   PRIMARY KEY,
+  user_id     UUID        REFERENCES users(id) ON DELETE SET NULL,
+  action      TEXT        NOT NULL,   -- 'LOGIN' | 'LOGOUT' | 'DELETE_ACCOUNT' | 'PLAN_UPGRADE' | 'ADMIN_ACTION'
+  resource    TEXT,                   -- e.g. 'user', 'interview', 'resume'
+  resource_id TEXT,
+  ip_address  TEXT,
+  user_agent  TEXT,
+  metadata    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+
+-- =============================================================================
+-- FEATURE FLAGS — Gradual rollout & A/B testing control
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS feature_flags (
+  id          SERIAL      PRIMARY KEY,
+  flag_name   TEXT        UNIQUE NOT NULL,    -- e.g. 'multi_agent_evaluation'
+  is_enabled  BOOLEAN     NOT NULL DEFAULT FALSE,
+  rollout_pct INTEGER     NOT NULL DEFAULT 0 CHECK (rollout_pct BETWEEN 0 AND 100), -- % of users
+  rules       JSONB       NOT NULL DEFAULT '{}'::jsonb,   -- { "plans": ["pro"], "roles": ["admin"] }
+  description TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Seed default flags
+INSERT INTO feature_flags (flag_name, is_enabled, rollout_pct, description)
+VALUES
+  ('multi_agent_evaluation',  FALSE, 0,   'Use specialized AI agents for evaluation instead of single LLM call'),
+  ('explainable_ai_scores',   TRUE,  100, 'Show detailed reasoning with every AI score'),
+  ('job_matching_engine',     FALSE, 0,   'Enable job matching and gap analysis from resume'),
+  ('learning_engine',         FALSE, 0,   'Generate personalized micro-lessons after each interview'),
+  ('ai_cost_tracking',        TRUE,  100, 'Track per-user token consumption and cost')
+ON CONFLICT (flag_name) DO NOTHING;
+
+-- =============================================================================
+-- AI PROMPTS — Versioned, database-driven prompt management
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ai_prompts (
+  id          SERIAL      PRIMARY KEY,
+  name        TEXT        NOT NULL,    -- e.g. 'interview_system_prompt'
+  version     INTEGER     NOT NULL DEFAULT 1,
+  prompt_text TEXT        NOT NULL,
+  is_active   BOOLEAN     NOT NULL DEFAULT FALSE,
+  description TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (name, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_prompts_name ON ai_prompts(name, is_active);
+
+-- =============================================================================
+-- AI COST LOGS — Per-interview token & cost tracking
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ai_cost_logs (
+  id                  BIGSERIAL   PRIMARY KEY,
+  user_id             UUID        REFERENCES users(id) ON DELETE SET NULL,
+  session_id          UUID        REFERENCES interview_sessions(id) ON DELETE SET NULL,
+  operation           TEXT        NOT NULL,   -- 'evaluate_answer' | 'generate_questions' | 'resume_analysis'
+  model               TEXT,
+  prompt_tokens       INTEGER     NOT NULL DEFAULT 0,
+  completion_tokens   INTEGER     NOT NULL DEFAULT 0,
+  total_tokens        INTEGER     NOT NULL DEFAULT 0,
+  cost_usd            NUMERIC(10,6) NOT NULL DEFAULT 0,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cost_logs_user ON ai_cost_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_cost_logs_created ON ai_cost_logs(created_at DESC);
+
+-- =============================================================================
+-- LEARNING PATHS — Personalized micro-lessons from interview weaknesses
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS learning_paths (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_session  UUID        REFERENCES interview_sessions(id) ON DELETE SET NULL,
+  weakness_topic  TEXT        NOT NULL,      -- e.g. 'Dynamic Programming', 'System Design'
+  lesson_content  TEXT,
+  quiz_questions  JSONB,                     -- Array of {question, options, answer}
+  quiz_score      INTEGER,                   -- 0-100 after quiz attempt
+  status          TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_user ON learning_paths(user_id, status);
+
+-- =============================================================================
+-- USER SKILL PROFILES — Aggregated skill mastery from all activities
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS user_skill_profiles (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+  skills          JSONB       NOT NULL DEFAULT '{}'::jsonb,  -- { "React": 82, "System Design": 54 }
+  weak_topics     TEXT[]      NOT NULL DEFAULT '{}',
+  strong_topics   TEXT[]      NOT NULL DEFAULT '{}',
+  career_goal     TEXT,
+  target_companies TEXT[]     NOT NULL DEFAULT '{}',
+  last_updated    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================================
 -- SAFE MIGRATION — Add columns to existing DBs if they don't already exist
 -- =============================================================================
 DO $$ BEGIN
+  -- Users table migrations
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email_verified') THEN
     ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE;
   END IF;
@@ -350,5 +461,28 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
     ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'moderator'));
+  END IF;
+  -- Resumes table: add S3 object storage key (path in bucket)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='s3_key') THEN
+    ALTER TABLE resumes ADD COLUMN s3_key TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='s3_bucket') THEN
+    ALTER TABLE resumes ADD COLUMN s3_bucket TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='content_type') THEN
+    ALTER TABLE resumes ADD COLUMN content_type TEXT DEFAULT 'application/pdf';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='file_size_bytes') THEN
+    ALTER TABLE resumes ADD COLUMN file_size_bytes INTEGER;
+  END IF;
+  -- Add impact_score and keyword_density to resumes for advanced ATS
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='impact_score') THEN
+    ALTER TABLE resumes ADD COLUMN impact_score NUMERIC(5,2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='grammar_score') THEN
+    ALTER TABLE resumes ADD COLUMN grammar_score NUMERIC(5,2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resumes' AND column_name='readability_score') THEN
+    ALTER TABLE resumes ADD COLUMN readability_score NUMERIC(5,2) DEFAULT 0;
   END IF;
 END $$;

@@ -54,6 +54,26 @@ if (isProduction) {
   }
 }
 
+// 5. S3 / Object Storage
+const S3_ENABLED      = process.env.S3_ENABLED === 'true';
+const S3_BUCKET       = process.env.S3_BUCKET || 'tresk-ai-uploads';
+const S3_REGION       = process.env.S3_REGION || 'us-east-1';
+const S3_ACCESS_KEY_ID     = process.env.S3_ACCESS_KEY_ID || '';
+const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY || '';
+
+if (isProduction && S3_ENABLED) {
+  if (!S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
+    throw new Error('FATAL: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set when S3_ENABLED=true in production.');
+  }
+}
+
+// 6. Email provider
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'console';  // 'resend' | 'sendgrid' | 'smtp' | 'console'
+const EMAIL_FROM     = process.env.EMAIL_FROM || 'TRESK AI <noreply@tresk.ai>';
+const APP_BASE_URL   = process.env.APP_BASE_URL || 'http://localhost:5173';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
+
 module.exports = {
   NODE_ENV,
   JWT_SECRET,
@@ -61,5 +81,17 @@ module.exports = {
   CORS_ORIGIN,
   RAZORPAY_KEY_ID,
   RAZORPAY_KEY_SECRET,
-  requireDemoMode
+  requireDemoMode,
+  // S3 Object Storage
+  S3_ENABLED,
+  S3_BUCKET,
+  S3_REGION,
+  S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY,
+  // Email
+  EMAIL_PROVIDER,
+  EMAIL_FROM,
+  APP_BASE_URL,
+  RESEND_API_KEY,
+  SENDGRID_API_KEY,
 };
