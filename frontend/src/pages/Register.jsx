@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Lock, Building, GraduationCap, Calendar, AlertCircle, ArrowRight, Eye, EyeOff, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
-
+import { User, Mail, Lock, Building, GraduationCap, Calendar, AlertCircle, Eye, EyeOff, Globe, ArrowLeft } from 'lucide-react';
+// ─── Google Logo Component ───────────────────────────────────────────────────
 function GoogleLogo({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -15,14 +14,66 @@ function GoogleLogo({ size = 18 }) {
   );
 }
 
-const STATS = [
-  { value: '50K+', label: 'Students Trained' },
-  { value: '98%',  label: 'Success Rate' },
-  { value: '4.9',  label: 'User Rating' },
-];
+// ─── VideoBackground Component ────────────────────────────────────────────────
+const VideoBackground = ({ videoUrl }) => {
+  const videoRef = useRef(null);
 
-const COMPANIES = ['Google', 'Amazon', 'Microsoft', 'Meta', 'Netflix', 'Apple'];
+  useEffect(() => {
+    videoRef.current?.play().catch(() => {
+      // Autoplay blocked — background will fall through to CSS fallback
+    });
+  }, []);
 
+  return (
+    <div className="absolute inset-0 w-full h-full overflow-hidden">
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/40 z-10" />
+      {/* Subtle grid lines */}
+      <div
+        className="absolute inset-0 z-10 pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(139,92,246,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.04) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
+      <video
+        ref={videoRef}
+        className="absolute inset-0 min-w-full min-h-full object-cover w-auto h-auto"
+        autoPlay
+        loop
+        muted
+        playsInline
+        /* CSS fallback if video is blocked */
+        style={{ background: 'linear-gradient(135deg,#0a0015,#0d0025 40%,#1a0038 70%,#0a0020)' }}
+      >
+        <source src={videoUrl} type="video/mp4" />
+      </video>
+    </div>
+  );
+};
+
+// ─── FormInput Component ──────────────────────────────────────────────────────
+const FormInput = ({
+  icon, rightSlot, ...props
+}) => (
+  <div className="relative">
+    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
+      {icon}
+    </div>
+    <input
+      {...props}
+      className={`w-full pl-10 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/40 focus:outline-none focus:border-purple-500/60 transition-colors ${rightSlot ? 'pr-10' : 'pr-3'}`}
+    />
+    {rightSlot && (
+      <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+        {rightSlot}
+      </div>
+    )}
+  </div>
+);
+
+// ─── Main Register Component ──────────────────────────────────────────────────
 export default function Register() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -66,278 +117,208 @@ export default function Register() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden pb-12" style={{ background: 'var(--bg)' }}>
-      {/* Background layers */}
-      <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 65%)' }} />
-      <div className="absolute top-0 left-0 w-96 h-96 rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)', transform: 'translate(-40%, -40%)' }} />
-      <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)', transform: 'translate(30%, 30%)' }} />
+    <div className="relative min-h-screen w-full flex items-center justify-center px-4 py-12">
+      <VideoBackground videoUrl="/background-video.mp4" />
 
-      <motion.main
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-12 px-6 py-12 items-center"
+      {/* Back to Home Button */}
+      <Link
+        to="/"
+        className="absolute top-6 left-6 z-30 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-all duration-200"
       >
-        {/* Left — Branding */}
-        <div className="flex-1 w-full flex flex-col gap-8 text-left hidden lg:flex">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>
-              <Sparkles size={20} className="text-white" />
-            </div>
-            <span className="text-white font-bold text-xl tracking-tight">InterviewAI</span>
-          </div>
+        <ArrowLeft size={16} />
+        Back to Home
+      </Link>
 
-          <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-white leading-tight">
-              Create your account &<br/>
-              <span className="text-gradient">build confidence.</span>
-            </h1>
-            <p className="text-slate-400 mt-3 text-base leading-relaxed max-w-sm">
-              Practice with AI interviewers. Get real feedback. Track progress. Confidently walk into any interview.
-            </p>
-          </div>
+      <div className="relative z-20 w-full max-w-5xl px-3 sm:px-6">
+        <div className="mx-auto w-full max-w-4xl p-6 sm:p-8 lg:p-10 rounded-3xl backdrop-blur-sm bg-black/50 border border-white/10 shadow-2xl overflow-hidden">
+          <div className="grid gap-8 lg:grid-cols-[1.2fr_1.3fr] items-stretch">
+            
+            {/* Left Panel — Branding & Stats */}
+            <div className="space-y-6 flex flex-col justify-start">
+              <div className="space-y-6">
+                <div className="inline-flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-500/20 text-white/90">
+                    <Globe size={18} />
+                  </div>
+                  <div className="text-sm font-semibold text-white">TRESK AI</div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white leading-tight">
+                    Land your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">dream role.</span>
+                  </h1>
+                  <p className="max-w-xl text-sm text-white/60">
+                    Practice with AI interviewers. Get real feedback. Track progress. Confidently walk into any interview.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    ['50K+', 'Students Trained'],
+                    ['98%', 'Success Rate'],
+                    ['4.9', 'User Rating'],
+                  ].map(([value, label]) => (
+                    <div key={label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xl font-semibold text-white">{value}</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.32em] text-white/50">{label}</div>
+                    </div>
+                  ))}
+                </div>
 
-          {/* Stats */}
-          <div className="flex gap-6">
-            {STATS.map(s => (
-              <div key={s.label}>
-                <div className="text-2xl font-bold text-white">{s.value}</div>
-                <div className="text-xs text-slate-500 font-medium mt-0.5">{s.label}</div>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  {['Voice AI Interviews', 'Real-time Feedback', 'Coding Arena', 'Resume Analyzer'].map(label => (
+                    <span key={label} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/70 text-center">{label}</span>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-
-          {/* Trusted */}
-          <div>
-            <p className="text-xs text-slate-600 mb-3 font-medium uppercase tracking-wider">Trusted by professionals at</p>
-            <div className="flex flex-wrap gap-4">
-              {COMPANIES.map(c => (
-                <span key={c} className="text-sm font-bold text-slate-600 hover:text-slate-400 transition-colors cursor-default">{c}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* Feature badges */}
-          <div className="flex flex-wrap gap-2 mt-2">
-            {['Voice AI Interviews', 'Real-time Feedback', 'Coding Arena', 'Resume Analyzer', 'Career Roadmap'].map(f => (
-              <span key={f}
-                className="text-[11px] font-medium px-3 py-1.5 rounded-full"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
-                {f}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Right — Form Container */}
-        <div className="w-full max-w-2xl">
-          <div className="rounded-2xl p-8 lg:p-9"
-            style={{
-              background: 'rgba(13,18,32,0.9)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1)',
-            }}>
-
-            {/* Mobile logo */}
-            <div className="flex items-center gap-2 mb-6 lg:hidden">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>
-                <Sparkles size={16} className="text-white" />
-              </div>
-              <span className="text-white font-bold text-lg">InterviewAI</span>
             </div>
 
-            <h2 className="text-2xl font-bold text-white mb-1">Create Account 🚀</h2>
-            <p className="text-slate-500 text-sm mb-6">Join 50,000+ students and prepare for your dream tech role.</p>
-
-            {/* Alerts */}
-            {error && (
-              <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm mb-5 font-medium"
-                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
-                <AlertCircle size={15} className="flex-shrink-0" />{error}
+            {/* Right Panel — Signup Form */}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h2 className="text-3xl font-semibold text-white tracking-tight">Create Account 🚀</h2>
+                <p className="text-sm text-white/70 max-w-sm">Join 50,000+ students and prepare for your dream tech role.</p>
               </div>
-            )}
 
-            {/* Google SignUp Button */}
-            <button
-              id="google-signup-btn"
-              onClick={handleGoogleSignUp}
-              disabled={googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-white font-semibold text-sm transition-all mb-5 disabled:opacity-50"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-            >
-              {googleLoading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <GoogleLogo size={18} />
+              {/* Alerts */}
+              {error && (
+                <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium"
+                  style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+                  <AlertCircle size={15} className="flex-shrink-0" />
+                  {error}
+                </div>
               )}
-              {googleLoading ? 'Signing up with Google...' : 'Sign up with Google'}
-            </button>
 
-            {/* Divider */}
-            <div className="relative flex items-center mb-5">
-              <div className="flex-grow h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-              <span className="flex-shrink-0 mx-4 text-[11px] font-semibold text-slate-600 uppercase tracking-widest">or register with email</span>
-              <div className="flex-grow h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
-              {/* Name & Email Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-name">Full Name</label>
-                  <div className="relative">
-                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                    <input
-                      id="reg-name"
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
-                      placeholder="Rahul Kumar"
-                      autoComplete="name"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-email">Email Address</label>
-                  <div className="relative">
-                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                    <input
-                      id="reg-email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
-                      placeholder="rahul@college.edu"
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Password */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-password">Password</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                  <input
-                    id="reg-password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="glass-input w-full rounded-xl py-3 pl-10 pr-10 text-sm"
-                    placeholder="Min. 8 characters"
-                    autoComplete="new-password"
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* College / University */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-college">College / University</label>
-                <div className="relative">
-                  <Building size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                  <input
-                    id="reg-college"
-                    type="text"
-                    required
-                    value={collegeName}
-                    onChange={(e) => setCollegeName(e.target.value)}
-                    className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
-                    placeholder="IIT Bombay"
-                  />
-                </div>
-              </div>
-
-              {/* Branch & Graduation Year Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-branch">Branch / Major</label>
-                  <div className="relative">
-                    <GraduationCap size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                    <input
-                      id="reg-branch"
-                      type="text"
-                      required
-                      value={branch}
-                      onChange={(e) => setBranch(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
-                      placeholder="Computer Science"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold tracking-wider text-slate-400 uppercase pl-1" htmlFor="reg-year">Graduation Year</label>
-                  <div className="relative">
-                    <Calendar size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                    <input
-                      id="reg-year"
-                      type="number"
-                      required
-                      value={graduationYear}
-                      onChange={(e) => setGraduationYear(e.target.value)}
-                      className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm"
-                      placeholder="2027"
-                      min="2024"
-                      max="2035"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
+              {/* Google Button */}
               <button
-                id="email-register-btn"
-                type="submit"
-                disabled={loading || googleLoading}
-                className="btn btn-shimmer mt-4 py-3 w-full text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                style={{
-                  background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
-                  boxShadow: loading ? 'none' : '0 4px 20px rgba(99,102,241,0.3)',
-                }}
+                id="google-signup-btn"
+                type="button"
+                onClick={handleGoogleSignUp}
+                disabled={googleLoading || loading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white hover:bg-white/10 transition disabled:opacity-50"
               >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Creating Account...
-                  </>
+                {googleLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>
-                    Create Account
-                    <ArrowRight size={16} />
-                  </>
+                  <GoogleLogo size={18} />
                 )}
+                {googleLoading ? 'Signing up...' : 'Continue with Google'}
               </button>
-            </form>
 
-            <div className="mt-6 text-center text-sm text-slate-500">
-              Already have an account?{' '}
-              <Link className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors" to="/login">Sign In</Link>
+              {/* Divider */}
+              <div className="relative py-2 text-center">
+                <div className="absolute left-0 right-0 top-1/2 h-px bg-white/10" />
+                <span className="relative inline-flex items-center bg-black/50 px-3 text-xs uppercase tracking-[0.24em] text-white/50">or email</span>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <FormInput
+                  id="reg-name"
+                  icon={<User size={17} />}
+                  type="text"
+                  placeholder="Full Name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                />
+
+                <FormInput
+                  id="reg-email"
+                  icon={<Mail size={17} />}
+                  type="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+
+                <FormInput
+                  id="reg-password"
+                  icon={<Lock size={17} />}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  minLength={6}
+                  rightSlot={
+                    <button
+                      type="button"
+                      className="text-white/50 hover:text-white transition-colors focus:outline-none"
+                      onClick={() => setShowPassword(v => !v)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  }
+                />
+
+                <FormInput
+                  id="reg-college"
+                  icon={<Building size={17} />}
+                  type="text"
+                  placeholder="College / University"
+                  value={collegeName}
+                  onChange={e => setCollegeName(e.target.value)}
+                  required
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput
+                    id="reg-branch"
+                    icon={<GraduationCap size={17} />}
+                    type="text"
+                    placeholder="Branch / Major"
+                    value={branch}
+                    onChange={e => setBranch(e.target.value)}
+                    required
+                  />
+
+                  <FormInput
+                    id="reg-year"
+                    icon={<Calendar size={17} />}
+                    type="number"
+                    placeholder="Graduation Year"
+                    value={graduationYear}
+                    onChange={e => setGraduationYear(e.target.value)}
+                    required
+                    min="2024"
+                    max="2035"
+                  />
+                </div>
+
+                <button
+                  id="email-register-btn"
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  className={`w-full py-3 rounded-lg text-white text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500/60 disabled:opacity-75 disabled:cursor-not-allowed ${loading ? 'bg-purple-700' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'}`}
+                >
+                  {loading ? 'Creating account...' : 'Create Account'}
+                </button>
+              </form>
+
+              <p className="text-center text-sm text-white/50">
+                Already have an account?{' '}
+                <Link
+                  to="/login"
+                  className="font-medium text-white hover:text-purple-300 transition-colors"
+                >
+                  Sign In
+                </Link>
+              </p>
             </div>
+
           </div>
         </div>
-      </motion.main>
+      </div>
+
+      <footer className="absolute bottom-4 left-0 right-0 text-center text-white/50 text-xs z-20">
+        © 2026 TRESK AI. All rights reserved.
+      </footer>
     </div>
   );
 }
